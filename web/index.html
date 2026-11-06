@@ -16,21 +16,24 @@
 </head>
 <body>
 <a class="vh skip" href="#main">Aller au contenu</a>
-<header class="top">
-  <div class="wrap">
-    <a class="brand" href="#/" translate="no">runward<span> hébergé</span></a>
-    <span class="rv" id="stamp"></span>
-    <nav class="svc" id="svc" aria-label="Service"></nav>
-    <span class="who" id="who"></span>
-    <button class="theme" id="theme" type="button" aria-label="Changer de thème">thème</button>
+<div class="corps" id="corps">
+  <aside class="lat" id="lat" aria-label="Navigation de l'app" hidden></aside>
+  <div class="colonne">
+    <header class="top" id="top">
+      <div class="wrap">
+        <a class="brand marque" href="#/" translate="no"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward<span> hébergé</span></a>
+        <nav class="pub" id="pub" aria-label="Pages publiques"></nav>
+        <span class="rv" id="stamp"></span>
+        <div class="top-act" id="topact"></div>
+        <details class="mob" id="mob" hidden><summary>Menu</summary><nav id="mobnav" aria-label="Navigation de l'app"></nav></details>
+        <button class="theme" type="button" data-theme-btn aria-label="Changer de thème">thème</button>
+      </div>
+    </header>
+    <div id="bandeaux" class="wrap"></div>
+    <main id="main" class="wrap" tabindex="-1"><noscript>Cette page affiche ses vues avec JavaScript.</noscript></main>
+    <footer class="pied" id="pied"></footer>
   </div>
-</header>
-<nav class="views" aria-label="Vues de la flotte" id="navwrap" hidden>
-  <div class="wrap" id="nav" tabindex="0" role="group" aria-label="Vues de la flotte, défilable au clavier"></div>
-</nav>
-<div id="bandeaux" class="wrap"></div>
-<main id="main" class="wrap" tabindex="-1"><noscript>Cette page affiche ses vues avec JavaScript.</noscript></main>
-<footer class="pied" id="pied"></footer>
+</div>
 <div id="annonce" class="vh" role="status" aria-live="polite"></div>
 <script type="module" src="__APP_JS__"></script>
 </body>

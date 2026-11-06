@@ -21,7 +21,22 @@ export function readingCases(ctx, identity) {
     });
   }
 
-  /** One line per declared mission: last accepted upload, uploads not accepted since, the last code. */
+  /** An entry of the journal as the dashboard shows it: kind, time, mission, run, the refusal code. No name. */
+  const brief = (e) => {
+    const d = e.body.detail ?? {};
+    return {
+      seq: e.seq, what: e.body.what, who: e.body.who.type, at: e.body.dates?.received?.at ?? null,
+      mission: d.mission ?? null, kind: d.kind ?? null, repository: d.claims?.repository ?? d.name ?? null,
+      runNumber: d.runNumber ?? null, refusal: d.refusal ?? null, commit: d.commit ?? null,
+    };
+  };
+
+  /**
+   * One line per declared mission: last accepted upload (with what the verdict comes from), uploads not
+   * accepted since and the last code, the repository's consent, and the mission's recent activity; plus the
+   * fleet's recent activity and the journal head. The dashboard and a mission's page read this and the
+   * index only: no call per mission (architecture §6, the budget of a screen).
+   */
   async function status(s) {
     return store.tx(s.tenantId, async (tx) => {
       const repos = await tx.list("repository");
@@ -37,15 +52,28 @@ export function readingCases(ctx, identity) {
         const cur = uploads.filter((u) => u.mission === m.id && u.rank === "current" && u.kind === "check")[0] ?? null;
         const since = entries.filter((e) => ["send-not-accepted", "send-quarantined"].includes(e.body.what) && e.body.detail?.mission === m.id && e.seq > (cur?.seq ?? 0));
         const last = since[since.length - 1];
+        const mine = entries.filter((e) => e.body.detail?.mission === m.id || (e.body.object === r.id && e.body.who.type === "human"));
         lines.push({
-          mission: m.id, repository: r.name, state: forge.find((f) => f.id === r.id)?.state ?? "pending",
-          accepted: cur ? { entry: cur.id, seq: cur.seq, runId: cur.runId, runNumber: cur.runNumber, runAttempt: cur.runAttempt, commit: cur.commit, receivedAt: iso(cur.receivedAt), source: "service clock (declared)" } : null,
+          mission: m.id, repository: r.name, path: m.path, state: forge.find((f) => f.id === r.id)?.state ?? "pending", consent: r.consent,
+          accepted: cur ? {
+            entry: cur.id, seq: cur.seq, runId: cur.runId, runNumber: cur.runNumber, runAttempt: cur.runAttempt, commit: cur.commit,
+            receivedAt: iso(cur.receivedAt), source: "service clock (declared)", kind: cur.kind,
+            workflow: String(cur.claims?.workflowRef ?? "").replace(`${cur.claims?.repository}/`, "").replace(/@refs\/heads\/main$/, ""),
+          } : null,
           notAcceptedSince: since.length,
           lastRefusal: last ? last.body.detail.refusal : null,
+          lastRefusalSeq: last ? last.seq : null,
+          lastRefusalAt: last ? last.body.dates?.received?.at ?? null : null,
+          activity: mine.slice(-8).reverse().map(brief),
         });
       }
       const quarantined = uploads.filter((u) => u.rank === "quarantine" && !u.erasedAt).length;
-      return { lines, index: idx ? { sha256: idx.sha256, version: idx.version, publishedAt: iso(idx.publishedAt), seq: idx.seq, fleetVersion: idx.fleetVersion } : null, quarantined };
+      const head = entries.length ? { seq: entries[entries.length - 1].seq, hash: entries[entries.length - 1].hash } : null;
+      return {
+        lines, quarantined, head,
+        recent: entries.slice(-7).reverse().map(brief),
+        index: idx ? { sha256: idx.sha256, version: idx.version, publishedAt: iso(idx.publishedAt), seq: idx.seq, fleetVersion: idx.fleetVersion } : null,
+      };
     });
   }
 

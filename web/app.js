@@ -14,8 +14,8 @@ const tt = window.trustedTypes ? window.trustedTypes.createPolicy("runward", { c
 const setHTML = (el, html) => { el.innerHTML = tt ? tt.createHTML(html) : html; };
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const $ = (id) => document.getElementById(id);
-const main = $("main"), navEl = $("nav"), navWrap = $("navwrap"), stampEl = $("stamp");
-const whoEl = $("who"), svcEl = $("svc"), bandEl = $("bandeaux"), piedEl = $("pied"), annonceEl = $("annonce");
+const main = $("main"), stampEl = $("stamp"), latEl = $("lat"), mobEl = $("mob"), mobNavEl = $("mobnav"), pubEl = $("pub"), topActEl = $("topact");
+const bandEl = $("bandeaux"), piedEl = $("pied"), annonceEl = $("annonce");
 const short = (h) => (h ? `${String(h).slice(0, 12)}…` : "");
 
 // ------------------------------------------------------------- times: UTC kept, Paris shown, offset said
@@ -120,10 +120,11 @@ async function loadJournal(cursor) { const r = await api("GET", `/api/v0/journal
 
 // ------------------------------------------------------------- entry (signed out) — plain, to be redesigned
 function viewEntree(sub) {
-  const intent = S.intent && sub === "" ? `<p class="intent" role="note">Connectez-vous pour ouvrir cette page : <code>${esc(S.intent)}</code>. Vous y reviendrez juste après.</p>` : "";
+  const intent = S.intent && sub === "connexion" ? `<p class="intent" role="note">Connectez-vous pour ouvrir cette page : <code>${esc(S.intent)}</code>. Vous y reviendrez juste après.</p>` : "";
   const signin = `<div class="actions">${act("signin", "Se connecter avec ma passkey", { k: "device" })}${act("signin", "Ma passkey est sur mon téléphone", { q: true, k: "phone" })}</div>`;
+  if (sub === "") return viewAccueil();
   const V = {
-    "": ["Connexion", `<h1 class="v">Ce que vos missions prouvent, au même endroit.</h1>
+    connexion: ["Connexion", `<h1 class="v">Ce que vos missions prouvent, au même endroit.</h1>
       <p class="face">Chaque CI envoie ce que runward a écrit. Vous lisez la vue de runward-fleet, la même que chez vous, derrière votre passkey.</p>
       ${intent}${signin}${FORGE}${PK_PLAIN}
       <p class="note">Plus aucune passkey ? <a href="#/reprise">Reprendre l'accès</a>. Pas encore d'accès ? <a href="#/entree/sans-compte">Comment on entre</a>.</p>`],
@@ -138,17 +139,17 @@ function viewEntree(sub) {
       <p class="face">${mk("inv", "inconnue")} Elle n'est enregistrée pour aucun membre de ce service. Elle a peut-être été retirée, ou créée pour un autre site.</p>
       <div class="actions">${act("signin", "Essayer une autre passkey", { k: "device" })}${act("signin", "Utiliser mon téléphone", { q: true, k: "phone" })}</div>
       <p class="note">Vous étiez membre et n'avez plus de passkey valable ? <a href="#/reprise">Reprendre l'accès</a>. Sinon, <a href="#/entree/sans-compte">comment on entre</a>.</p>`],
-    expiree: ["Demande expirée", `<h1 class="v">La demande a expiré.</h1><p class="face">${mk("void", "expirée")} Elle a duré plus de 5 minutes. Rien n'a été accordé.</p><div class="actions">${go("#/entree", "Recommencer")}</div>`],
+    expiree: ["Demande expirée", `<h1 class="v">La demande a expiré.</h1><p class="face">${mk("void", "expirée")} Elle a duré plus de 5 minutes. Rien n'a été accordé.</p><div class="actions">${go("#/entree/connexion", "Recommencer")}</div>`],
     "sans-passkey": ["Navigateur sans passkey", `<h1 class="v">Ce navigateur ne propose pas de passkey.</h1>
       <p class="face">Il ne sait pas créer ni utiliser de passkey ici : navigation privée, poste partagé, ou navigateur trop ancien.</p>
       <p class="note">Ouvrez cette page dans votre navigateur habituel ; s'il propose les passkeys, il affiche aussi un code QR pour valider avec votre téléphone.</p>`],
     "sans-compte": ["Comment on entre", `<h1 class="v">L'accès est ouvert par l'opérateur du service.</h1>
       <p class="face">runward hébergé rassemble ce que les missions d'une équipe prouvent. Chaque accès est ouvert par l'opérateur, avec un lien à usage unique ; il n'y a pas d'inscription en libre-service.</p>
       <p>Pour lire vos propres missions sans compte, runward-fleet construit la même vue chez vous, à partir des mêmes fichiers : <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.</p>
-      <div class="actions">${go("#/entree", "Revenir à la connexion", { q: true })}</div>`],
+      <div class="actions">${go("#/entree/connexion", "Revenir à la connexion", { q: true })}</div>`],
     sortie: ["Déconnecté", `<h1 class="v">Vous êtes déconnecté.</h1>
       <p class="face">${mk("void", "session fermée")} Cette session est fermée sur ce navigateur. Vos autres sessions restent ouvertes ; vous pouvez les fermer depuis Accès.</p>
-      <div class="actions">${go("#/entree", "Se reconnecter")}</div>`],
+      <div class="actions">${go("#/entree/connexion", "Se reconnecter")}</div>`],
     "session-fermee": ["Session fermée", `<h1 class="v">Votre session s'est fermée.</h1>
       <p class="face">${mk("void", "fermée")} La passkey qui l'avait ouverte vient d'être retirée, comme annoncé. Connectez-vous avec une passkey qui vous reste.</p>${signin}`],
     fin: ["Session expirée", `<h1 class="v">Votre session a pris fin.</h1>
@@ -172,9 +173,9 @@ function viewLien(sub) {
   if (sub === "annulee") return frame("Création annulée", "La passkey n'a pas été créée.", `<p class="face">${mk("void", "rien de créé")} La création a été annulée sur l'appareil. Le lien reste valable jusqu'au ${until}.</p>${create("Réessayer")}`);
   if (sub === "panne") return frame("Service perdu pendant la création", "Le service n'a pas reçu votre passkey.", `<p class="face">${mk("inv", "non enregistrée")} Votre appareil a peut-être créé une passkey, mais le service ne l'a pas enregistrée : aucun compte n'existe encore, et le lien reste valable.</p>${create("Réessayer")}<p class="note">Si votre appareil affiche une passkey de ce service qui ne fonctionne pas, supprimez-la de son trousseau ; ce navigateur a été prié de l'oublier.${reqNote(S.lastError)}</p>`);
   const st = info.state;
-  if (st === "link-invalid") return frame("Lien invalide", "Ce lien ne mène à rien.", `<p class="face">${mk("void", "invalide")} Il est incomplet, ou il n'a jamais été ouvert par ce service. Vérifiez que vous l'avez copié en entier.</p><div class="actions">${go("#/entree", "Aller à la connexion", { q: true })}</div>`);
+  if (st === "link-invalid") return frame("Lien invalide", "Ce lien ne mène à rien.", `<p class="face">${mk("void", "invalide")} Il est incomplet, ou il n'a jamais été ouvert par ce service. Vérifiez que vous l'avez copié en entier.</p><div class="actions">${go("#/entree/connexion", "Aller à la connexion", { q: true })}</div>`);
   if (st === "link-signed-in") return frame("Déjà connecté", kind === "invitation" ? "Vous êtes déjà membre de cette flotte." : "Vous êtes déjà dans cette flotte.", `<p class="face">${mk("full", "connecté")} Ce navigateur a une session de membre de ${esc(info.fleet)}. Ce lien ne change rien pour vous.</p><div class="actions">${go("#/", "Ouvrir la flotte")}</div>`);
-  if (st === "link-used") return frame("Lien déjà servi", "Ce lien a déjà servi.", `<p class="face">${mk("void", "fermé")} Une passkey a déjà été créée avec lui.${kind === "bootstrap" ? " L'amorçage de cette flotte est fermé pour toujours." : ""}</p><div class="actions">${go("#/entree", "Se connecter avec ma passkey")}</div><p class="note">Si ce n'était pas vous : l'ouverture est écrite au journal et notifiée à l'opérateur. L'opérateur du service peut retirer ce membre ; la reprise d'accès vous rend ensuite la flotte.</p>`);
+  if (st === "link-used") return frame("Lien déjà servi", "Ce lien a déjà servi.", `<p class="face">${mk("void", "fermé")} Une passkey a déjà été créée avec lui.${kind === "bootstrap" ? " L'amorçage de cette flotte est fermé pour toujours." : ""}</p><div class="actions">${go("#/entree/connexion", "Se connecter avec ma passkey")}</div><p class="note">Si ce n'était pas vous : l'ouverture est écrite au journal et notifiée à l'opérateur. L'opérateur du service peut retirer ce membre ; la reprise d'accès vous rend ensuite la flotte.</p>`);
   if (st === "link-expired") return frame("Lien expiré", kind === "recovery" ? "Ce lien de reprise a expiré." : kind === "invitation" ? "Cette invitation a expiré." : "Ce lien a expiré.", `<p class="face">${mk("void", "expiré")} Il valait jusqu'au ${until} et n'a pas servi. Rien n'a changé.</p><p class="note">${kind === "invitation" ? "Demandez un nouveau lien à la personne qui vous l'a transmise." : `Tirez un nouveau lien sur votre poste : <code>npm run ${kind === "recovery" ? "operateur:reprise" : "operateur:amorcage"}</code>, puis approuvez le run.`}</p>`);
   if (st === "link-cancelled") return frame(kind === "recovery" ? "Reprise annulée" : "Lien fermé", kind === "recovery" ? "Cette reprise a été annulée." : "Ce lien a été fermé.", `<p class="face">${mk("void", "annulé")} ${kind === "recovery" ? "Une session ouverte de cette flotte l'a annulée. Rien n'a changé." : "Il a été fermé avant de servir, ou remplacé par un plus récent. Rien n'a été créé."}</p>${kind === "recovery" ? `<p class="note">Si vous avez bien perdu toutes vos passkeys, tirez un nouveau lien de reprise. <a href="#/reprise">Comment faire</a></p>` : ""}`);
   if (st === "link-not-yet") return frame("Reprise pas encore utilisable", `Cette reprise s'ouvrira le ${when(info.usableFrom, { sec: false })}.`, `<p class="face">${mk("half", "en délai")} Pendant 24 heures, toute session encore ouverte de cette flotte la voit et peut l'annuler.</p><p class="note">Rien à faire d'ici là : revenez à ce même lien après l'heure dite. Ce délai protège le titulaire si quelqu'un d'autre a ouvert la reprise.</p>`);
@@ -395,10 +396,250 @@ function fleetHead() {
 function viewFleet(route, sub) {
   if (S.fleetError) return { title: "Flotte injoignable", key: "fleet", signed: "in", html: `${head("runward hébergé · état du service", "")}<h1 class="v">La flotte ne s'affiche pas.</h1><p class="face">${mk("inv", "non affichée")} Votre session est ouverte, mais l'index n'a pas pu être lu. Le journal, lui, s'affiche.${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", "Réessayer")}${go("#/envois", "Voir les envois", { q: true })}</div>` };
   if (!S.status) return loadingView("Flotte");
+  if (route === "") return viewFlotte();
+  if (route === "mission") return viewMissionDetail(sub);
   if (!S.index) return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: route, html: `${fleetHead()}<h1 class="v">Aucune mission publiée.</h1><p>Votre flotte compte les dépôts que vous déclarez, et seulement ceux-là. Une mission apparaît après son premier envoi confirmé.</p><div class="actions">${go("#/declarer", "Déclarer un dépôt")}</div>` };
-  if (route === "mission" && !S.index.missions.some((m) => m.id === sub)) return null;
-  const titles = { "": "Flotte", mission: "Une mission", history: "Historique", proof: "Preuve", signatures: "Signatures", pr: "Dans la PR", sources: "Sources" };
-  return { title: titles[route] ?? "Flotte", key: "fleet", signed: "in", fleetRoute: route, html: `${fleetHead()}${renderView(S.index, route, sub || undefined)}` };
+  const titles = { vue: "Vue complète", history: "Historique", proof: "Preuve", signatures: "Signatures", pr: "Dans la PR", sources: "Sources" };
+  return { title: titles[route] ?? "Flotte", key: "fleet", signed: "in", fleetRoute: route, html: `${fleetHead()}${renderView(S.index, route === "vue" ? "" : route, sub || undefined)}` };
+}
+
+// ------------------------------------------------------------- the shell of direction A (« la coque »), its dashboard and a mission's page
+// Everything is read from the index served and from GET /api/v0/fleet/status, already loaded for the screen:
+// opening a mission costs 0 more read (architecture §6). No example data: what is shown is the tenant's.
+const MAILTO = "mailto:contact@runward.dev?subject=Acc%C3%A8s%20%C3%A0%20la%20pr%C3%A9version%20de%20runward%20h%C3%A9berg%C3%A9";
+const MARK = `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>`;
+const VERDICT_FR = { gaps: ["inv", "refusée"], "level-not-met": ["inv", "niveau non atteint"], "not-observed": ["void", "silencieuse"], clean: ["full", "sans écart"] };
+const ORDER = { gaps: 0, "level-not-met": 1, "not-observed": 2, clean: 3 };
+const PHASE_FR = { frame: "Cadrer", architect: "Architecturer", floor: "Plancher", iterate: "Itérer", govern: "Gouverner", handover: "Transmettre" };
+const GATE_KEY = { frame: "frame", architect: "architect", floor: "floor", iterate: "iterate", govern: "govern", hand: "handover" };
+const ART_FR = {
+  "Framing note": "note de cadrage", "Steering contract": "contrat de pilotage", "Architecture note": "note d'architecture",
+  "Execution topology": "topologie d'exécution", "Decision matrix": "matrice de décision", "Decision journal (≥1 ADR)": "journal de décisions",
+  "Port contracts (≥1 filled)": "contrats de ports", "Floor note (measured proof)": "note de plancher, preuve mesurée", "Threat model": "modèle de menaces",
+  "Evaluation rubric": "grille d'évaluation", "Observability schema": "schéma d'observabilité", "Recovery runbook": "runbook de reprise",
+  "Hand-over note (the kit, proven)": "note de passation",
+};
+const REFUS_FR = { "workflow-not-pinned": "workflow appelant non déclaré", "content-not-consented": "contenu non consenti", "repository-pending": "dépôt en attente de votre confirmation", "repository-not-declared": "dépôt non déclaré ou retiré", "owner-changed": "propriétaire changé", "private-path": "chemin privé", "index-build-refused": "export que runward-fleet ne sait pas assembler", "index-rule-broken": "règle de vue cassée" };
+const HM = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const DAY_FR = new Intl.DateTimeFormat("fr-FR", { timeZone: TZ, day: "numeric", month: "short", year: "numeric" });
+const hm = (iso) => (iso ? `<time datetime="${esc(iso)}">${esc(HM.format(new Date(iso)))}</time>` : `<span class="soft">à dater</span>`);
+const etq = (shape, word) => `<span class="etq"><span class="mk mk-${shape}" aria-hidden="true"></span>${esc(word)}</span>`;
+const chipOf = (v) => { const [sh, w] = VERDICT_FR[v] ?? VERDICT_FR["not-observed"]; return sh === "inv" ? mk("inv", w) : etq(sh, w); };
+const verdictOf = (m) => (m && typeof m.latest === "object" && m.latest ? m.latest.verdict : "not-observed");
+const nomLong = (m) => m.name;
+const nomCourt = (m) => (m.path && m.path !== "." ? m.path.split("/").pop() : m.name.split("/").pop());
+const triees = () => (S.index ? [...S.index.missions].sort((a, b) => (ORDER[verdictOf(a)] ?? 9) - (ORDER[verdictOf(b)] ?? 9)) : []);
+const ligne = (id) => S.status?.lines.find((l) => l.mission === id) ?? null;
+function porteFr(gate) {
+  if (!gate || gate === "all gates passed") return "toutes les portes";
+  const g = /^(\d+)\s*·\s*([A-Za-z]+)/.exec(gate);
+  return g ? `porte ${g[1]}, ${PHASE_FR[GATE_KEY[g[2].toLowerCase()]] ?? g[2]}` : gate;
+}
+const manquants = (m) => (typeof m.latest === "object" ? (m.latest.deliverables?.list ?? []).filter((d) => d.state !== "filled") : []);
+const sourceDe = (m) => (typeof m.latest === "object" ? S.index.sources.find((s) => s.id === m.latest.src)?.path : null);
+function cause(m) {
+  const v = verdictOf(m), st = ligne(m.id);
+  if (v === "gaps") {
+    const mq = manquants(m);
+    return mq.length ? `Bloquée à la ${esc(porteFr(m.latest.currentGate))} : ${mq.length} livrable${mq.length > 1 ? "s" : ""} absent${mq.length > 1 ? "s" : ""}, dont ${mq.slice(0, 2).map((d) => `<code>${esc(d.relPath)}</code>`).join(" et ")}.` : `Refusée à la ${esc(porteFr(m.latest.currentGate))} : des lignes de conformité restent ouvertes.`;
+  }
+  if (v === "level-not-met") return "Toutes les portes sont franchies, mais rien n'y est vérifié mécaniquement : le niveau demandé n'est pas atteint.";
+  if (v === "not-observed") {
+    if (st?.lastRefusal) return `Aucun envoi accepté. Le dernier, à ${hm(st.lastRefusalAt)} (entrée ${esc(st.lastRefusalSeq)}), n'a pas été accepté : ${esc(REFUS_FR[st.lastRefusal] ?? st.lastRefusal)}.`;
+    return "Aucun envoi accepté pour cette mission déclarée : c'est un constat, pas un filtre.";
+  }
+  return "Toutes les portes sont franchies, sans écart.";
+}
+function sourceLigne(m) {
+  const st = ligne(m.id);
+  if (!st || !st.accepted) return `source : journal${st?.lastRefusalSeq ? `, entrée ${esc(st.lastRefusalSeq)}` : ""}`;
+  return `source : <code>${esc(sourceDe(m) ?? "")}</code>, commit ${esc(String(st.accepted.commit ?? "").slice(0, 12))}, entrée ${esc(st.accepted.seq)} à ${hm(st.accepted.receivedAt)}`;
+}
+function geste(m) {
+  const v = verdictOf(m), st = ligne(m.id);
+  if (v === "gaps" && m.latest.next?.command) return `<span class="k">ensuite, dans le dépôt</span><code class="cmd" translate="no">${esc(m.latest.next.command)}</code>`;
+  if (v === "level-not-met") return go(`#/mission/${m.id}`, "Voir ce qui n'est que déclaré", { q: true });
+  if (v === "not-observed") return st?.consent ? `<span class="small">${etq("full", "contenu consenti")} Le prochain envoi de ce dépôt sera lu.</span>` : go("#/acces", "Consentir dans Accès", { q: true });
+  return "";
+}
+function comptes() {
+  const by = Object.fromEntries((S.index?.fleet.byVerdict ?? []).map((g) => [g.state, g.n]));
+  return { N: S.index?.fleet.declared ?? 0, gaps: by.gaps ?? 0, lnm: by["level-not-met"] ?? 0, silent: by["not-observed"] ?? 0, clean: by.clean ?? 0 };
+}
+const QUOI = {
+  "send-accepted": (e) => `envoi accepté (entrée ${e.seq})`, "send-historical": (e) => `relance gardée comme historique, jamais comme courant (entrée ${e.seq})`,
+  "send-pending": (e) => `premier envoi, gardé jusqu'à votre confirmation (entrée ${e.seq})`, "send-not-accepted": (e) => `envoi non accepté : ${REFUS_FR[e.refusal] ?? e.refusal} (entrée ${e.seq})`,
+  "send-quarantined": (e) => `envoi gardé en quarantaine : ${REFUS_FR[e.refusal] ?? e.refusal} (entrée ${e.seq})`,
+};
+function jLigne(e) {
+  if (e.who === "workload") {
+    const shape = e.what === "send-accepted" ? "full" : e.what === "send-not-accepted" || e.what === "send-quarantined" ? "inv" : "void";
+    return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-${shape}" aria-hidden="true"></span></span><span><span translate="no">${esc(e.repository ?? "")}</span>${e.runNumber ? `, run ${esc(e.runNumber)}` : ""}<span class="sub">${esc((QUOI[e.what] ?? ((x) => `${WHAT[x.what] ?? x.what} (entrée ${x.seq})`))(e))}</span></span></li>`;
+  }
+  return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${esc(WHAT[e.what] ?? e.what)}${e.repository ? ` · <span translate="no">${esc(e.repository)}</span>` : ""}<span class="sub">${esc(WHO[e.who] ?? e.who)} (entrée ${e.seq})</span></span></li>`;
+}
+const provLigne = () => {
+  const i = S.status?.index;
+  return i ? `relevé du <b>${esc(S.index?.asOf?.label ?? "")}</b> · index <b>${esc(String(i.sha256).slice(0, 12))}</b> · runward-fleet ${esc(i.fleetVersion)} · assemblé à <b>${hm(i.publishedAt)}</b>, heure du service (déclarée), à l'entrée ${esc(i.seq)}` : "aucun index publié";
+};
+
+// --- the shell: the sidebar (desktop) and the menu (phone), the same links
+function liensCoque(route, sub) {
+  const cur = (cond) => (cond ? ' aria-current="page"' : "");
+  const exp = route === "acces" && /^export/.test(sub);
+  const N = comptes();
+  const a = (h, w, n, c) => `<a class="it" href="${h}"${cur(c)}>${w}${n != null ? `<span class="n0">${n}</span>` : ""}</a>`;
+  const principaux = [a("#/", "Flotte", S.index ? N.N : null, route === ""), a("#/envois", "Envois", S.status?.head?.seq ?? S.journal?.head?.seq ?? null, route === "envois"), a("#/acces", "Accès", null, route === "acces" && !exp), a("#/acces/export", "Export", null, exp)].join("");
+  const missions = triees().map((m) => { const [sh] = VERDICT_FR[verdictOf(m)] ?? ["void"]; return `<a class="it mis" href="#/mission/${esc(m.id)}"${cur(route === "mission" && sub === m.id)}>${etq(sh, nomCourt(m))}</a>`; }).join("");
+  const vues = [["vue", "Vue complète"], ["history", "Historique"], ["proof", "Preuve"], ["signatures", "Signatures"], ["pr", "Dans la PR"], ["sources", "Sources"]].map(([r, w]) => a(`#/${r}`, w, null, route === r)).join("");
+  return { principaux, missions, vues };
+}
+function renderLat(route, sub) {
+  const L = liensCoque(route, sub);
+  const s = S.session;
+  setHTML(latEl, `<a class="marque" href="#/" translate="no">${MARK}runward<span> hébergé</span></a>
+    <nav aria-label="Vues du service">${L.principaux}</nav>
+    ${L.missions ? `<p class="sec">Missions</p><nav aria-label="Missions, dans l'ordre de ce qui attend">${L.missions}</nav>` : `<p class="sec">Missions</p><nav aria-label="Missions"><a class="it" href="#/">dans la flotte</a></nav>`}
+    <p class="sec">Vues runward-fleet</p><nav aria-label="Vues runward-fleet">${L.vues}</nav>
+    <div class="bas"><span><b>${esc(s.tenant.title)}</b><br>vous · ${esc(s.member.role === "owner" ? "propriétaire" : s.member.role)} · ${s.passkeys} passkey${s.passkeys > 1 ? "s" : ""}</span>
+      <span class="bas-act"><button class="lien-btn" type="button" data-do="logout">Se déconnecter</button><button class="theme" type="button" data-theme-btn aria-label="Changer de thème">thème</button></span></div>`);
+  setHTML(mobNavEl, `${L.principaux}${L.missions ? `<p class="sec">Missions</p>${L.missions}` : ""}<p class="sec">Vues runward-fleet</p>${L.vues}<button class="lien-btn" type="button" data-do="logout">Se déconnecter</button>`);
+}
+
+// --- the public home (signed out). Data-free on purpose: no example fleet is shown on the service's screens.
+function viewAccueil() {
+  const etat = (v, txt) => `<div class="etat-a">${chipOf(v)}<p>${txt}</p></div>`;
+  const wf = `<pre class="term" lang="en" tabindex="0">name: runward
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: {}
+jobs:
+  runward:
+    permissions: { contents: read, id-token: write }
+    uses: stranxik/runward-hosted/.github/workflows/send.yml@&lt;release&gt;
+    with:
+      mission: &lt;mission&gt;
+<span class="c" lang="fr"># aucun « secrets. » : la CI se présente par OIDC</span></pre>`;
+  const journal = `<dl class="cl"><dt>dépôt</dt><dd>propriétaire/dépôt, par son identifiant</dd><dt>workflow appelant</dt><dd>celui que vous avez déclaré</dd><dt>workflow d'envoi</dt><dd>celui du service, à son commit</dd><dt>run</dt><dd>numéro, tentative</dd><dt>commit</dt><dd>celui qui a été jugé</dd><dt>émetteur</dt><dd translate="no">token.actions.githubusercontent.com</dd></dl>`;
+  const etats = `${etat("gaps", "la porte où la mission bute, et le livrable qui manque")}${etat("level-not-met", "les portes franchies, mais rien n'y est vérifié mécaniquement")}${etat("not-observed", "aucun envoi accepté, et pourquoi")}${etat("clean", "toutes les portes franchies, sans écart")}`;
+  const etapes = [
+    ["1", "La CI envoie", "Un workflow publié par le service, épinglé par son commit, lance <code>runward check</code> sur votre commit et envoie ce que runward a écrit. Votre CI se présente par OIDC : aucun secret n'est rangé.", wf],
+    ["2", "Le service assemble", "Il lit qui envoie dans le jeton signé par GitHub, écrit chaque envoi au journal, accepté ou non, avec ce qu'il retient :", journal],
+    ["3", "Vous lisez", "En tête, ce qui vous attend, mission par mission, dans l'un de quatre états, et chaque nombre renvoie à son fichier source.", `<div class="etats-a">${etats}</div>`],
+  ];
+  return { title: "Accueil", key: "entree", signed: "out", public: true, html: `<div class="acc">
+    <section class="hero"><div class="hero-g">
+      <div><h1>Ce que vos missions prouvent, au même endroit.</h1>
+        <p class="lede">Chaque CI envoie ce que runward a jugé. Vous voyez quelle mission est refusée, laquelle n'atteint pas son niveau, laquelle se tait, et d'où vient chaque nombre.</p>
+        <div class="actions"><a class="btn btn-l" href="${MAILTO}">Demander l'accès à la préversion</a><button class="btn btn-q btn-l" type="button" data-do="scroll" data-k="marche">Voir comment ça marche</button></div>
+        <p class="note">L'accès s'ouvre sur invitation. Déjà membre ? <button class="lien-btn" type="button" data-go="#/entree/connexion">Se connecter</button>. Sans compte, <code>runward-fleet</code> construit la même vue chez vous.</p></div>
+      <div class="etats-a hero-etats" aria-label="Les quatre états d'une mission">${etats}</div></div></section>
+    <section class="bp" id="marche">
+      <h2 class="ts">Trois gestes, et aucun n'est à vous.</h2>
+      <p class="intro">Vous ajoutez un workflow une fois. Ensuite, chaque commit sur la branche principale met la vue à jour.</p>
+      <div class="pas-a">${etapes.map(([n, h, p, e]) => `<div class="pas"><span class="rv">0${n}</span><h3>${h}</h3><p>${p}</p><div class="pas-e">${e}</div></div>`).join("")}</div></section>
+    <section class="bp inverse" id="confiance"><div class="inv-w">
+      <h2 class="ts">Ce que vous pouvez vérifier sans nous croire.</h2>
+      <div class="conf-g">
+        <div><h3>Aucun secret dans votre CI</h3><p>Le service lit qui envoie dans le jeton OIDC que GitHub signe pour votre run. Votre workflow ne contient aucune ligne <code>secrets.</code> : il n'y a rien à voler ni à renouveler.</p></div>
+        <div><h3>La même vue que chez vous</h3><p>La vue est assemblée par <code>runward-fleet</code>, la bibliothèque MIT que vous lancez déjà. Sur l'archive exportée, <code>runward-fleet build</code> redonne le même index, octet pour octet.</p></div>
+        <div><h3>Tout s'exporte</h3><p>Une archive rassemble les envois, le journal et l'index. Elle se relit sans le service, et vous la gardez si vous partez.</p></div>
+        <div><h3>Une passkey pour entrer</h3><p>Ni mot de passe, ni compte de forge : le déverrouillage de votre appareil ouvre la vue, et rien d'autre.</p></div></div>
+      <div class="empr"><pre class="term" lang="en" tabindex="0"><span class="c">$</span> runward-fleet build fleet.json --out site
+<span class="c">$</span> shasum -a 256 site/index.json</pre>
+        <div class="compare"><div class="row"><span class="soft-i">en ligne</span><span>l'empreinte de l'index servi, dans la flotte</span></div>
+          <div class="row"><span class="soft-i">chez vous</span><span>l'empreinte de l'index reconstruit</span></div>
+          <div class="ok"><span class="or" aria-hidden="true">✓</span>même empreinte, donc même vue</div></div></div>
+    </div></section>
+    <section class="bp final" id="acces-final"><div class="final-g">
+      <div><h2 class="ts">Vos dépôts, dans la même vue.</h2><p class="intro">La préversion sert aujourd'hui les dépôts de son mainteneur. Écrivez-nous : l'accès s'ouvre par invitation, avec un lien à usage unique.</p></div>
+      <div class="actions"><a class="btn btn-l" href="${MAILTO}">Demander l'accès à la préversion</a><a class="btn btn-q btn-l" href="https://runward.dev" rel="noreferrer">Construire la vue chez moi</a></div></div></section>
+  </div>` };
+}
+
+// --- the dashboard of the fleet (signed in)
+function viewFlotte() {
+  const s = S.session;
+  if (!S.index) {
+    return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "", html: `<div class="dash"><div class="titre-d"><div><h1>${esc(s.tenant.title)}</h1><p class="rv">${provLigne()}</p></div><div class="actions">${go("#/declarer", "Déclarer un dépôt")}</div></div>
+      <section class="sect"><h2>Aucune mission publiée.</h2><p class="note">Votre flotte compte les dépôts que vous déclarez, et seulement ceux-là. Une mission apparaît après son premier envoi confirmé.</p></section>
+      ${S.status?.recent?.length ? `<section class="sect" aria-labelledby="h-act"><header><h2 id="h-act">Activité récente</h2><a href="#/envois">Tout le journal</a></header><ul class="journal-d">${S.status.recent.map(jLigne).join("")}</ul></section>` : ""}</div>` };
+  }
+  const N = comptes();
+  const attente = triees().filter((m) => verdictOf(m) !== "clean");
+  const lignesAtt = attente.map((m) => `<div class="att-r">
+      <div>${chipOf(verdictOf(m))}</div>
+      <div><p class="nm"><a href="#/mission/${esc(m.id)}" translate="no">${esc(nomLong(m))}</a></p><p class="cause">${cause(m)}</p><p class="src">${sourceLigne(m)}</p></div>
+      <div class="geste">${geste(m)}</div></div>`).join("");
+  const lignesMis = triees().map((m) => {
+    const v = verdictOf(m), [sh, w] = VERDICT_FR[v] ?? VERDICT_FR["not-observed"], st = ligne(m.id), l = typeof m.latest === "object" ? m.latest : null;
+    const sous = l ? `${porteFr(l.currentGate)} · ${l.adrCount ?? 0} ADR` : "aucun verdict reçu";
+    const env = st?.accepted ? `entrée ${esc(st.accepted.seq)}, ${hm(st.accepted.receivedAt)}<span class="sub hash">${esc(String(st.accepted.commit ?? "").slice(0, 12))}</span>` : `<span class="soft">aucun</span>`;
+    const niv = l ? etq("half", l.implemented) : etq("void", "non observé");
+    return `<a class="r" href="#/mission/${esc(m.id)}"><span><span class="nm" translate="no">${esc(nomLong(m))}</span><span class="sub">${esc(sous)}</span></span><span>${etq(sh, w)}</span><span class="soft">${env}</span><span class="soft">${niv}</span></a>`;
+  }).join("");
+  const first = (v) => attente.find((m) => verdictOf(m) === v)?.id;
+  const cpt = (v, n, chip) => { const id = first(v); return id ? `<a href="#/mission/${esc(id)}"><span class="v">${n}</span>${chip}</a>` : `<span class="cpt"><span class="v">${n}</span>${chip}</span>`; };
+  const recent = S.status?.recent ?? [];
+  const jour = recent[0]?.at ? DAY_FR.format(new Date(recent[0].at)) : "";
+  return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "", html: `<div class="dash">
+    <div class="titre-d"><div><h1>${esc(s.tenant.title)}</h1><p class="rv">${provLigne()}</p></div>
+      <div class="actions">${go("#/acces/export", "Exporter", { q: true })}${go("#/declarer", "Déclarer un dépôt")}</div></div>
+    ${S.status?.quarantined ? `<p class="avert">${mk("inv", "non publié")} ${S.status.quarantined} envoi${S.status.quarantined > 1 ? "s" : ""} en quarantaine : la flotte montre le dernier index publié. <a href="#/envois">Voir les envois</a></p>` : ""}
+    <nav class="compteurs" aria-label="Missions par état">
+      ${cpt("gaps", N.gaps, etq("inv", N.gaps > 1 ? "refusées" : "refusée"))}${cpt("level-not-met", N.lnm, etq("inv", "niveau non atteint"))}${cpt("not-observed", N.silent, etq("void", N.silent > 1 ? "silencieuses" : "silencieuse"))}
+      <a href="#/vue"><span class="v">${N.clean}</span>${etq("full", "sans écart")}</a></nav>
+    <section class="sect" aria-labelledby="h-att"><header><h2 id="h-att">Ce qui vous attend <span>${attente.length}</span></h2></header>
+      ${attente.length ? `<div class="attente">${lignesAtt}</div>` : `<p class="note">Rien ne vous attend : chaque mission déclarée est sans écart.</p>`}</section>
+    <div class="duo-d">
+      <section class="sect" aria-labelledby="h-mis"><header><h2 id="h-mis">Missions <span>${N.N}</span></h2><a href="#/history">Historique</a></header>
+        <div class="ml"><div class="r h" aria-hidden="true"><span>Mission</span><span>État</span><span>Dernier envoi accepté</span><span>Preuve</span></div>${lignesMis}</div></section>
+      <section class="sect" aria-labelledby="h-act"><header><h2 id="h-act">Activité récente</h2><a href="#/envois">Tout le journal</a></header>
+        ${jour ? `<p class="jour">${esc(jour)}</p>` : ""}<ul class="journal-d">${recent.map(jLigne).join("")}</ul></section>
+    </div>
+    <div class="recalc"><p class="small soft">Cette vue est l'index <code>${esc(short(S.status?.index?.sha256))}</code>, servi tel quel : <a href="/f/${esc(s.tenant.id)}/index.json">index.json</a>. Sur l'archive exportée, <code translate="no">runward-fleet build fleet.json --out site</code> le reconstruit chez vous. La vue runward-fleet complète : <a href="#/vue">Vue complète</a>. Rien n'est élevé par ce service : ci-declared au plus.</p></div>
+  </div>` };
+}
+
+// --- a mission: cause, the next gesture, what is missing gate by gate, where the verdict comes from, its activity, then its runward-fleet view
+function viewMissionDetail(id) {
+  if (!S.index) return null;
+  const m = S.index.missions.find((x) => x.id === id);
+  if (!m) return null;
+  const v = verdictOf(m), st = ligne(m.id), l = typeof m.latest === "object" ? m.latest : null;
+  let portes = "";
+  if (l) {
+    const groupes = [];
+    (l.deliverables?.list ?? []).forEach((d) => { let g = groupes.find((x) => x.id === d.phaseId); if (!g) { g = { id: d.phaseId, n: String(d.phase ?? "").split("·")[0].trim(), items: [] }; groupes.push(g); } g.items.push(d); });
+    portes = groupes.map((g) => {
+      const ok = g.items.filter((d) => d.state === "filled"), ko = g.items.filter((d) => d.state !== "filled");
+      const nom = `${g.n}, ${PHASE_FR[g.id] ?? g.id}`;
+      const lignes = ko.map((d) => `<div class="r"><span>${esc(nom)}</span><span><code>${esc(d.relPath)}</code> <span class="soft small">${esc(ART_FR[d.artifact] ?? d.artifact)}</span></span><span>${mk("inv", "manquant")}</span></div>`).join("");
+      return `${ok.length ? `<div class="r"><span>${esc(nom)}</span><span class="soft">${ok.length} livrable${ok.length > 1 ? "s" : ""} rempli${ok.length > 1 ? "s" : ""}</span><span class="soft">${etq("full", "rempli")}</span></div>` : ""}${lignes}`;
+    }).join("");
+  }
+  let suivant = "";
+  if (v === "gaps" && l?.next?.command) suivant = `<div class="suivant"><div><h3>Geste suivant</h3><p>Écrire le livrable qui manque à la porte où la mission bute, puis relancer <code>runward check --strict</code>.</p>${l.next.text ? `<p class="small soft" lang="en">runward : ${esc(l.next.text)}</p>` : ""}</div><code class="cmd" translate="no">${esc(l.next.command)}</code></div>`;
+  if (v === "level-not-met") suivant = `<div class="suivant"><div><h3>Geste suivant</h3><p>Ouvrir la preuve de la flotte : elle sépare ce qui est vérifié mécaniquement de ce qui n'est que déclaré par la CI.</p></div>${go("#/proof", "Ouvrir la preuve", { q: true })}</div>`;
+  if (v === "not-observed") suivant = `<div class="suivant"><div><h3>Geste suivant</h3><p>${st?.consent ? "Le contenu de ce dépôt est consenti : le prochain envoi accepté fera entrer la mission dans l'index." : "Consentir au contenu de ce dépôt. Sans cet accord, aucun envoi n'est accepté, attestation comprise."}</p></div>${st?.consent ? etq("full", "contenu consenti") : go("#/acces", "Consentir dans Accès", { q: true })}</div>`;
+  const a = st?.accepted;
+  const prov = a ? `<dl class="cl2"><dt>fichier</dt><dd><code>${esc(sourceDe(m) ?? "")}</code>${l?.runward ? `, écrit par runward ${esc(l.runward)}` : ""}</dd>
+      <dt>envoi</dt><dd>entrée ${esc(a.seq)}, reçue le ${when(a.receivedAt)}</dd><dt>run</dt><dd>${esc(a.runId)}, n° ${esc(a.runNumber)}, tentative ${esc(a.runAttempt)}</dd>
+      <dt>workflow appelant</dt><dd><code>${esc(a.workflow)}</code></dd><dt>commit</dt><dd><code>${esc(a.commit ?? "")}</code></dd>
+      <dt>niveau de preuve</dt><dd>${etq("half", `${l?.implemented ?? "ci-declared"} : déclaré par la CI, rien de plus`)}</dd></dl>`
+    : `<p class="note">Aucun envoi accepté : il n'y a pas encore de verdict, donc pas de provenance à montrer.</p>`;
+  const attendus = (m.findings ?? []).filter((f) => f.file).map((f) => `<li><span class="h">attendu</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${esc(f.what)} attendu par l'inventaire, absent<span class="sub"><code>${esc(f.file)}</code></span></span></li>`).join("");
+  const hist = (st?.activity ?? []).map(jLigne).join("");
+  return { title: `Mission ${nomCourt(m)}`, key: "fleet", signed: "in", fleetRoute: "mission", html: `<div class="dash mission-d">
+    <p class="fil-d small soft"><a href="#/">Flotte</a> / <span translate="no">${esc(nomLong(m))}</span></p>
+    <div>${chipOf(v)}<h1 translate="no">${esc(nomLong(m))}</h1><p class="cause-g">${cause(m)}</p><p class="src">${sourceLigne(m)}</p></div>
+    ${suivant}
+    ${l && portes ? `<section class="sect" aria-labelledby="h-pp"><header><h2 id="h-pp">${v === "gaps" ? "Ce qui manque, porte par porte" : "Livrables, porte par porte"}</h2></header><div class="manque">${portes}</div></section>` : ""}
+    <section class="sect" aria-labelledby="h-prov"><header><h2 id="h-prov">D'où vient ce verdict</h2></header>${prov}</section>
+    <section class="sect" aria-labelledby="h-hist"><header><h2 id="h-hist">Activité de la mission</h2><a href="#/envois">Tout le journal</a></header>${hist || attendus ? `<ul class="journal-d">${hist}${attendus}</ul>` : `<p class="note">Aucune activité pour cette mission.</p>`}</section>
+    <section class="sect vue-fleet" aria-labelledby="h-vf"><header><h2 id="h-vf">La vue runward-fleet de cette mission</h2><span class="rv">telle que runward-fleet build la construit</span></header>${renderView(S.index, "mission", m.id)}</section>
+  </div>` };
 }
 
 // ------------------------------------------------------------- access: gestures that withdraw, then restore
@@ -547,7 +788,7 @@ function viewLegal() {
     </div>` };
 }
 function view404(hash) {
-  return { title: "Adresse inconnue", key: "panne", signed: "any", html: `${head("runward hébergé", "404")}<h1 class="v">Cette adresse n'existe pas.</h1><p class="face">${mk("void", "introuvable")} <code>${esc(hash)}</code> ne mène à aucune page de ce service. Le lien est peut-être incomplet.</p><div class="actions">${S.session ? go("#/", "Ouvrir la flotte") : go("#/entree", "Aller à la connexion")}</div>` };
+  return { title: "Adresse inconnue", key: "panne", signed: "any", html: `${head("runward hébergé", "404")}<h1 class="v">Cette adresse n'existe pas.</h1><p class="face">${mk("void", "introuvable")} <code>${esc(hash)}</code> ne mène à aucune page de ce service. Le lien est peut-être incomplet.</p><div class="actions">${S.session ? go("#/", "Ouvrir la flotte") : go("#/entree/connexion", "Aller à la connexion")}</div>` };
 }
 const loadingView = (title) => ({ title, key: "fleet", signed: "in", html: `<h1 class="v">Chargement…</h1><div class="charge" role="progressbar" aria-label="Chargement"></div><div class="squelette"></div><div class="squelette"></div>` });
 
@@ -561,18 +802,19 @@ function renderBandeaux() {
   if (s?.maintenance) b.push(`<div class="bandeau"><p><b>Maintenance${s.maintenance.until ? ` jusqu'au ${when(s.maintenance.until, { sec: false })}` : ""}.</b> La lecture reste ouverte ; les gestes qui écrivent attendent la fin.</p></div>`);
   setHTML(bandEl, b.join(""));
 }
-function shell(signedIn, route) {
-  setHTML(whoEl, signedIn ? `<button class="lien-btn" type="button" data-do="logout">Se déconnecter</button>` : "");
-  setHTML(stampEl, signedIn ? esc(S.session.tenant.title) : esc(location.host));
-  setHTML(svcEl, signedIn ? [["", "Flotte"], ["envois", "Envois"], ["acces", "Accès"]].map(([r, w]) => `<a href="#/${r}"${r === route || (r === "" && ROUTES.includes(route)) ? ' aria-current="page"' : ""}>${w}</a>`).join("") : "");
-  setHTML(navEl, signedIn && S.index && ROUTES.includes(route) ? renderNav(S.index, route) : "");
-  navWrap.hidden = !navEl.innerHTML;
+function shell(signedIn, route, sub, v) {
+  document.body.classList.toggle("connecte", signedIn);
+  latEl.hidden = !signedIn; mobEl.hidden = !signedIn; mobEl.open = false;
+  if (signedIn) renderLat(route, sub); else { setHTML(latEl, ""); setHTML(mobNavEl, ""); }
+  setHTML(stampEl, signedIn ? esc(S.session.tenant.title) : v.public ? "" : esc(location.host));
+  setHTML(pubEl, !signedIn && v.public ? `<button class="lien-nav" type="button" data-do="scroll" data-k="marche">Comment ça marche</button><button class="lien-nav" type="button" data-do="scroll" data-k="confiance">Confiance</button><a class="lien-nav" href="https://runward.dev" rel="noreferrer">Documentation</a>` : "");
+  setHTML(topActEl, !signedIn && v.public ? `${go("#/entree/connexion", "Se connecter", { q: true })}<a class="btn" href="${MAILTO}">Demander l'accès</a>` : "");
   setHTML(piedEl, `<div class="wrap"><a href="#/legal">Mentions légales</a> · <a href="#/legal">Confidentialité</a> · <a href="#/legal">Sécurité</a> · <span class="soft">heures affichées à l'heure de Paris, avec leur décalage</span></div>`);
 }
 
 // ------------------------------------------------------------- router
 const parts = () => { const h = location.hash.replace(/^#\/?/, ""); const p = h.split("/"); return { h, route: p[0], sub: p.slice(1).join("/") }; };
-const PROTECTED = new Set(["arrivee", "declarer", "envois", "acces", ...ROUTES]);
+const PROTECTED = new Set(["arrivee", "declarer", "envois", "acces", "vue", ...ROUTES]);
 function resolve() {
   const { route, sub } = parts();
   if (route === "entree") return viewEntree(sub);
@@ -584,7 +826,7 @@ function resolve() {
   if (route === "acces") return viewAcces(sub);
   if (route === "panne") return viewPanne(sub);
   if (route === "legal") return sub ? null : viewLegal();
-  if (route === "" || ROUTES.includes(route)) return viewFleet(route, sub ? decodeURIComponent(sub) : "");
+  if (route === "" || route === "vue" || ROUTES.includes(route)) return viewFleet(route, sub ? decodeURIComponent(sub) : "");
   return null;
 }
 
@@ -594,10 +836,17 @@ async function show() {
   if (S.session === undefined && !S.error) await loadSession();
   if (S.session === undefined && S.error) { if (route !== "panne") { location.replace(navigator.onLine === false ? "#/panne/hors-ligne" : "#/panne"); return; } }
   if (S.session && route === "entree" && sub !== "sortie") { location.replace(S.session.arrivalDone ? "#/" : "#/arrivee"); return; }
-  if (!S.session && PROTECTED.has(route)) { S.intent = route === "" ? null : location.hash; if (route !== "entree") { location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : "#/entree"); return; } }
-  if (S.session && !S.session.arrivalDone && (route === "" || ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
+  // signed out: the root opens the public home; any other protected address opens the sign-in, with its intent
+  if (!S.session && PROTECTED.has(route)) {
+    S.intent = route === "" ? null : location.hash;
+    location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : route === "" ? "#/entree" : "#/entree/connexion");
+    return;
+  }
+  if (S.session && !S.session.arrivalDone && (route === "" || route === "vue" || ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
-  const key = route === "" || ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
+  // the sidebar lists the missions from the index once this page has read it; a screen opened cold
+  // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
+  const key = route === "" || route === "vue" || ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
   if (S.session && key && loadedFor !== key) {
     loadedFor = key;
     paint(loadingView(""));
@@ -606,8 +855,8 @@ async function show() {
   paint(resolve() ?? view404(location.hash || "#/"));
 }
 function paint(v) {
-  const { route } = parts();
-  shell(Boolean(S.session) && v.signed !== "out", v.fleetRoute ?? route);
+  const { route, sub } = parts();
+  shell(Boolean(S.session) && v.signed !== "out", v.fleetRoute ?? route, sub, v);
   renderBandeaux();
   setHTML(main, v.html);
   document.title = `${v.title ? `${v.title} · ` : ""}runward hébergé`;
@@ -752,6 +1001,7 @@ document.addEventListener("click", async (e) => {
   if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; loadedFor = null; location.hash = "#/entree/sortie"; say("Vous êtes déconnecté."); return; }
   if (what === "reload") { location.reload(); return; }
   if (what === "reload-screen") { S.error = null; S.session = undefined; loadedFor = null; location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
+  if (what === "scroll") { document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
   if (what === "confirm") return confirmGesture(k);
@@ -801,10 +1051,11 @@ main.addEventListener("submit", async (e) => {
 });
 
 (function theme() {
-  const KEY = "runward-hosted-theme", btn = $("theme");
+  const KEY = "runward-hosted-theme";
   let saved = null; try { saved = localStorage.getItem(KEY); } catch { saved = null; }
   if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
-  btn.addEventListener("click", () => {
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest("[data-theme-btn]")) return;
     const cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const next = cur === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", next);

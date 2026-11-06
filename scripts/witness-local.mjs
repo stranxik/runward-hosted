@@ -102,7 +102,9 @@ try {
   const click = async (text) => { await page.getByRole("button", { name: text }).first().click(); await page.waitForTimeout(500); };
 
   // 1. signed out
-  await page.goto(`${ORIGIN}/`); await screen("01-entree");
+  await page.goto(`${ORIGIN}/`); await screen("01-accueil");
+  await page.getByRole("button", { name: "Se connecter", exact: true }).first().click(); await page.waitForTimeout(400); await screen("01b-connexion");
+  await page.goto(`${ORIGIN}/#/mission/hosted`); reads = []; await page.reload(); await screen("01c-lien-profond", { mobile: false });
   await page.goto(`${ORIGIN}/#/entree/sans-compte`); reads = []; await page.reload(); await screen("02-sans-compte", { mobile: false });
   await page.goto(`${ORIGIN}/lien#t=${randomBytes(32).toString("base64url")}`); await screen("03-lien-invalide", { mobile: false });
   await page.goto(`${ORIGIN}/#/nimporte`); await screen("04-404", { mobile: false });
@@ -142,8 +144,32 @@ try {
   const refused = await upload({ workflow_ref: "stranxik/dropyour/.github/workflows/release.yml@refs/heads/main", run_number: "1210" });
   const second = await upload({ run_number: "1204" });
   console.log(`witness: refused -> ${refused.body.refusal}; second -> ${second.status} current ${second.body.current}`);
-  await page.reload(); await page.waitForTimeout(800); await screen("12-flotte-apres-envois");
-  await go("#/mission/dropyour"); await screen("13-mission", { mobile: true });
+  // seeding three more repositories, one per state of the dashboard. This is the witness's own harness, not a
+  // product path: the declarations and confirmations are made in process for the member signed in this
+  // browser, with the verification the passkey would give marked on its session (the same rows the routes
+  // write); the uploads still go through the real HTTP route with signed tokens.
+  const cookie = (await ctx.cookies()).find((k) => k.name === "__Host-rw_session");
+  const s0 = await c.app.identity.sessionFrom(cookie.value);
+  const grant = async (gesture, object) => { await c.store.tx(s0.tenantId, (tx) => tx.update("session", { id: s0.id }, { freshAt: Date.now(), grant: gesture ? { gesture, object, at: Date.now() } : null })); return c.app.identity.sessionFrom(cookie.value); };
+  const fix = JSON.parse(readFileSync(new URL("../test/fixtures/check.json", import.meta.url), "utf8"));
+  const seed = async ({ name, mission, rid, consent, verdict }) => {
+    const nk = name.toLowerCase();
+    const d = await c.app.repositories.declare(await grant(consent ? "declare-with-consent" : null, nk), { name, consent, missions: [{ id: mission, path: "." }] }, {});
+    const bytes = Buffer.from(JSON.stringify({ ...fix, verdict: verdict ?? fix.verdict }));
+    await upload({ repository: name, repository_id: rid, mission, run_number: "40", bytes });
+    await c.app.repositories.confirm(await grant("repository-confirm", d.id), d.id, {});
+    return d;
+  };
+  await seed({ name: "stranxik/hitpoint", mission: "hitpoint", rid: "880215547", consent: true, verdict: "level-not-met" });
+  await seed({ name: "stranxik/runward", mission: "runward", rid: "1021874533", consent: true, verdict: "clean" });
+  await seed({ name: "stranxik/radar", mission: "radar", rid: "902334118", consent: false });
+  await upload({ repository: "stranxik/radar", repository_id: "902334118", mission: "radar", run_number: "41", workflow_ref: "stranxik/radar/.github/workflows/release.yml@refs/heads/main" });
+  await page.reload(); await page.waitForTimeout(800); await screen("12-flotte-tableau");
+  await go("#/mission/dropyour"); await screen("13-mission-refusee");
+  await go("#/mission/hitpoint"); await screen("13b-mission-niveau");
+  await go("#/mission/radar"); await screen("13c-mission-silencieuse");
+  await go("#/mission/runward"); await screen("13d-mission-sans-ecart");
+  await go("#/vue"); await screen("13e-vue-complete");
   await go("#/envois"); await screen("14-envois");
   await go("#/acces"); await screen("15-acces");
   // 6. a gesture that withdraws, then restores: remove the security key, restore it
@@ -160,8 +186,8 @@ try {
   // 7. export
   await go("#/acces/export"); await click("Préparer l'archive"); await page.waitForTimeout(1500); await screen("19-export", { mobile: false });
   // 8. sign out, sign in again (discoverable credential)
-  await go("#/acces"); await page.getByRole("button", { name: "Se déconnecter" }).first().click(); await page.waitForTimeout(800); await screen("20-sortie", { mobile: false });
-  await go("#/entree"); await click("Se connecter avec ma passkey"); await page.waitForTimeout(1500); await screen("21-reconnecte", { mobile: false });
+  await go("#/acces"); await page.locator("[data-do=logout]:visible").first().click(); await page.waitForTimeout(800); await screen("20-sortie", { mobile: false });
+  await go("#/entree/connexion"); await click("Se connecter avec ma passkey"); await page.waitForTimeout(1500); await screen("21-reconnecte", { mobile: false });
   void a2; void tenant;
   report.push({ consoleErrors });
   if (consoleErrors.length) { console.log(`witness: console errors: ${consoleErrors.join(" | ").slice(0, 400)}`); failed++; }

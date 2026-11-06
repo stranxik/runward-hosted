@@ -18,6 +18,8 @@
   /* roles, light */
   --bg:var(--chaux); --fg:var(--basalte); --panel:var(--pierre); --mist:var(--sauge);
   --soft:rgb(25 23 21 / .66); --hair:rgb(25 23 21 / .16); --hair2:rgb(25 23 21 / .30);
+  --soft-i:color-mix(in srgb, var(--bg) 70%, var(--fg)); /* the soft ink of the inverted section of the home */
+  --term-soft:rgb(233 228 219 / .6); /* comments in the terminal, which stays warm black in both themes */
   /* type */
   --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --mono:"Departure Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
@@ -33,7 +35,7 @@
   --sans:var(--font);
   --ls-h1:-.02em; --ls-h2:-.015em; --ls-h3:-.01em;
   /* shape: radii belong to each product; runward keeps near-square corners (author's decision, 2026-11-06) */
-  --radius:2px; --r-pill:2px; --r-panel:2px; --r-thumb:2px; --r-notice:2px; --r-win:2px;
+  --radius:2px; --r-mark:1px; --r-pill:2px; --r-panel:2px; --r-thumb:2px; --r-notice:2px; --r-win:2px;
   /* motion: the family's productive curve and durations apply (famille.css); no entrance animation in the
      app. The one loop kept is the loading line, a progress indicator. */
   --ease-load:cubic-bezier(.45,.05,.25,1); --dur-load:1.6s;

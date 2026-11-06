@@ -87,7 +87,11 @@ export function repositoryCases(ctx, identity) {
         await tx.update("forge_repository", { id }, { repositoryId: pin.repositoryId, ownerId: pin.ownerId, state: "pinned" });
         await tx.update("repository", { id }, { confirmedAt: r.confirmedAt ?? now(), pendingSend: null });
         let published = null, quarantine = null;
-        if (r.pendingSend.uploadId) {
+        if (!r.pendingSend.uploadId) {
+          // no byte kept (content not consented): the mission still enters the index, declared and silent
+          const built = await ctx.assemble(tx);
+          if (built.ok) { const head = await tx.ledgerHead(); published = await ctx.publish(tx, built, head.seq + 1); }
+        } else {
           const u = await tx.get("upload", { id: r.pendingSend.uploadId });
           const built = await ctx.assemble(tx, { mission: u.mission, repositoryRef: id, kind: u.kind, sha256: u.sha256, commit: u.commit });
           if (built.ok) {

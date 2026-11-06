@@ -156,3 +156,16 @@ test("a mission that has uploads is removed only knowingly; its uploads stay in 
   const entries = await h.store.tx(f.tenant, (tx) => tx.ledgerAll());
   assert.ok(entries.some((e) => e.body.what === "send-pending"));
 });
+
+test("a repository confirmed without consented content enters the index, declared and silent (guard on a witness finding)", async () => {
+  const h = harness();
+  const f = await founder(h);
+  await gesture(h, f.session, null, null);
+  const d = await h.app.repositories.declare(await h.app.identity.sessionFrom(f.token), { name: "stranxik/radar", missions: [{ id: "radar" }] }, {});
+  assert.equal((await send(h, { repository: "stranxik/radar", repository_id: "4004" }, { mission: "radar" })).refusal, "content-not-consented");
+  await gesture(h, f.session, "repository-confirm", d.id);
+  const c = await h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), d.id, {});
+  assert.ok(c.published);
+  const idx = JSON.parse((await h.app.reading.index(f.tenant)).bytes.toString("utf8"));
+  assert.equal(idx.missions.find((m) => m.id === "radar").latest, "not-observed");
+});
