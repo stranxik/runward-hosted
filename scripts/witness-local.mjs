@@ -103,8 +103,12 @@ try {
 
   // 1. signed out
   await page.goto(`${ORIGIN}/`); await screen("01-accueil");
+  // guard: signed out, the root opens the public home, never the sign-in (a defect this witness found)
+  if (!(await page.locator("main .acc").count()) || !/#\/entree$/.test(page.url())) { console.log("witness: FAULT the root did not open the public home"); failed++; }
   await page.getByRole("button", { name: "Se connecter", exact: true }).first().click(); await page.waitForTimeout(400); await screen("01b-connexion");
-  await page.goto(`${ORIGIN}/#/mission/hosted`); reads = []; await page.reload(); await screen("01c-lien-profond", { mobile: false });
+  // a deep link opened as a fresh page load (a query makes it a new document, as a link from a job summary is)
+  reads = []; await page.goto(`${ORIGIN}/?from=job#/mission/hosted`); await screen("01c-lien-profond", { mobile: false });
+  if (!/#\/entree\/connexion$/.test(page.url()) || !(await page.locator("main .intent").count())) { console.log("witness: FAULT a deep link signed out did not open the sign-in with its intent"); failed++; }
   await page.goto(`${ORIGIN}/#/entree/sans-compte`); reads = []; await page.reload(); await screen("02-sans-compte", { mobile: false });
   await page.goto(`${ORIGIN}/lien#t=${randomBytes(32).toString("base64url")}`); await screen("03-lien-invalide", { mobile: false });
   await page.goto(`${ORIGIN}/#/nimporte`); await screen("04-404", { mobile: false });
