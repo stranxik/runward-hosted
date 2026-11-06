@@ -1,0 +1,31 @@
+---
+title: Memory Carries Provenance; an Untrusted Write Cannot Act Unreviewed
+requires: junit
+impact: HIGH
+asi: [ASI06]
+phases: [govern]
+signature: provenance|quarantin|trust[-\s]?tier
+nonScope: Proves the provenance/trust-tier design is decided and evidenced; does not prove quarantine actually blocks a poisoned memory at runtime, nor that trust tiers are enforced on every write path
+impactDescription: Every stored memory item carries its origin and trust tier; a memory written from untrusted content is quarantined and cannot influence a privileged action without human review
+tags: [security, memory, provenance, poisoning]
+noTerritory: It governs a trust property attached to every memory write and to the privileged-action guard, two execution paths that no directory gathers.
+---
+
+# Memory carries provenance; an untrusted write cannot act unreviewed
+
+> Prompt-injection defense guards the context window at read time. Memory poisoning is the same attack shifted in time: hostile content is written to memory now and replayed as trusted instruction later, long after the injection is out of the window. The write path needs its own guard.
+
+**The rule.** Every stored memory item carries provenance: its origin, its trust tier (trusted / derived / untrusted), and its write time. An item written from untrusted content (a retrieved page, a tool output, a user message) is stored **quarantined** — usable as *data* for recall, never promotable to instruction, and never load-bearing for a privileged action without human review. Trust is a property of the write, recorded once and never silently upgraded on read.
+
+```
+memory.write(item, source):
+  item.provenance = { origin: source.id, trust: source.trust, at: now }
+  store(item)
+
+memory.recall(query) -> items            # returns data; provenance travels with each item
+guardPrivilegedAction(item):
+  if item.provenance.trust != "trusted":
+    require(humanReview)                  # a quarantined memory cannot act alone
+```
+
+**Boundary.** Deterministic provenance tagging plus a fail-closed guard on the action path — no model judgment of trust. Complements `security-prompt-injection` (read-time), `data-memory-invalidation` (revocation) and `state-event-sourcing` (traceability). Maps to OWASP Agentic ASI06 (memory & context poisoning).
