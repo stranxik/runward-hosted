@@ -1,0 +1,12 @@
+{
+  "package": "runward-fleet",
+  "version": "0.46.0",
+  "repository": "https://github.com/stranxik/runward",
+  "path": "packages/runward-fleet",
+  "ref": "integration/2026-11-06-c",
+  "commit": "da888958fbee6557338a5d3d12e7992c66cc13a9",
+  "tarball": "vendor/runward-fleet-0.46.0-da888958.tgz",
+  "tarballSha256": "1d8c1205f8f17ae4836a6437995798902857e2fafb12650ab37d9a292b52b07a",
+  "integrity": "sha512-vqB8TWxBC+JlaqIQEMEVtT71xJlVuxBls8xIR2lipV5lwEzSaOQ6LuYN0ugM8wu1+9/hBvqOYwiu5DuPq5vGqQ==",
+  "how": "npm pack of packages/runward-fleet at commit; scripts/verify-runward-fleet.mjs proves each file of the tarball is the file at that commit"
+}
