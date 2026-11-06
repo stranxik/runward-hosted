@@ -497,12 +497,12 @@ function liensCoque(route, sub) {
 function renderLat(route, sub) {
   const L = liensCoque(route, sub);
   const s = S.session;
-  setHTML(latEl, `<a class="marque" href="#/" translate="no">${MARK}runward<span> hébergé</span></a>
+  setHTML(latEl, `<div class="lat-in"><a class="marque" href="#/" translate="no">${MARK}runward<span> hébergé</span></a>
     <nav aria-label="Vues du service">${L.principaux}</nav>
     ${L.missions ? `<p class="sec">Missions</p><nav aria-label="Missions, dans l'ordre de ce qui attend">${L.missions}</nav>` : `<p class="sec">Missions</p><nav aria-label="Missions"><a class="it" href="#/">dans la flotte</a></nav>`}
     <p class="sec">Vues runward-fleet</p><nav aria-label="Vues runward-fleet">${L.vues}</nav>
     <div class="bas"><span><b>${esc(s.tenant.title)}</b><br>vous · ${esc(s.member.role === "owner" ? "propriétaire" : s.member.role)} · ${s.passkeys} passkey${s.passkeys > 1 ? "s" : ""}</span>
-      <span class="bas-act"><button class="lien-btn" type="button" data-do="logout">Se déconnecter</button><button class="theme" type="button" data-theme-btn aria-label="Changer de thème">thème</button></span></div>`);
+      <span class="bas-act"><button class="lien-btn" type="button" data-do="logout">Se déconnecter</button><button class="theme" type="button" data-theme-btn aria-label="Changer de thème">thème</button></span></div></div>`);
   setHTML(mobNavEl, `${L.principaux}${L.missions ? `<p class="sec">Missions</p>${L.missions}` : ""}<p class="sec">Vues runward-fleet</p>${L.vues}<button class="lien-btn" type="button" data-do="logout">Se déconnecter</button>`);
 }
 
@@ -522,11 +522,12 @@ jobs:
       mission: &lt;mission&gt;
 <span class="c" lang="fr"># aucun « secrets. » : la CI se présente par OIDC</span></pre>`;
   const journal = `<dl class="cl"><dt>dépôt</dt><dd>propriétaire/dépôt, par son identifiant</dd><dt>workflow appelant</dt><dd>celui que vous avez déclaré</dd><dt>workflow d'envoi</dt><dd>celui du service, à son commit</dd><dt>run</dt><dd>numéro, tentative</dd><dt>commit</dt><dd>celui qui a été jugé</dd><dt>émetteur</dt><dd translate="no">token.actions.githubusercontent.com</dd></dl>`;
+  const attend = `<dl class="cl"><dt>état</dt><dd>l'un des quatre, par sa forme et son mot</dd><dt>mission</dt><dd>son nom déclaré</dd><dt>cause</dt><dd>la porte où elle bute, ou l'envoi qui n'a pas été accepté</dd><dt>source</dt><dd>le fichier, le commit et l'entrée du journal</dd><dt>geste suivant</dt><dd>la commande à lancer dans le dépôt, ou l'écran où agir</dd></dl>`;
   const etats = `${etat("gaps", "la porte où la mission bute, et le livrable qui manque")}${etat("level-not-met", "les portes franchies, mais rien n'y est vérifié mécaniquement")}${etat("not-observed", "aucun envoi accepté, et pourquoi")}${etat("clean", "toutes les portes franchies, sans écart")}`;
   const etapes = [
     ["1", "La CI envoie", "Un workflow publié par le service, épinglé par son commit, lance <code>runward check</code> sur votre commit et envoie ce que runward a écrit. Votre CI se présente par OIDC : aucun secret n'est rangé.", wf],
     ["2", "Le service assemble", "Il lit qui envoie dans le jeton signé par GitHub, écrit chaque envoi au journal, accepté ou non, avec ce qu'il retient :", journal],
-    ["3", "Vous lisez", "En tête, ce qui vous attend, mission par mission, dans l'un de quatre états, et chaque nombre renvoie à son fichier source.", `<div class="etats-a">${etats}</div>`],
+    ["3", "Vous lisez", "En tête, ce qui vous attend, mission par mission, dans l'un de quatre états, et chaque nombre renvoie à son fichier source. Chaque ligne dit :", attend],
   ];
   return { title: "Accueil", key: "entree", signed: "out", public: true, html: `<div class="acc">
     <section class="hero"><div class="hero-g">
@@ -803,11 +804,14 @@ function renderBandeaux() {
   setHTML(bandEl, b.join(""));
 }
 function shell(signedIn, route, sub, v) {
+  const pub = !signedIn && Boolean(v.public);
   document.body.classList.toggle("connecte", signedIn);
-  latEl.hidden = !signedIn; mobEl.hidden = !signedIn; mobEl.open = false;
-  if (signedIn) renderLat(route, sub); else { setHTML(latEl, ""); setHTML(mobNavEl, ""); }
+  document.body.classList.toggle("public", pub);
+  latEl.hidden = !signedIn; mobEl.hidden = !signedIn && !pub; mobEl.open = false;
+  const PUB_LINKS = `<button class="lien-nav" type="button" data-do="scroll" data-k="marche">Comment ça marche</button><button class="lien-nav" type="button" data-do="scroll" data-k="confiance">Confiance</button><a class="lien-nav" href="https://runward.dev" rel="noreferrer">Documentation</a>`;
+  if (signedIn) renderLat(route, sub); else { setHTML(latEl, ""); setHTML(mobNavEl, pub ? `${PUB_LINKS}<button class="lien-btn theme-m" type="button" data-theme-btn>Changer de thème</button>` : ""); }
   setHTML(stampEl, signedIn ? esc(S.session.tenant.title) : v.public ? "" : esc(location.host));
-  setHTML(pubEl, !signedIn && v.public ? `<button class="lien-nav" type="button" data-do="scroll" data-k="marche">Comment ça marche</button><button class="lien-nav" type="button" data-do="scroll" data-k="confiance">Confiance</button><a class="lien-nav" href="https://runward.dev" rel="noreferrer">Documentation</a>` : "");
+  setHTML(pubEl, pub ? PUB_LINKS : "");
   setHTML(topActEl, !signedIn && v.public ? `${go("#/entree/connexion", "Se connecter", { q: true })}<a class="btn" href="${MAILTO}">Demander l'accès</a>` : "");
   setHTML(piedEl, `<div class="wrap"><a href="#/legal">Mentions légales</a> · <a href="#/legal">Confidentialité</a> · <a href="#/legal">Sécurité</a> · <span class="soft">heures affichées à l'heure de Paris, avec leur décalage</span></div>`);
 }
@@ -1001,7 +1005,7 @@ document.addEventListener("click", async (e) => {
   if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; loadedFor = null; location.hash = "#/entree/sortie"; say("Vous êtes déconnecté."); return; }
   if (what === "reload") { location.reload(); return; }
   if (what === "reload-screen") { S.error = null; S.session = undefined; loadedFor = null; location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
-  if (what === "scroll") { document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
+  if (what === "scroll") { mobEl.open = false; document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
   if (what === "confirm") return confirmGesture(k);

@@ -103,6 +103,15 @@ try {
 
   // 1. signed out
   await page.goto(`${ORIGIN}/`); await screen("01-accueil");
+  // guard: the public header's links hold on one line at 1440, and fold into the menu on a phone
+  const navOneLine = await page.evaluate(() => [...document.querySelectorAll("nav.pub .lien-nav")].every((e) => e.getBoundingClientRect().height < 24 && getComputedStyle(e).whiteSpace === "nowrap") && document.querySelectorAll("nav.pub .lien-nav").length === 3);
+  if (!navOneLine) { console.log("witness: FAULT the public header's links do not hold on one line at 1440"); failed++; }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const menuOnPhone = await page.evaluate(() => getComputedStyle(document.getElementById("mob")).display !== "none" && getComputedStyle(document.getElementById("pub")).display === "none" && document.querySelectorAll("#mobnav .lien-nav").length === 3);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  if (!menuOnPhone) { console.log("witness: FAULT on a phone the public links are not in the menu"); failed++; }
+  // guard: the four state cards appear once on the home (in the hero), step 03 shows field labels
+  if ((await page.locator("main .etats-a").count()) !== 1 || !(await page.locator(".pas:nth-child(3) dl.cl").count())) { console.log("witness: FAULT the state cards are not once in the hero, or step 03 has no field labels"); failed++; }
   // guard: signed out, the root opens the public home, never the sign-in (a defect this witness found)
   if (!(await page.locator("main .acc").count()) || !/#\/entree$/.test(page.url())) { console.log("witness: FAULT the root did not open the public home"); failed++; }
   await page.getByRole("button", { name: "Se connecter", exact: true }).first().click(); await page.waitForTimeout(400); await screen("01b-connexion");
@@ -169,6 +178,9 @@ try {
   await seed({ name: "stranxik/radar", mission: "radar", rid: "902334118", consent: false });
   await upload({ repository: "stranxik/radar", repository_id: "902334118", mission: "radar", run_number: "41", workflow_ref: "stranxik/radar/.github/workflows/release.yml@refs/heads/main" });
   await page.reload(); await page.waitForTimeout(800); await screen("12-flotte-tableau");
+  // guard: the sidebar's rule runs the whole height of the page
+  const latFull = await page.evaluate(() => { const l = document.getElementById("lat").getBoundingClientRect(); return l.height >= document.documentElement.scrollHeight - 2 && getComputedStyle(document.getElementById("lat")).borderRightWidth !== "0px"; });
+  if (!latFull) { console.log("witness: FAULT the sidebar's rule stops before the bottom of the page"); failed++; }
   await go("#/mission/dropyour"); await screen("13-mission-refusee");
   await go("#/mission/hitpoint"); await screen("13b-mission-niveau");
   await go("#/mission/radar"); await screen("13c-mission-silencieuse");
