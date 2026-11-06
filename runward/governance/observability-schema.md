@@ -1,53 +1,29 @@
-# Observability Schema: [system or agent name]
+# Observability Schema: runward hosted
 
-> **Usage.** An unobserved agentic system is ungovernable and unpredictable in cost. Observability is a design property carried by the middleware chain, never an end-of-project option. Three independent levels: structured logs, lifecycle events, per-model-call metrics. One request ID propagated from entry to every tool and model call — and to sub-agents via parent/child lineage — makes every trajectory replayable and auditable. The same trace stream also feeds continuous evaluation and provenance. Auditing a past decision means rebuilding the context as it was: the schema must let you unfold a consolidated memory back to its raw facts at the exact timestamp. Cost is steered by architecture, with explicit ceilings. Replace every `[placeholder]`; delete this notice on delivery.
-
-**Version**: [vX.Y] · **Last review**: [YYYY-MM-DD]
+**Date**: 2026-11-06
 
 ## 1. The three levels
 
-[What is emitted at each level, and where it aggregates.]
-
-| Level | What | Fields | Use |
-|---|---|---|---|
-| **Structured logs** | one line per event, typed context | [module, request ID, session, timestamp] | [aggregation, search, alerting] |
-| **Lifecycle events** | every orchestrator step and tool call, persisted | [step, tool, input, output, status] | [trajectory replay, behavioral audit] |
-| **Per-model-call metrics** | one measurement per inference | [input tokens, output tokens, cache, tier used, duration, status, attempt] | [cost and performance tracking per agent] |
+- **Logs**: one JSON line per event on standard output (`src/adapters/system/log.js#jsonLog`), fields from a closed list: level, at, event, requestId, route, method, status, ms, refusal, tenant (a digest), detail, error. Never a body, a token, a name or a path.
+- **Events**: the tenant's journal (`rw.ledger`), append only and chained (ADR-0007); the operator's journal (`rw.operator_journal`).
+- **Measures**: the six of the framing note; the request budget per screen.
 
 ## 2. Propagated request ID
 
-[The single identifier that threads the whole trajectory.]
-
-- **Origin**: [generated at system entry.]
-- **Propagation**: [passed to every tool and model call.]
-- **Parent/child lineage**: [propagated to sub-agents to reconstruct a task's tree.]
-- **Carrier field**: [field name in logs, events, and metrics.]
+Created by the server for each request (`r-` and 12 hex), returned in `Runward-Request-Id`, written in the log line and in the journal entry, shown in every error state of the screen, and written by the send job in the job summary.
 
 ## 3. Provenance
 
-[What makes it possible to replay exactly what the model saw, even after working memory is gone.]
-
-- **Per-inference fingerprint**: [what was actually injected into context on each call.]
-- **Associated versions**: [prompt and model version behind each output, for temporal consistency.]
-- **Linkage**: [how provenance ties to lifecycle events and metrics through the same request ID.]
+Each upload's entry keeps the verified claims of its token (repository and owner by id, calling and called workflows with their SHA, event, ref, commit, runner), the run, attempt and order epoch, and each publication the runward-fleet version and the digests of the archive, the inventory and the index.
 
 ## 4. Unfolding a consolidated memory (audit)
 
-[The condition for an audit that holds: rebuild the context of a decision, not just observe that a call happened.]
-
-- **Consolidation pointers**: [when a memory item is consolidated, deposit pointers to its raw source facts.]
-- **Unfolding procedure**: [from a compressed item, walk the pointers back to the raw facts at the exact timestamp of the decision.]
-- **Principle**: [current execution stays light; explaining a past decision stays possible after summarization.]
+No memory. The audit is the journal page (`GET /api/v0/journal`) and the export's `journal.jsonl`.
 
 ## 5. Cost ceilings
 
-[Recurring cost as a steered quantity, not a suffered one — from day zero.]
-
-- **Aggregate counter**: [per root task.]
-- **Ceilings per time window**: [thresholds set in advance.]
-- **Behavior on overrun**: [the orchestrator stops and returns a synthesis, instead of running open-ended.]
-- **Structural cost levers**: [the model boundary (deterministic work pays no call); tier routing (fast / balanced / deep — one tier up when in doubt); caching and prompt stability (stability beats raw token trimming).]
+Budget 20 EUR excluding tax a month, billing alert at 15 EUR (author's decision); max scale 1; the probe hourly, not every 5 minutes; 30 runs an hour per repository.
 
 ## References
 
-- [Evaluation rubric (fed by this trace stream), runbook, related ADRs.]
+ADR-0007, ADR-0010.

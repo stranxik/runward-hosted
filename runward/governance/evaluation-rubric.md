@@ -1,60 +1,50 @@
-# Evaluation Rubric: [agent or capability under evaluation]
+# Evaluation Rubric: runward hosted
 
-> **Usage.** A deterministic system is tested; an agentic system is tested **and** evaluated. This rubric serves the evaluation half: measuring the quality of non-deterministic behavior where a test can no longer answer true or false. Scoring follows an explicit rubric; every scenario carries expected and forbidden terms, which makes **abstention** (refusing to invent) weigh as much as recall. Evaluation is not a final gate but a continuous loop, sampled off the hot path from the trace stream. Scoring is hybrid: deterministic wherever a guarantee exists, a judge model only for the irreducibly behavioral. Two mandatory guards: a **hold-out the optimizer never sees**, and an **anchored judge** (pinned version, or an anchor set replayed at every judge change) — without them the quality series silently becomes incomparable. Replace every `[placeholder]`; delete this notice on delivery.
-
-**Version**: [vX.Y] · **Anchored judge**: [pinned version or anchor set] · **Rerun triggers**: [any change touching memory, prompts, or routing]
+**Date**: 2026-11-06
 
 ## 1. Capabilities evaluated
 
-[Select and adapt the relevant capabilities. For long-memory benches, the six core ones below.]
+The service has no model: nothing here is judged by a model. The capabilities are deterministic and evaluated by tests (listed per file below) and by the six measures of the framing note.
 
 | Capability | What it verifies |
 |---|---|
-| Direct recall | [retrieve a fact given many turns earlier] |
-| Multi-constraint recall | [combine several scattered pieces of information into one answer] |
-| Knowledge update | [return the most recent value after a correction] |
-| Temporal reasoning | [state what was true at a given date; distinguish when a fact was learned from when it was valid] |
-| Abstention | [refuse to invent when the information was never given] |
-| Long session | [remember across enough turns to trigger summarization] |
+| Upload and order | a pinned upload is accepted, an old run stays history, each refusal has its code (`test/unit/ingest.test.js`) |
+| Identity | links in seven states, single-use challenges, sessions, gestures, recovery (`test/unit/identity.test.js`) |
+| Declarations and content | consent, erasure, quarantine, export and replay (`test/unit/repositories.test.js`, `test/pg/isolation.test.js`) |
+| HTTP | hosts, origin, cookie, headers, assets (`test/unit/http.test.js`) |
+| Isolation | 0 row across two real tenants, catalog, planted controls (`test/pg/isolation.test.js`) |
+| The six measures | S1 to S6 on the deployed service (framing §3) |
 
 ## 2. Scoring scale
 
-[Explicit and reproducible.]
-
 | Answer quality | Score |
 |---|---|
-| Complete — restates all key elements | [max] |
-| Partial — misses one | [intermediate] |
-| Vague but not wrong | [half] |
-| Wrong, or hallucinated where abstention was required | [zero] |
+| Complete: the test passes, or the measure meets its threshold | 1 |
+| Partial: a measure below its threshold, published as it is | 0 |
+| Vague but not wrong: does not apply, a test either passes or fails | 0 |
+| Wrong: a test fails, or a measure is reported without its data | 0 |
 
 ## 3. Scenarios
 
-[One block per scenario: the multi-turn conversation, the final question, and the expected / forbidden terms.]
+### Scenario S1 — capability: same index, anchored outside the service
 
-### Scenario [ID] — capability: [target capability]
-
-- **Multi-turn conversation**: [describe the turns in order.]
-- **Final question**: [the question asked at the end.]
-- **Expected terms**: [elements a good answer must contain.]
-- **Forbidden terms**: [elements whose presence signals hallucination or leakage. For an abstention scenario, the right answer is a motivated refusal; any invented fact is forbidden.]
+- **Multi-turn conversation**: seven consecutive days of real uploads from at least three repositories; each client job writes the anchor (seq, head, indexSha256) in its summary, an annotation and an artifact.
+- **Final question**: is every anchored indexSha256 the index served, and the index runward-fleet rebuilds from the export with the version of that entry?
+- **Expected terms**: "same" for every replayable version in replay.json; the served index equal to the last replayed.
+- **Forbidden terms**: a "different" replay; an index served that no export rebuilds.
 
 ## 4. Hold-out (non-gameable)
 
-[The strong guard that stops self-tuning from drifting toward whatever flatters the judge.]
-
-- **Composition**: [a subset of scenarios with verifiable ground truth, invisible to the optimizer.]
-- **Use**: [replayed to trigger rollback if its score drops, independently of the training score.]
-- **Limit**: [for purely subjective behavior without ground truth, the safety net reverts to human sampling; the self-tuning envelope stays narrow.]
+- **Composition**: the anchors live in the customers' job summaries and artifacts, outside the service; the image served is read from the hoster's API, not from `/api/version` (S5).
+- **Use**: the witness reader compares them each day (`scripts/witness-reader.mjs`).
+- **Limit**: the head of a private repository needs a read token the public job does not hold; such a line reads "not compared".
 
 ## 5. Judge anchoring
 
-[The judge is itself a model, and it will be updated.]
-
-- **Anchoring method**: [pinned version, or an anchor set replayed at every judge change to recalibrate the measure.]
-- **Judge scope**: [only irreducibly behavioral quality. The hard floor — safety, security, authorization, audit — stays deterministic, never delegated to the judge.]
-- **Action boundary**: [the loop produces signals and recommendations; acting on them goes through bounded, audited, pre-approved tuning or human validation — never autonomous self-rewriting.]
+- **Anchoring method**: no judge; nothing to anchor.
+- **Judge scope**: none; safety, security, authorization and audit stay deterministic.
+- **Action boundary**: the measures produce reports; nothing acts on them without the author.
 
 ## References
 
-- [Observability schema (the trace stream feeding this loop), related evaluation runbook, ADRs.]
+framing §3; ADR-0012.

@@ -1,0 +1,99 @@
+# The gate and the tests of runward hosted, on GitHub-hosted runners only (never the NAS runner: this
+# repository is public). Actions are pinned by commit; permissions are the least each job needs.
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions: {}
+concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    services:
+      postgres:
+        image: postgres@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac  # postgres:17-alpine
+        env: { POSTGRES_HOST_AUTH_METHOD: trust }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with: { node-version: "22" }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: unit, application and HTTP tests
+        run: npm test
+      - name: PostgreSQL isolation suite (two tenants, catalog, planted controls)
+        env: { PG_ADMIN_URL: "postgres://postgres@localhost:5432/postgres" }
+        run: npm run test:pg
+      - name: the vendored runward-fleet is the code at its pinned commit
+        run: node scripts/verify-runward-fleet.mjs
+      - name: the send workflow never passes --hooks and pins every action by commit
+        run: node scripts/check-workflows.mjs
+
+  runward:
+    # The gate. Red until every CRITICAL/HIGH row of the phase is accounted for and ratified by a person.
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with: { node-version: "22" }
+      - name: install runward 0.46.0, integrity checked, outside the tree, without scripts
+        run: |
+          mkdir -p "$RUNNER_TEMP/rw" && cd "$RUNNER_TEMP/rw"
+          curl -sSfLo runward.tgz https://registry.npmjs.org/runward/-/runward-0.46.0.tgz
+          echo "+O+Q8yVcdxCNm9bsb9IbrIcHU5SB90hgfReoHdKolzCwTvBggWn7DXDu6IAhX84bHQ8M6qJks6yU6DHbtFyLIQ==  runward.tgz" > want
+          [ "$(openssl dgst -sha512 -binary runward.tgz | base64 -w0)  runward.tgz" = "$(cat want)" ] || { echo "runward tarball integrity mismatch"; exit 1; }
+          npm install --ignore-scripts --no-audit --no-fund --prefix . ./runward.tgz >/dev/null
+      - name: runward check --strict
+        run: '"$RUNNER_TEMP/rw/node_modules/.bin/runward" check --strict'
+
+  infra:
+    runs-on: ubuntu-24.04
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4  # v2.0.2
+        with: { tofu_version: "1.12.12", tofu_wrapper: false }
+      - name: the Scaleway description is valid (nothing is created)
+        run: cd infra/scaleway && tofu init -backend=false -input=false && tofu validate
+      - name: the qualified-target description is valid (nothing is created)
+        run: |
+          curl -sSfLo k.tgz https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz
+          echo "9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883  k.tgz" | sha256sum -c -
+          tar -xzf k.tgz kubeconform && ./kubeconform -strict -summary -skip Route infra/kubernetes/*.yaml
+
+  image:
+    # The OCI image of this exact commit, run against PostgreSQL and a local S3 (R9: portability exercised,
+    # not asserted); on main, a real OIDC token of this job is sent and must be refused for the right reason.
+    needs: test
+    runs-on: ubuntu-24.04
+    permissions: { contents: read, id-token: write }
+    services:
+      postgres:
+        image: postgres@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac
+        env: { POSTGRES_HOST_AUTH_METHOD: trust }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with: { node-version: "22" }
+      - name: a local S3 (SeaweedFS 3.97, pinned by digest), not the hoster's
+        run: docker run -d --name s3 -p 127.0.0.1:8333:8333 chrislusf/seaweedfs@sha256:bb05d66d2963b1cc48073190781c3dd29e2c4c88a2ae2986bf58e38c86d89c6e server -s3 -dir=/data
+      - name: build the image at ${{ github.sha }}
+        run: docker build --pull=false --build-arg RW_COMMIT=${{ github.sha }} -t runward-hosted:${{ github.sha }} .
+      - name: the image digest
+        run: docker image inspect runward-hosted:${{ github.sha }} --format '{{.Id}}' | tee "$RUNNER_TEMP/image-id"
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: run the image against PostgreSQL and S3, then the smoke test
+        env:
+          IMAGE: runward-hosted:${{ github.sha }}
+          PG_ADMIN_URL: postgres://postgres@localhost:5432/postgres
+          SEND_TOKEN_FROM_THIS_JOB: ${{ github.event_name == 'push' && 'yes' || 'no' }}
+        run: node scripts/image-smoke.mjs

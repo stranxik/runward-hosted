@@ -1,58 +1,44 @@
-# Mission Contract: [system or mission name]
+# Mission Contract: runward hosted
 
-> **Usage.** One page, filled with the sponsor at framing; the steering contract of the mission. It states what is delivered, on what condition it is accepted, and along which roadmap. It links the success criterion to the deliverables and the milestones, and it is the shared reference from one gate to the next. Replace every `[placeholder]`; delete this notice on delivery.
-
-**Date**: [YYYY-MM-DD] · **Sponsor**: [name or role] · **Operator(s)**: [name(s)] · **Indicative horizon**: [e.g. framing in days, floor in weeks]
+**Date**: 2026-11-06 · **Sponsor**: Thibault Souris · **Operator(s)**: Thibault Souris; agent sessions act under their own identity, never his (ADR-0110 of runward) · **Indicative horizon**: floor in weeks, after the paid resources are approved
 
 ## Principle
 
-A deliverable is judged by its **acceptance against an observable criterion**, not by its form. Every engagement therefore carries two inseparable faces: what is handed over, and the condition that says it is done. That condition — the Definition of Done — always ties back to the success criterion set at framing. This protects both sides: no fuzzy scope, no deliverable open to interpretation.
+A deliverable is judged by its acceptance against an observable criterion (framing §3, SC-1 to SC-6), not by its form.
 
 ## Engagements
 
 | Engagement | Deliverables | Definition of Done |
 |---|---|---|
-| **Flash framing** | Framing note: problem, target value, observable success criterion, floor vs target split, first costed increment, hard constraints | The sponsor validates the success criterion and the floor scope; what is deferred is named |
-| **Executable floor** | System wired to real traffic; the deterministic taken out of the model as testable code; baseline observability; light architecture note | The system answers on real cases and a first proof of value is measured against the success criterion |
-| **Staged iteration** | Increments delivered; structural decisions locked as ADRs; governance, security and evaluation instrumented | Every increment is measured, every added complexity traced to a trigger, every decision traceable |
-| **Handover** | Reusable assets, tutorials, handover sessions; evidence in the code; recovery documentation | The team takes over and evolves the system without the operator — demonstrated on a task redone autonomously |
+| **Framing** | runward/framing.md, the PADRs ratified on 2026-11-06 | the author validated S1 to S6 and Q1 to Q12 (2026-11-06) |
+| **Executable floor** | this repository: the service, the send workflow, the CI, the two infrastructure descriptions, the runbook | S1 to S6 measured on the deployed service and published in runward/floor.md |
+| **Staged iteration** | one ADR per trigger of framing §6 | each increment measured, each complexity traced to its trigger |
+| **Handover** | runward/handover.md, the runbook | a task redone without the builder, dated |
 
 ## Acceptance of the whole mission
 
-Beyond each engagement, the mission is done when these four conditions hold. This is the global acceptance — the one you sign.
-
-1. A system **holds in production on real traffic**, not in a demo.
-2. The success criterion set at framing is **measured and reached**, or its gap is explained.
-3. **Governance is in place**: observability, provenance, human approval, untrusted inputs constrained.
-4. The assets are **handed over and the team is autonomous** — demonstrated, not declared.
+1. The service holds in production on the maintainer's real repositories.
+2. S1 to S6 are measured and reached, or their gap is explained.
+3. Governance is in place: journal, isolation proof, probe, rollback.
+4. The runbook lets the author operate it alone.
 
 ## Typical roadmap and decision gates
 
-A mission follows a constant arc, punctuated by decision gates: a milestone is crossed only when the previous one has proven itself. Durations are indicative and set at framing.
-
 ```
-DoR check --> Framing --> Executable floor --> Increments --> Handover
- (launch      (days)       (weeks)             (iterative,    (autonomy)
- conditions)                                    on evidence)
-                       gate: floor proven?   gate: increment holds?
+framing (done) --> floor built (this repository) --> resources approved --> deployed --> S1..S6 measured
+                                                     gate: author's price approval     gate: floor proven?
 ```
-
-A gate is crossed on **measured evidence**, never by calendar or by principle.
-
-- **After the floor**: is the first proof of value there? If not, fix the floor — do not add complexity.
-- **After each increment**: is the gain measured and held? The next increment is justified only by an objective trigger.
-- **Before handover**: is the system governed and the team ready to take over?
 
 ## The contract, to fill with the sponsor
 
 | Field | To fill in |
 |---|---|
-| **Problem** | [The real need, not the dreamed one — as observed in the process] |
-| **Success criterion** | [Observable and measurable on real traffic] |
-| **Floor** | [The smallest system that proves value] |
-| **Target** | [The full architecture aimed at, by increments — named, not built] |
-| **Engagements retained** | [flash framing / executable floor / staged iteration / handover — which apply] |
-| **Milestones & gates** | [Indicative dates and the passing condition of each gate] |
-| **Deliverables & DoD** | [Taken from the engagements table, adjusted to this mission] |
-| **Hard constraints** | [Sovereignty, regulation, security, legacy — whatever bounds the solution space] |
-| **Risks owned by the sponsor** | [Missing launch conditions (DoR), if any, each named as an owned risk] |
+| **Problem** | framing §1 |
+| **Success criterion** | framing §3, SC-1 to SC-6 |
+| **Floor** | framing §4 |
+| **Target** | framing §5 |
+| **Engagements retained** | framing, executable floor, staged iteration |
+| **Milestones & gates** | resources approved by the author; deploy enabled (RW_DEPLOY_ENABLED); seven days of S1 |
+| **Deliverables & DoD** | engagements table above |
+| **Hard constraints** | framing §7 |
+| **Risks owned by the sponsor** | no paid resource yet; one human (R5) |

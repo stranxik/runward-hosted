@@ -44,5 +44,14 @@ Four questions, in order. If none fires, stay on the sober default.
 
 | Decision | Position | ADR |
 |---|---|---|
-| [decision name from the matrix above] | [default \| switched] | [— or ADR-NNNN] |
+| Core language | default (Node.js, for runward-fleet) | ADR-0001 |
+| Service split | default (modular monolith) | ADR-0001 |
+| Legacy integration | default (the assembler as the boundary with runward-fleet) | ADR-0004 |
+| Number of agents | default (no agent in the service) | — |
+| Model abstraction | default (no model at all) | — |
+| State | switched (immutable journal plus derived index) | ADR-0007 |
+| Contract evolution | default (/api/v0 additive, tolerant reader) | ADR-0003 |
+| Non-critical vs sensitive | default (reads degrade; gestures fail closed, the security log before commit) | ADR-0007 |
+| Agent identity | default (the CI's workload identity, the witness reader's own) | ADR-0003 |
+| Execution secrets | default (secrets at the boundary: environment of the container and of the GitHub environment) | ADR-0008 |
 

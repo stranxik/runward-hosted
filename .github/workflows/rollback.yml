@@ -1,0 +1,27 @@
+# The manual rollback of the closed list (ADR-0110, PADR-0015 point 6), WRITTEN BUT OFF until
+# RW_DEPLOY_ENABLED is true. It redeploys a digest that a past deploy's evidence named green, then waits
+# for /api/version to serve it. It never builds anything. Runbook: runward/runbook.md, "Roll back".
+name: rollback
+on:
+  workflow_dispatch:
+    inputs:
+      digest: { description: "the registry image digest to serve again (rg.fr-par.scw.cloud/runward/runward-hosted@sha256:...)", required: true, type: string }
+permissions: {}
+jobs:
+  rollback:
+    if: ${{ vars.RW_DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: {}
+    steps:
+      - name: redeploy by digest, then wait for /api/version
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", DIGEST: "${{ inputs.digest }}" }
+        run: |
+          [[ "$DIGEST" =~ ^rg\.fr-par\.scw\.cloud/runward/runward-hosted@sha256:[0-9a-f]{64}$ ]] || { echo "not a digest of this registry"; exit 2; }
+          api="https://api.scaleway.com/containers/v1beta1/regions/fr-par/containers/$CONTAINER"
+          start=$(date +%s)
+          curl -sSf -X PATCH -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api" -d "$(jq -n --arg img "$DIGEST" '{registry_image: $img, environment_variables: {RW_IMAGE: $img}}')" >/dev/null
+          curl -sSf -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null
+          for i in $(seq 1 60); do
+            if [ "$(curl -sf https://app.runward.dev/api/version | jq -r .image)" = "$DIGEST" ]; then echo "rolled back in $(( $(date +%s) - start )) s" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi; sleep 10
+          done; exit 1

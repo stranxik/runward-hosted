@@ -1,70 +1,83 @@
-# Architecture Note: [system name]
+# Architecture Note: runward hosted
 
-> **Usage.** Produce this note at the end of the `architect` workflow. It states boundaries before technology: the ports, the integration protocol, the default topology with its triggers, and what deliberately stays open. Keep it to a few pages — it is a map, not a detailed design dossier. Every structuring decision referenced here must already be locked in an ADR; the note cites, it does not decide. Replace every `[placeholder]`; delete this notice on delivery.
-
-**Date**: [YYYY-MM-DD] · **Version**: [vX.Y] · **Framing note**: [link] · **ADR journal**: [link]
+**Date**: 2026-11-06 · **Phase**: architect · **Source**: the architecture note v2 of 2026-11-06 (author's private folder) and PADR-0010 to PADR-0020, restated here in English.
 
 ## 1. Context
 
-[One paragraph: the problem and success criterion from framing, and the floor this architecture must carry. No restating of the full framing note — link it.]
+A hosted view of runward missions: each declared repository's CI sends what runward wrote; the service assembles the index with the pinned runward-fleet and serves runward-fleet's own view behind passkeys. The system has **no model**: no LLM call, no model port. It never sees code, runs neither runward nor a test nor customer code (the send workflow runs runward in the customer's CI), raises no cell, and does not know the CLI.
 
 ## 2. Boundaries
 
-[The two boundaries that make the stack secondary.]
-
-- **Domain ports.** [How the domain expresses its needs as contracts, and why the model port is a port like any other: the reasoning engine is bound by its contract, not its brand — a replaceable adapter behind a stable port.]
-- **Integration protocol.** [The standardized tool protocol through which out-of-process capabilities are exposed and consumed. A service is an adapter that moved into its own process; the domain does not change.]
+- **Entry** (`src/http/`): HTTP and JSON, `/api/v0` in the path, additive only, tolerant reader; every write a POST, PATCH or DELETE checked same-origin; no GET writes; every answer carries `Runward-Request-Id` and `Runward-Version`.
+- **Application** (`src/application/`): upload, order, assemble, sign in, links, declare and confirm, consent, withdraw and restore, journal, export, erase, operator gestures, witness reader.
+- **Domain** (`src/domain/`): refusals, workload claims and upload order, identity rules, repositories and retention, the chained journal. Imports only itself and `node:crypto` (`test/unit/boundary.test.js`).
+- **Adapters** (`src/adapters/`): PostgreSQL and in-memory stores, S3 and in-memory objects, GitHub OIDC, WebAuthn, runward-fleet (the anti-corruption layer), tar, clock, log, egress.
 
 ## 3. Ports
 
-[One line per port; the full contract of each lives in its own port-contract spec.]
-
 | Port | Direction | Intent | Contract version | Spec |
 |---|---|---|---|---|
-| [ModelPort] | [secondary] | [provide a model completion] | [v0.1] | [link] |
-| [PersistencePort] | [secondary] | [persist the interaction log] | [v0.1] | [link] |
-| [ActionPort] | [secondary] | [execute an action — approval required: yes/no] | [v0.1] | [link] |
-| [EntryPort] | [primary] | [receive work: interface / API / tool protocol] | [v0.1] | [link] |
+| EntryPort (HTTP) | primary | receive uploads from CI, gestures and reads from browsers | v0 | ../src/http/server.js |
+| TenantStore and Ledger | secondary | persist under a tenant set by the server; append to the chained journal; resolve by exact key | v0 | ../src/adapters/store/tables.js |
+| ExportStore, SecurityLog, Archive | secondary | keep bytes by content; write the security log before commit; keep a prepared archive 24 h | v0 | ../src/adapters/objects/objects.js |
+| WorkloadVerifier | secondary | verify a CI's OIDC token, or name the refusal | v0 | ../src/adapters/oidc/github.js |
+| HumanAuthenticator | secondary | passkey ceremonies, a challenge bound to a purpose and a gesture | v0 | ../src/adapters/webauthn/simplewebauthn.js |
+| IndexAssembler | secondary | the fleet index by runward-fleet, or a named refusal | v0 | contracts/index-assembler.md |
+| Clock, Log | secondary | the service time, declared; one JSON line per event | v0 | ../src/adapters/system/log.js |
+
+Port contracts: `runward/contracts/index-assembler.md`.
 
 ## 4. Default topology and triggers
 
-[The starting silhouette and the signal that would change each default. Defaults apply now; triggers are crossed only in `iterate`.]
-
 | Default | Rationale | Evolution trigger |
 |---|---|---|
-| Modular hexagonal monolith | [one deployable, pure domain plus adapters] | [load, isolation, release-cycle, or availability signal] |
-| Single orchestrator | [composes, carries no business logic] | [genuinely parallelizable subtasks] |
-| Tool registry + middleware chain | [single transversal surface, thin channel] | [—] |
-| One core language, thin model SDK | [no heavy chain framework] | [mature library or proven performance need → sidecar] |
+| Modular hexagonal monolith | one deployable, pure domain plus adapters (ADR-0001) | more than sixty routes, or a module with its own scaling or release cycle |
+| Single orchestrator | the application layer composes use cases; no agent | a genuinely parallelizable subtask (none known) |
+| Tool registry + middleware chain | no agent tools: the route table and one entry middleware hold the host list, request id, headers, same origin, session, in one place (`src/http/server.js`) | a second entry (an MCP read access) |
+| One core language, thin model SDK | no model SDK at all; Node.js because runward-fleet is JavaScript; three production dependencies | a measured need the table router cannot cover in under a hundred lines |
+| Mono-instance, scale 0 to 1, state outside the process | all state in PostgreSQL and S3 | S2 or S6 fails at scale 0 (minimum scale 1), or a second instance (advisory locks already serialise per tenant) |
 
 ## Rule conformance
 
-> Account for every CRITICAL/HIGH craft rule mapped to the architect phase (`runward/rules/`, frontmatter `phases: [architect]`). `applied` needs a pointer; `deviated` needs an ADR; `n/a` needs a reason. `runward check --strict` verifies this table is complete — it checks a traced decision, not the quality of your architecture.
->
-> Evidence can be **typed**, and typed pointers are verified deterministically at the gate: `file:PATH[:LINE][#SYMBOL]` · `test:PATH[::NAME]` · `adr:NNNN` — several per cell, separated by `;`. The gate checks resolution, non-emptiness, line count, symbol/test-name presence, and the rule's `signature:` when it declares one (ADR-0019/0020). Free prose stays valid — it is your judgment; a path it cites must simply not point at an empty file. A spelling whose operand could not be a path is read as prose, not as a citation, so a sentence may say `npm run test:junit` without becoming a pointer that fails; the flip side is that a file with no extension needs `file:./Makefile` rather than `file:Makefile`, and `runward check --strict` names every spelling it read as prose so the difference is never silent.
+> Rows are proposed by an agent session and ratified by the author, never by the agent (AGENTS.md, ADR-0082 of runward). The gate refuses a proposed row until it is ratified.
 
 | Rule | Status | Evidence |
 |---|---|---|
-| [rule-slug] | applied \| deviated \| n/a | [pointer, ADR-id, or reason] |
+| contracts-governance | proposed:applied | file:src/http/server.js#apiContract; file:src/domain/refusals.js#REFUSALS; adr:0003 |
+| hexa-adapter-pattern | proposed:applied | file:src/application/app.js#PORTS; file:src/adapters/store/memory.js#memoryStore; file:src/adapters/store/postgres.js#postgresStore |
+| hexa-architecture | proposed:applied | test:test/unit/boundary.test.js; adr:0001 |
+| hexa-typescript-native | proposed:deviated | adr:0001 (JavaScript ES modules: runward-fleet, which the product imports, is JavaScript; no framework, no chain library) |
+| process-adr-and-journal | proposed:applied | adr:0001; adr:0003; adr:0006 |
+| security-mcp-server-pinning | proposed:n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
 
 ## 5. What stays open
 
-[Explicitly undecided: language(s), framework, model provider, hosting. Each is an adapter decision, taken later behind the contracts above, justified by a local technical reason.]
+The WebAuthn library's behaviour in each browser (the ceremonies are the author's gestures); the private network between the serverless container and the managed base (to confirm at creation); the backup retention settable to 7 days in the console.
 
 ## 6. Legacy integration (if any)
 
-[Where the anticorruption layer sits, which dialect it translates, and the named cost of that translation. The boundary is never free on legacy.]
+runward-fleet is the upstream: its `runward-fleet-index/0` contract is read tolerantly and never extended here; `IndexAssembler` translates the service's records into its inventory.
 
 ## 7. Target, named
 
-[The architecture this system tends toward, per the framing note — named for direction, not built.]
+The control plane of PADR-0003 to PADR-0007 (framing §5).
 
 ## 8. Decisions
 
-[Pointers only. Every structuring choice is locked in an ADR before appearing here.]
-
 | Decision | ADR |
 |---|---|
-| [starting topology] | [ADR-0001] |
-| [core language] | [ADR-0002] |
-| [legacy integration strategy] | [ADR-0003] |
+| One Node.js monolith, no framework, one network exit | ADR-0001 |
+| runward-fleet pinned by a vendored tarball of a commit | pending: ADR-0002, proposed |
+| Upload by the OIDC token of the send workflow | ADR-0003 |
+| The index by runward-fleet, the view imported | ADR-0004 |
+| Passkeys and one link mechanism | ADR-0005 |
+| Forced RLS, exact-key resolution | ADR-0006 |
+| The chained journal and the security log | ADR-0007 |
+| The deployment chain | ADR-0008 |
+| Consent, retention, erasure | ADR-0009 |
+| Operating with one human | ADR-0010 |
+| Members, invitation at its trigger | ADR-0011 |
+| The witness reader | ADR-0012 |
+| Licence and hosting | ADR-0013 |
+| Design tokens in one file | pending: ADR-0014, proposed |
+| The in-memory store as reference adapter | pending: ADR-0015, proposed |
