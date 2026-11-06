@@ -151,3 +151,12 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   const js = await (await call("GET", app)).text();
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
+
+test("the served views say « niveau non atteint » and \"level not met\" for level-not-met, from the pinned package (author's rule)", async () => {
+  const html = await (await call("GET", "/")).text();
+  const views = /href="(\/assets\/views-0\.46\.0\.[0-9a-f]{16}\.js)"/.exec(html)[1];
+  const js = await (await call("GET", views)).text();
+  assert.ok(js.includes('"level-not-met": "niveau non atteint"'));
+  assert.ok(js.includes('"level-not-met": "level not met"'));
+  assert.equal(/non franchi|not crossed/.test(js), false);
+});
