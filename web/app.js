@@ -594,7 +594,7 @@ async function show() {
   if (S.session === undefined && !S.error) await loadSession();
   if (S.session === undefined && S.error) { if (route !== "panne") { location.replace(navigator.onLine === false ? "#/panne/hors-ligne" : "#/panne"); return; } }
   if (S.session && route === "entree" && sub !== "sortie") { location.replace(S.session.arrivalDone ? "#/" : "#/arrivee"); return; }
-  if (!S.session && PROTECTED.has(route)) { S.intent = location.hash || "#/"; if (route !== "entree") { location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : "#/entree"); return; } }
+  if (!S.session && PROTECTED.has(route)) { S.intent = route === "" ? null : location.hash; if (route !== "entree") { location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : "#/entree"); return; } }
   if (S.session && !S.session.arrivalDone && (route === "" || ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
   const key = route === "" || ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
