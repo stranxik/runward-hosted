@@ -9,8 +9,8 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
-    "test": "node --test --test-reporter=spec test/unit/",
-    "test:pg": "node --test --test-concurrency=1 --test-reporter=spec test/pg/",
+    "test": "node --test --test-reporter=spec \"test/unit/**/*.test.js\"",
+    "test:pg": "node --test --test-concurrency=1 --test-reporter=spec \"test/pg/**/*.test.js\"",
     "check": "npm test && node scripts/verify-runward-fleet.mjs --offline",
     "operateur:amorcage": "node scripts/operator-link.mjs bootstrap",
     "operateur:reprise": "node scripts/operator-link.mjs recovery",

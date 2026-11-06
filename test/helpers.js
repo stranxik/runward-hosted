@@ -20,6 +20,7 @@ export const FIXTURE_CHECK = readFileSync(new URL("./fixtures/check.json", impor
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: "jwk" }), kid: "test-key", alg: "RS256", use: "sig" };
+export const testJwk = () => jwk;
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 
 /** A signed token as GitHub would issue it, for the given claims. */
@@ -75,25 +76,26 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] } 
 }
 
 /** Open a tenant with a founder and two passkeys, signed in. Returns the session and credential ids. */
-export async function founder(h, { passkeys = 2 } = {}) {
+export async function founder(h, { passkeys = 2, prefix = "cred" } = {}) {
   const tokenValue = randomBytes(32).toString("base64url");
   const { tenant } = await h.app.operator.openBootstrap({ hash: sha(Buffer.from(tokenValue)) });
   const o = await h.app.identity.linkOptions({ token: tokenValue });
-  const r = await h.app.identity.redeemLink({ token: tokenValue, challengeId: o.challengeId, response: { id: "cred-1", challenge: o.options.challenge, aaguid: "fbfc3007-154e-4ecc-8c0b-6e020557d7bd" }, ua: "Chrome/130 Macintosh" });
+  const r = await h.app.identity.redeemLink({ token: tokenValue, challengeId: o.challengeId, response: { id: `${prefix}-1`, challenge: o.options.challenge, aaguid: "fbfc3007-154e-4ecc-8c0b-6e020557d7bd" }, ua: "Chrome/130 Macintosh" });
   let s = await h.app.identity.sessionFrom(r.token);
-  const creds = ["cred-1"];
+  const creds = [`${prefix}-1`];
   for (let i = 2; i <= passkeys; i++) {
-    await gesture(h, s, "passkey-add", "", "cred-1");
+    await gesture(h, s, "passkey-add", "", `${prefix}-1`);
     const ao = await h.app.identity.passkeyAddOptions(s);
-    await h.app.identity.passkeyAdd(s, { challengeId: ao.challengeId, response: { id: `cred-${i}`, challenge: ao.options.challenge, aaguid: "bada5566-a7aa-401f-bd96-45619a55120d" } });
-    creds.push(`cred-${i}`);
+    await h.app.identity.passkeyAdd(s, { challengeId: ao.challengeId, response: { id: `${prefix}-${i}`, challenge: ao.options.challenge, aaguid: "bada5566-a7aa-401f-bd96-45619a55120d" } });
+    creds.push(`${prefix}-${i}`);
   }
   s = await h.app.identity.sessionFrom(r.token);
   return { tenant, token: r.token, session: s, creds };
 }
 
 /** A fresh, or per-gesture, verification with the given credential. */
-export async function gesture(h, s, g, object, cred = "cred-1") {
+export async function gesture(h, s, g, object, cred = null) {
+  cred ??= (await h.store.tx(s.tenantId, (tx) => tx.get("passkey", { id: s.passkeyId })))?.credentialId;
   const o = await h.app.identity.freshOptions(s, g ? { gesture: g, object } : {});
   return h.app.identity.fresh(s, { challengeId: o.challengeId, response: { id: cred, challenge: o.options.challenge } });
 }

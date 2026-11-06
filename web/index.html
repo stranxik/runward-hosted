@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<meta name="runward-commit" content="__COMMIT__">
+<title>runward hébergé</title>
+<link rel="stylesheet" href="__FAMILLE_CSS__">
+<link rel="stylesheet" href="__TOKENS_CSS__">
+<link rel="stylesheet" href="__FLEET_CSS__">
+<link rel="stylesheet" href="__APP_CSS__">
+<link rel="modulepreload" href="__VIEWS_JS__">
+</head>
+<body>
+<a class="vh skip" href="#main">Aller au contenu</a>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#/" translate="no">runward<span> hébergé</span></a>
+    <span class="rv" id="stamp"></span>
+    <nav class="svc" id="svc" aria-label="Service"></nav>
+    <span class="who" id="who"></span>
+    <button class="theme" id="theme" type="button" aria-label="Changer de thème">thème</button>
+  </div>
+</header>
+<nav class="views" aria-label="Vues de la flotte" id="navwrap" hidden>
+  <div class="wrap" id="nav" tabindex="0" role="group" aria-label="Vues de la flotte, défilable au clavier"></div>
+</nav>
+<div id="bandeaux" class="wrap"></div>
+<main id="main" class="wrap" tabindex="-1"><noscript>Cette page affiche ses vues avec JavaScript.</noscript></main>
+<footer class="pied" id="pied"></footer>
+<div id="annonce" class="vh" role="status" aria-live="polite"></div>
+<script type="module" src="__APP_JS__"></script>
+</body>
+</html>

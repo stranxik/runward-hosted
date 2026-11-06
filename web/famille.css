@@ -1,0 +1,43 @@
+/* Copied from ~/.claude/skills/jetons-famille/famille.css on 2026-11-06 (the family's common structure: type
+   scale, grid, control heights, motion, focus). Loaded first; web/tokens.css, the runward layer, comes after it
+   and redefines none of these. Check for drift: ~/.claude/skills/autonomie/scripts/synchroniser-skills.sh. */
+/* Jetons de la famille (Dropyour, Hitpoint, runward, Radar) : la STRUCTURE commune.
+   Couleurs, polices et interlettrage appartiennent à la couche de chaque produit (couches/<produit>.css), chargée APRÈS
+   ce fichier, qui DOIT définir les rôles listés dans SKILL.md. Source des valeurs : Hitpoint, 2026-11-06. */
+:root {
+  --fs-body: 15px;
+  --lh-body: 1.6;
+  --fs-ui: 14px;
+  --fs-small: 13px;
+  --fs-h1: clamp(32px, 3.6vw, 60px);
+  --fs-h2: clamp(28px, 3vw, 44px);
+  --fs-h3: clamp(17px, 1.35vw, 21px);
+  --fw-text: 400;
+  --fw-strong: 500;
+
+  /* grille et densité */
+  --gutter: clamp(16px, 2.2vw, 48px);
+  --gap: clamp(16px, 1.7vw, 24px);
+  --head: 60px;
+  --measure: 62ch;
+
+
+  /* hauteurs de contrôles */
+  --h-btn: 34px;
+  --h-field: 36px;
+  --h-nav: 32px;
+  --h-tag: 22px;
+
+  /* mouvement */
+  --ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);  /* app : 150 à 240 ms */
+  --ease-expressive: cubic-bezier(0.4, 0.14, 0.3, 1);  /* pages publiques */
+  --dur-ui: 150ms;
+  --dur-max: 240ms;
+}
+
+/* règles communes d'accessibilité */
+:focus-visible { outline: 2px solid var(--hit); outline-offset: 2px; }
+.num { font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}

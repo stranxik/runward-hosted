@@ -1,0 +1,44 @@
+/* runward hosted: the runward layer of the design tokens, loaded right after web/famille.css (the family's
+   structure) and before everything else. EVERY colour, font, radius and motion value of the
+   shell lives here, and only here (test/unit/tokens.test.js fails on a literal colour anywhere else).
+   Today these are the tokens of runward-fleet's ui/template.html, the "archive minérale" identity the
+   preview follows: basalte, chaux, pierre, sauge, encre, one gold, the warm terminal black. Changing the
+   base of the hosted app is a change of this file alone. The :root blocks of the pinned template are
+   removed from the fleet stylesheet the service serves, so these values are the only ones in force. */
+
+@font-face{font-family:"Inter";font-weight:300;font-style:normal;font-display:swap;src:url(/assets/fonts/inter-latin-300-normal.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-weight:400;font-style:normal;font-display:swap;src:url(/assets/fonts/inter-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-weight:500;font-style:normal;font-display:swap;src:url(/assets/fonts/inter-latin-500-normal.woff2) format("woff2")}
+@font-face{font-family:"Inter";font-weight:600;font-style:normal;font-display:swap;src:url(/assets/fonts/inter-latin-600-normal.woff2) format("woff2")}
+@font-face{font-family:"Departure Mono";font-weight:400;font-style:normal;font-display:swap;src:url(/assets/fonts/DepartureMono-Regular.woff2) format("woff2")}
+
+:root{
+  /* palette */
+  --basalte:#191715; --chaux:#E9E4DB; --pierre:#E1DCD2; --sauge:#C9D2C6; --encre:#2A2622; --or:#C9A45C; --term:#131110;
+  /* roles, light */
+  --bg:var(--chaux); --fg:var(--basalte); --panel:var(--pierre); --mist:var(--sauge);
+  --soft:rgb(25 23 21 / .66); --hair:rgb(25 23 21 / .16); --hair2:rgb(25 23 21 / .30);
+  /* type */
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:"Departure Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --code:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  /* layout */
+  --gut:16px; --max:1180px;
+  /* the family contract's roles (jetons-famille), mapped onto the identity */
+  --bg-2:var(--panel); --line:var(--hair); --line-2:var(--hair2);
+  --text:var(--fg); --text-2:var(--soft); --text-3:var(--soft); --bar:var(--fg); --beat:var(--hair); --hit:var(--fg);
+  --sans:var(--font);
+  --ls-h1:-.02em; --ls-h2:-.015em; --ls-h3:-.01em;
+  /* shape: radii belong to each product; runward keeps near-square corners (author's decision, 2026-11-06) */
+  --radius:2px; --r-pill:2px; --r-panel:2px; --r-thumb:2px; --r-notice:2px; --r-win:2px;
+  /* motion: the family's productive curve and durations apply (famille.css); no entrance animation in the
+     app. The one loop kept is the loading line, a progress indicator. */
+  --ease-load:cubic-bezier(.45,.05,.25,1); --dur-load:1.6s;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){ --bg:var(--basalte); --fg:var(--chaux); --panel:var(--encre); --mist:rgb(201 210 198 / .16);
+    --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); }
+}
+:root[data-theme="dark"]{ --bg:var(--basalte); --fg:var(--chaux); --panel:var(--encre); --mist:rgb(201 210 198 / .16);
+  --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); }
+@media (min-width: 760px){ :root{ --gut:32px; } }

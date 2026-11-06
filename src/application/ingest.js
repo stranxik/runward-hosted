@@ -102,7 +102,7 @@ export function ingestCases(ctx) {
         const same = (await tx.list("upload", { runId: c.runId, runAttempt: c.runAttempt, mission, kind }))[0];
         if (same) {
           if (same.sha256 !== digest) throw new Refusal("duplicate-in-run");
-          return { status: same.rank === "pending" ? 202 : 201, body: same.claims.response, replayed: true };
+          return { status: same.rank === "pending" ? 202 : same.rank === "quarantine" ? 422 : 201, body: same.claims.response, replayed: true, ...(same.rank === "pending" ? { refusal: "repository-pending" } : same.claims.response.refusal ? { refusal: same.claims.response.refusal } : {}) };
         }
         const blob = await tx.get("blob", { sha256: digest });
         if (blob) await tx.update("blob", { sha256: digest }, { refs: blob.refs + 1, erasedAt: null }); else await tx.insert("blob", { sha256: digest, refs: 1 });
@@ -116,7 +116,7 @@ export function ingestCases(ctx) {
           const response = { entry: id, seq: e.seq, head: e.hash, pending: true };
           await tx.insert("upload", { ...base, epoch: repo.epoch, rank: "pending", seq: e.seq, claims: { ...claimsKept(c), response } });
           await tx.update("repository", { id: repo.id }, { pendingSend: { claims: claimsKept(c), sha256: digest, commit: c.sha, receivedAt: now(), uploadId: id, bytesKept: true, seq: e.seq } });
-          return { status: 202, body: response };
+          return { status: 202, body: response, refusal: "repository-pending" };
         }
 
         const current = (await tx.list("upload", { mission, kind, rank: "current", repositoryRef: repo.id }))[0] ?? null;
