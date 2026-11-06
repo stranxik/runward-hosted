@@ -103,9 +103,12 @@ function cookieOf(header) {
   }
   return null;
 }
-const setCookie = (token, secure) => token
-  ? `${COOKIE}=${token}; Path=/; ${secure ? "Secure; " : ""}HttpOnly; SameSite=Lax; Max-Age=${7 * 86400}`
-  : `${COOKIE}=; Path=/; ${secure ? "Secure; " : ""}HttpOnly; SameSite=Lax; Max-Age=0`;
+// Always Secure: the __Host- prefix requires it, and a browser drops a __Host- cookie without it, even on
+// http://localhost (which browsers treat as a secure context and accept Secure cookies from). A defect the
+// local witness found: the session never set on the local origin.
+const setCookie = (token) => token
+  ? `${COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${7 * 86400}`
+  : `${COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0`;
 
 /**
  * Build the server. `config`: origin, hosts (allowed Host headers), commit, image, securityTxt,
@@ -218,7 +221,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       if (shaped.refusal && REFUSALS[shaped.refusal]) shaped.body = { ...refusalBody(shaped.refusal, lang), ...shaped.body, requestId };
       else if (shaped.body && typeof shaped.body === "object" && !Array.isArray(shaped.body) && path === "/api/v0/exports") shaped.body = { ...shaped.body, requestId };
       const h = { ...headers, "cache-control": "no-store", ...(shaped.headers ?? {}) };
-      if (shaped.cookie !== undefined) h["set-cookie"] = setCookie(shaped.cookie, secure);
+      if (shaped.cookie !== undefined) h["set-cookie"] = setCookie(shaped.cookie);
       if (shaped.raw) { h["content-type"] = shaped.type; send(res, shaped.status, h, shaped.raw); }
       else { h["content-type"] = "application/json; charset=utf-8"; send(res, shaped.status, h, JSON.stringify(shaped.body ?? {})); }
       log.info("http", { requestId, method: req.method, route, status: shaped.status, ms: clock.now() - started, ...(shaped.refusal ? { refusal: shaped.refusal } : {}), ...(session ? { tenant: createHash("sha256").update(session.tenantId).digest("hex").slice(0, 12) } : {}) });

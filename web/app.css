@@ -39,7 +39,7 @@ input.in:focus-visible{ outline:2px solid var(--fg); outline-offset:1px; }
 ol.steps{ list-style:none; padding:0; margin:0; counter-reset:s; }
 ol.steps > li{ counter-increment:s; display:grid; grid-template-columns:44px 1fr; gap:4px 12px; padding:18px 0; border-top:1px solid var(--hair); }
 ol.steps > li:last-child{ border-bottom:1px solid var(--hair); }
-ol.steps > li::before{ content:counter(s, decimal-leading-zero); font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--soft); padding-top:4px; }
+ol.steps > li::before{ content:counter(s, decimal-leading-zero); font-family:var(--mono); font-size:var(--fs-releve); letter-spacing:.06em; color:var(--soft); padding-top:4px; }
 ol.steps h3{ font-size:16px; font-weight:500; margin:0 0 8px; letter-spacing:-.01em; }
 ol.steps .body{ min-width:0; }
 
@@ -149,3 +149,6 @@ table.claims td{ overflow-wrap:anywhere; }
 .releve-d > summary::before{ content:"+"; font-family:var(--mono); color:var(--soft); }
 .releve-d[open] > summary::before{ content:"−"; }
 @media (max-width: 759px){ .releve th, .releve td{ border:0 !important; } }
+
+/* every relevé in Departure Mono at one size, the fleet views' included (their stylesheet says 11 and 10 px) */
+.rv, .chart text{ font-size:var(--fs-releve); }

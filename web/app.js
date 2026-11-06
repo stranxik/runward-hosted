@@ -230,7 +230,12 @@ function viewArrivee(sub) {
   let step1;
   if (sub === "seule") step1 = `<div class="confirm" role="group" aria-label="Continuer avec une seule passkey"><p><b>Continuer avec une seule passkey ?</b> Si vous perdez cet appareil ou ce trousseau, la seule voie sera la reprise d'accès, qui prend 24 heures. Ce choix est écrit au journal, et chaque écran vous le rappellera jusqu'à l'ajout d'une seconde passkey.</p>
       <p class="small soft">Votre passkey vous est demandée pour ce geste.</p><div class="actions">${act("single", "Continuer avec une seule passkey")}${go("#/arrivee", "Revenir aux voies possibles", { q: true })}</div></div>`;
-  else if (live.length >= 2) step1 = `<p>${live.map(pkLine).join("<br>")}</p>${s.sameProvider ? `<p class="avert">Vos deux passkeys sont dans le même trousseau : perdre ce compte vous ferme les deux.</p>` : `<p class="note">Deux fournisseurs : perdre l'un ne vous ferme pas la porte.</p>`}`;
+  else if (live.length >= 2) {
+    // "two providers" is said only when both providers are known and differ; the AAGUID is declared, often absent
+    const known = live.map((p) => p.provider);
+    const distinct = known.every(Boolean) && new Set(known).size === known.length;
+    step1 = `<p>${live.map(pkLine).join("<br>")}</p>${s.sameProvider ? `<p class="avert">Vos deux passkeys sont dans le même trousseau : perdre ce compte vous ferme les deux.</p>` : distinct ? `<p class="note">Deux fournisseurs : perdre l'un ne vous ferme pas la porte.</p>` : `<p class="note">Deux passkeys enregistrées. Leur fournisseur n'est pas toujours connu : si elles sont dans le même trousseau, perdre ce compte vous ferme les deux.</p>`}`;
+  }
   else if (s.single) step1 = `<p>${live.map(pkLine).join("")} <span class="soft">seule passkey, choix écrit au journal</span></p>${WAYS}`;
   else step1 = `<p>${live.map(pkLine).join("")}</p>${msg}${WAYS}<p class="small"><button class="lien-btn" type="button" data-go="#/arrivee/seule">Je n'ai aucune seconde voie : continuer avec une seule passkey</button></p>
       <p class="note">${pinned.length ? "La flotte s'ouvre après ce choix." : "Les étapes suivantes s'ouvrent après ce choix."} Si vous fermez cette page avant, vous reviendrez ici à la prochaine connexion.</p>`;
@@ -650,11 +655,14 @@ async function verify(gesture = null, object = null) {
   const c = await ceremony("get", o.data.options);
   if (!c.ok) return { ok: false, why: c.why };
   const r = await api("POST", "/api/v0/auth/fresh", { challengeId: o.data.challengeId, response: c.response });
+  if (r.ok && !gesture) S.freshUntil = Date.parse(r.data.until);
   return r.ok ? { ok: true } : { ok: false, r };
 }
 /** Run a write: per-gesture verification when `gesture`, else a fresh one when the server asks for it. */
 async function write(method, path, body, { gesture = null, object = "" } = {}) {
   if (gesture) { const v = await verify(gesture, object); if (!v.ok) return { ok: false, verify: v }; }
+  // every other write asks a verification less than 5 minutes old: ask it first when this page knows it lapsed
+  else if (!(S.freshUntil > Date.now() + 15_000)) { const v = await verify(); if (!v.ok) return { ok: false, verify: v }; }
   let r = await api(method, path, body);
   if (r.refusal === "fresh-required") { const v = await verify(); if (!v.ok) return { ok: false, verify: v }; r = await api(method, path, body); }
   return r;
@@ -757,7 +765,7 @@ document.addEventListener("click", async (e) => {
     const r = await write("POST", `/api/v0/repositories/${id}/confirm`, {}, { gesture: "repository-confirm", object: id });
     if (!r.ok) { S.failed = k; return rerender(); }
     say(r.data?.quarantine ? "Dépôt confirmé. Son premier envoi reste en quarantaine." : "Dépôt confirmé. La mission est publiée.");
-    await refreshScreen(); location.hash = S.session.arrivalDone ? "#/" : "#/arrivee"; return;
+    await loadSession(); loadedFor = null; location.hash = S.session.arrivalDone ? "#/" : "#/arrivee"; return;
   }
   if (what === "export") {
     S.export = { busy: true }; rerender();

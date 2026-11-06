@@ -61,6 +61,14 @@ test("/api/version names the commit, the image, the views, the contract and the 
   assert.deepEqual(v.sendWorkflow, [SEND_SHA]);
 });
 
+test("the session cookie is Secure whatever the origin: __Host- requires it (guard on a defect the local witness found)", async () => {
+  const { createHttp } = await import("../../src/http/server.js");
+  const src = (await import("node:fs")).readFileSync(new URL("../../src/http/server.js", import.meta.url), "utf8");
+  assert.match(src, /Path=\/; Secure; HttpOnly; SameSite=Lax; Max-Age=\$\{7 \* 86400\}/);
+  assert.equal(/secure \? "Secure; "/.test(src), false);
+  assert.ok(createHttp);
+});
+
 test("security.txt and health", async () => {
   const t = await (await call("GET", "/.well-known/security.txt")).text();
   assert.match(t, /^Contact: /m); assert.match(t, /^Expires: /m);

@@ -60,3 +60,11 @@ test("no entrance animation in the app (family rule); only the loading line loop
   assert.deepEqual(anims.filter((a) => a !== "none"), ["charge"]);
   assert.equal(/\.anim\b|IntersectionObserver/.test(css + readFileSync(`${WEB}app.js`, "utf8")), false);
 });
+
+test("the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)", () => {
+  assert.match(readFileSync(`${WEB}tokens.css`, "utf8"), /--fs-releve:12px/);
+  const css = readFileSync(`${WEB}app.css`, "utf8");
+  assert.match(css, /\.rv, \.chart text\{ font-size:var\(--fs-releve\); \}/);
+  const monoRules = [...css.matchAll(/\{[^}]*var\(--mono\)[^}]*\}/g)].map((m) => m[0]);
+  assert.deepEqual(monoRules.filter((r) => /font-size:\s*\d/.test(r)), [], "no literal size on a mono rule");
+});

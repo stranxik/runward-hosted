@@ -210,7 +210,7 @@ export function identityCases(ctx) {
       const live = pks.filter((p) => !p.removedAt);
       const repos = (await tx.list("repository")).filter((r) => !r.removedAt);
       const recovery = (await tx.list("link", { kind: "recovery" })).find((l) => !l.usedAt && !l.cancelledAt && now() < l.expiresAt) ?? null;
-      const added = pks.filter((p) => !p.removedAt && p.id !== s.passkeyId && p.createdAt > s.createdAt);
+      const added = pks.filter((p) => !p.removedAt && p.id !== s.passkeyId && p.createdAt > s.createdAt && p.addedBySession !== s.id);
       const maintenance = await tx.maintenance();
       const open = arrivalOpen(pks, Boolean(s.member.singlePasskeyAt));
       return {
@@ -288,7 +288,7 @@ export function identityCases(ctx) {
       return await store.tx(s.tenantId, async (tx) => {
         await useGesture(tx, s, "passkey-add", "");
         const id = store.newId();
-        await tx.insert("passkey", { id, memberId: s.memberId, credentialId: reg.credentialId, publicKey: reg.publicKey, counter: reg.counter, transports: reg.transports, aaguid: meaningfulAaguid(reg.aaguid), device: deviceFromUserAgent(ua), via: reg.deviceType ?? null, createdAt: now() });
+        await tx.insert("passkey", { id, memberId: s.memberId, credentialId: reg.credentialId, publicKey: reg.publicKey, counter: reg.counter, transports: reg.transports, aaguid: meaningfulAaguid(reg.aaguid), device: deviceFromUserAgent(ua), via: reg.deviceType ?? null, createdAt: now(), addedBySession: s.id });
         await security(tx, { what: "passkey-added", member: s.memberId, passkey: id });
         const e = await append(tx, { who: human(s), what: "passkey-added", object: id, requestId });
         const pks = await tx.list("passkey", { memberId: s.memberId });

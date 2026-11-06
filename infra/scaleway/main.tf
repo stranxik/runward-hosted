@@ -116,9 +116,10 @@ resource "scaleway_container_domain" "app" {
 # ---- the hoster's jobs, same image, in the private network (PADR-0018 point 7): a few seconds a day
 resource "scaleway_job_definition" "retention" {
   name         = "runward-hosted-retention"
-  cpu_limit    = 250
-  memory_limit = 512
-  image_uri    = var.image
+  cpu_limit              = 250
+  memory_limit           = 512
+  local_storage_capacity = 1000
+  image_uri              = var.image
   command      = "node src/operator.js retention"
   cron {
     schedule = "23 3 * * *"
@@ -127,9 +128,10 @@ resource "scaleway_job_definition" "retention" {
 }
 resource "scaleway_job_definition" "verify_chains" {
   name         = "runward-hosted-verify-chains"
-  cpu_limit    = 250
-  memory_limit = 512
-  image_uri    = var.image
+  cpu_limit              = 250
+  memory_limit           = 512
+  local_storage_capacity = 1000
+  image_uri              = var.image
   command      = "node src/operator.js verify-chains"
   cron {
     schedule = "37 3 * * *"
@@ -138,16 +140,18 @@ resource "scaleway_job_definition" "verify_chains" {
 }
 resource "scaleway_job_definition" "operator" {
   name         = "runward-hosted-operator"
-  cpu_limit    = 250
-  memory_limit = 512
-  image_uri    = var.image
+  cpu_limit              = 250
+  memory_limit           = 512
+  local_storage_capacity = 1000
+  image_uri              = var.image
   command      = "node src/operator.js"
 }
 resource "scaleway_job_definition" "isolation" {
   name         = "runward-hosted-isolation"
-  cpu_limit    = 250
-  memory_limit = 512
-  image_uri    = var.image
+  cpu_limit              = 250
+  memory_limit           = 512
+  local_storage_capacity = 1000
+  image_uri              = var.image
   command      = "node scripts/isolation-deployed.mjs"
 }
 

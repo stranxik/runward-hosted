@@ -182,3 +182,16 @@ test("the security log is written before the database commits: a failing write f
   const after = await h.app.identity.accessView(f.session);
   assert.equal(after.passkeys.find((p) => p.id === other.id).removedAt, null, "nothing was removed");
 });
+
+test("a passkey added is announced in the OTHER sessions, never in the one that added it (guard on a witness finding)", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 1 });
+  let o = await h.app.identity.signInOptions();
+  const other = await h.app.identity.signIn({ challengeId: o.challengeId, response: { id: "cred-1", challenge: o.options.challenge } });
+  h.clock.advance(1000);
+  await gesture(h, f.session, "passkey-add", "");
+  const ao = await h.app.identity.passkeyAddOptions(f.session);
+  await h.app.identity.passkeyAdd(f.session, { challengeId: ao.challengeId, response: { id: "cred-2", challenge: ao.options.challenge } });
+  assert.equal((await h.app.identity.sessionView(await h.app.identity.sessionFrom(f.token))).addedElsewhere.length, 0);
+  assert.equal((await h.app.identity.sessionView(await h.app.identity.sessionFrom(other.token))).addedElsewhere.length, 1);
+});

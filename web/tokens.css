@@ -22,6 +22,8 @@
   --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --mono:"Departure Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
   --code:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  /* the relevés (Departure Mono micro-annotations) read at 12 px everywhere (author's rule, 2026-11-06) */
+  --fs-releve:12px;
   /* layout */
   --gut:16px; --max:1180px;
   /* the family contract's roles (jetons-famille), mapped onto the identity */

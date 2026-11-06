@@ -6,7 +6,7 @@
 export const TABLES = {
   tenant: { key: ["id"], cols: { id: "u", title: "s", lang: "s", witness: "k", createdAt: "t" } },
   member: { key: ["id"], cols: { id: "u", role: "s", founder: "k", label: "s", addedAt: "t", removedAt: "t", singlePasskeyAt: "t" } },
-  passkey: { key: ["id"], cols: { id: "u", memberId: "u", credentialId: "s", publicKey: "b", counter: "n", transports: "j", aaguid: "s", device: "s", via: "s", createdAt: "t", lastUsedAt: "t", removedAt: "t", lost: "k" } },
+  passkey: { key: ["id"], cols: { id: "u", memberId: "u", credentialId: "s", publicKey: "b", counter: "n", transports: "j", aaguid: "s", device: "s", via: "s", createdAt: "t", lastUsedAt: "t", removedAt: "t", lost: "k", addedBySession: "u" } },
   session: { key: ["id"], cols: { id: "u", tokenHash: "s", memberId: "u", passkeyId: "u", device: "s", createdAt: "t", lastSeenAt: "t", freshAt: "t", freshBy: "u", grant: "j", closedAt: "t" } },
   link: { key: ["id"], cols: { id: "u", tokenHash: "s", kind: "s", memberId: "u", openedAt: "t", usableFrom: "t", expiresAt: "t", usedAt: "t", cancelledAt: "t", meta: "j" } },
   forge_repository: { key: ["id"], cols: { id: "u", forge: "s", nameKey: "s", name: "s", repositoryId: "s", ownerId: "s", state: "s", removedAt: "t" } },
