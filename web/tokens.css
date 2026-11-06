@@ -26,7 +26,8 @@
   --gut:16px; --max:1180px;
   /* the family contract's roles (jetons-famille), mapped onto the identity */
   --bg-2:var(--panel); --line:var(--hair); --line-2:var(--hair2);
-  --text:var(--fg); --text-2:var(--soft); --text-3:var(--soft); --bar:var(--fg); --beat:var(--hair); --hit:var(--fg);
+  --text:var(--fg); --text-2:var(--soft); --text-3:var(--soft); --beat:var(--hair); --hit:var(--fg);
+  --bar:rgb(25 23 21 / .55); /* secondary graphic stroke: about 3.6:1 on --bg and --bg-2, discreet (contract: 3:1 at least) */
   --sans:var(--font);
   --ls-h1:-.02em; --ls-h2:-.015em; --ls-h3:-.01em;
   /* shape: radii belong to each product; runward keeps near-square corners (author's decision, 2026-11-06) */
@@ -37,8 +38,8 @@
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){ --bg:var(--basalte); --fg:var(--chaux); --panel:var(--encre); --mist:rgb(201 210 198 / .16);
-    --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); }
+    --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); --bar:rgb(233 228 219 / .45); }
 }
 :root[data-theme="dark"]{ --bg:var(--basalte); --fg:var(--chaux); --panel:var(--encre); --mist:rgb(201 210 198 / .16);
-  --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); }
+  --soft:rgb(233 228 219 / .66); --hair:rgb(233 228 219 / .14); --hair2:rgb(233 228 219 / .30); --bar:rgb(233 228 219 / .45); }
 @media (min-width: 760px){ :root{ --gut:32px; } }

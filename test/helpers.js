@@ -63,9 +63,9 @@ export function fakeAuthn() {
 export const sha = (b) => createHash("sha256").update(b).digest("hex");
 export const digestHeader = (b) => `sha-256=:${createHash("sha256").update(b).digest("base64")}:`;
 
-export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] } } = {}) {
-  const clock = manualClock(Date.parse("2026-11-06T12:00:00Z"));
-  const store = memoryStore({ clock });
+export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false } = {}) {
+  const clock = realTime ? { now: () => Date.now(), set() {}, advance() { throw new Error("real time: cannot advance"); } } : manualClock(Date.parse("2026-11-06T12:00:00Z"));
+  const store = given ?? memoryStore({ clock });
   const objects = memoryObjects();
   const fetches = [];
   const fetch = async (url) => { fetches.push(url); return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 }); };
@@ -76,9 +76,9 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] } 
 }
 
 /** Open a tenant with a founder and two passkeys, signed in. Returns the session and credential ids. */
-export async function founder(h, { passkeys = 2, prefix = "cred" } = {}) {
-  const tokenValue = randomBytes(32).toString("base64url");
-  const { tenant } = await h.app.operator.openBootstrap({ hash: sha(Buffer.from(tokenValue)) });
+export async function founder(h, { passkeys = 2, prefix = "cred", token: given = null, tenant: opened = null } = {}) {
+  const tokenValue = given ?? randomBytes(32).toString("base64url");
+  const tenant = opened ?? (await h.app.operator.openBootstrap({ hash: sha(Buffer.from(tokenValue)) })).tenant;
   const o = await h.app.identity.linkOptions({ token: tokenValue });
   const r = await h.app.identity.redeemLink({ token: tokenValue, challengeId: o.challengeId, response: { id: `${prefix}-1`, challenge: o.options.challenge, aaguid: "fbfc3007-154e-4ecc-8c0b-6e020557d7bd" }, ua: "Chrome/130 Macintosh" });
   let s = await h.app.identity.sessionFrom(r.token);

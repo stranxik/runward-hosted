@@ -8,7 +8,9 @@ import { randomUUID } from "node:crypto";
 import { TABLES, checkColumns, snake } from "./tables.js";
 import { StoreConflict } from "./errors.js";
 
-const CAST = { t: "timestamptz", j: "jsonb", b: "bytea", n: "bigint", k: "boolean", s: "text", u: "uuid" };
+// jsonb goes in as text and is cast by the server: a JSON text sent as a jsonb parameter would be
+// encoded a second time and stored as a JSON string (a defect found on PostgreSQL, guarded in test/pg).
+const CAST = { t: "timestamptz", j: "text::jsonb", b: "bytea", n: "bigint", k: "boolean", s: "text", u: "uuid" };
 
 function toDb(type, v) {
   if (v === null || v === undefined) return null;
@@ -92,7 +94,7 @@ export function postgresStore({ url, max = 4, ssl = "prefer" }) {
       },
       async ledgerAppend(e) {
         need();
-        await q1("insert into rw.ledger (seq, prev, hash, body) values ($1::bigint, $2::text, $3::text, $4::jsonb)", [String(e.seq), e.prev, e.hash, JSON.stringify(e.body)]);
+        await q1("insert into rw.ledger (seq, prev, hash, body) values ($1::bigint, $2::text, $3::text, $4::text::jsonb)", [String(e.seq), e.prev, e.hash, JSON.stringify(e.body)]);
       },
       async ledgerPage({ before = null, limit = 50 } = {}) {
         need();
@@ -124,9 +126,9 @@ export function postgresStore({ url, max = 4, ssl = "prefer" }) {
       async takeRate(repositoryId, bucket, runId, limit) { const [r] = await q`select rw.take_rate(${repositoryId}, ${bucket}, ${runId}, ${limit}) as ok`; return r.ok; },
       async countRefused(repositoryId, bucket) { const [r] = await q`select rw.count_refused(${repositoryId ?? "?"}, ${bucket}) as n`; return r.n; },
       async maintenance() { const [r] = await q`select rw.maintenance() as m`; return r.m ?? null; },
-      async setMaintenance(m) { await q`select rw.set_maintenance(${m === null ? null : JSON.stringify(m)}::jsonb)`; },
+      async setMaintenance(m) { await q`select rw.set_maintenance(${m === null ? null : JSON.stringify(m)}::text::jsonb)`; },
       async tenantIds() { const rows = await q`select * from rw.tenant_ids() as id`; return rows.map((r) => r.id); },
-      async operatorNote(what, detail) { const [r] = await q`select rw.operator_note(${what}, ${JSON.stringify(detail)}::jsonb) as seq`; return Number(r.seq); },
+      async operatorNote(what, detail) { const [r] = await q`select rw.operator_note(${what}, ${JSON.stringify(detail)}::text::jsonb) as seq`; return Number(r.seq); },
     };
   }
 

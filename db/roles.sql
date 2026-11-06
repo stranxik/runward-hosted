@@ -6,3 +6,4 @@ create role rw_resolve nologin;                   -- owns the exact-key resoluti
 create role rw_app login nobypassrls;             -- the service
 create role rw_maint login nobypassrls;           -- the hoster's scheduled and operator jobs
 grant rw_resolve to rw_owner;                     -- so the migration can hand the functions over
+-- then, on the service database: grant create, connect on database <db> to rw_owner; grant connect on database <db> to rw_app, rw_maint;
