@@ -20,6 +20,17 @@ The application domain is the hosted service; the execution topology is one cont
 
 Secrets (database role, S3 keys, the deploy key) are environment variables of the container or of the GitHub environment `production`, never in the image or a file.
 
+## Protection level by data class
+
+One level per class of data, whatever port it crosses; a port that several classes cross holds the highest of their levels (the map above).
+
+| Data class | Examples | Level | Where it may live | ADR |
+|---|---|---|---|---|
+| public reference | the OIDC issuer's public keys, the published send workflow commits | standard | anywhere it is published | ADR-0003 |
+| internal business | the fleet index, missions, repository declarations, the operator journal | raised | the hoster in Paris (fr-par), in the Union | ADR-0013 |
+| personal | passkey public keys, sessions, members, names inside consented exports | raised | the hoster in Paris (fr-par), in the Union; erased on demand or 30 days after a removal | ADR-0009, ADR-0013 |
+| secret | the database roles' passwords, the object storage keys, the deploy key | high | the hoster's secret environment and the GitHub environment `production` only; never in the image, a file, a log or a report | ADR-0008 |
+
 ## Usage registry
 
 | Deployment | Risk class | Data classes touched | Action scopes | Owner / responsible | Last review |
@@ -35,9 +46,9 @@ Secrets (database role, S3 keys, the deploy key) are environment variables of th
 | Rule | Status | Evidence |
 |---|---|---|
 | topology-port-placement-mapped | proposed:applied | file:infra/scaleway/main.tf; file:src/main.js#compose; adr:0013 |
-| topology-sovereignty-by-data-class | proposed:applied | adr:0013; adr:0009 (personal data only in consented exports, in the Union, erased on demand) |
+| topology-sovereignty-by-data-class | proposed:applied | adr:0013; adr:0009; file:runward/execution-topology.md#Protection level by data class |
 | topology-trace-export-decision | proposed:applied | file:src/adapters/system/log.js#jsonLog; adr:0013 (no third-party telemetry; the log never carries a body, a token, a name or a path) |
-| topology-usage-registry-present | proposed:applied | the usage registry above: three deployments, each with its risk class, owner and last review |
+| topology-usage-registry-present | proposed:applied | file:runward/execution-topology.md#Usage registry |
 
 ## Cross-references
 

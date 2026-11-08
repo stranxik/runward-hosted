@@ -43,11 +43,11 @@ Port contracts: `runward/contracts/index-assembler.md`.
 
 | Rule | Status | Evidence |
 |---|---|---|
-| contracts-governance | proposed:applied | file:src/http/server.js#apiContract; file:src/domain/refusals.js#REFUSALS; adr:0003 |
-| hexa-adapter-pattern | proposed:applied | file:src/application/app.js#PORTS; file:src/adapters/store/memory.js#memoryStore; file:src/adapters/store/postgres.js#postgresStore |
-| hexa-architecture | proposed:applied | test:test/unit/boundary.test.js; adr:0001 |
-| hexa-typescript-native | proposed:deviated | adr:0001 (JavaScript ES modules: runward-fleet, which the product imports, is JavaScript; no framework, no chain library) |
-| process-adr-and-journal | proposed:applied | adr:0001; adr:0003; adr:0006 |
+| contracts-governance | proposed:applied | test:reports/junit.xml::the API contract served is the committed one: same routes, same refusals, same digest; test:reports/junit.xml::planted control: one more route, or a route opened to the public, changes the digest; file:runward/contracts/api-contract.json; adr:0003 |
+| hexa-adapter-pattern | proposed:applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; file:reports/eslint.json#src/adapters/objects/objects.js |
+| hexa-architecture | proposed:applied | file:reports/eslint.json#src/domain/workload.js; file:reports/eslint.json#src/main.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; adr:0001 |
+| hexa-typescript-native | proposed:n/a | the service calls no model: there is no model SDK or chain framework to keep light; JavaScript ES modules without a framework (adr:0001) |
+| process-adr-and-journal | proposed:applied | adr:0002; adr:0015; file:runward/JOURNAL.md |
 | security-mcp-server-pinning | proposed:n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
 
 ## 5. What stays open
