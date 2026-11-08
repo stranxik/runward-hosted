@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Apply the migrations, then the grants, as the migration role (rw_owner), never as the service.
 // Usage: MIGRATE_URL=postgres://rw_owner@host/db node scripts/migrate.mjs
-// Expansion only (PADR-0015 point 3): a migration that drops or renames is refused before it runs.
+// Expansion only (PADR-0015 point 3): a migration that drops, renames, truncates or changes a type is
+// refused before it runs, and the files form a closed sequence (no gap, no reordering).
 // Each file runs once, in a transaction, and is recorded with its sha256 in rw_meta.migration; a file
 // whose content changed after it ran stops everything.
 // TLS as the service: verify-full by default, the instance's authority in DATABASE_CA or DATABASE_CA_FILE.
@@ -13,7 +14,69 @@ import { databaseTls, databaseTlsProblems } from "../src/adapters/store/tls.js";
 const DIR = new URL("../db/migrations/", import.meta.url).pathname;
 const GRANTS = new URL("../db/grants.sql", import.meta.url).pathname;
 const sha = (s) => createHash("sha256").update(s).digest("hex");
-const CONTRACTING = /^\s*(drop\s+(table|column|schema|function|view|index|type)|alter\s+table\s+\S+\s+(rename|drop)|truncate)\b/im;
+const NAME = /^(\d{4})_[a-z0-9_]+\.sql$/;
+
+/** The text as the server reads it: comments removed, single-quoted literals emptied; dollar-quoted
+ * bodies are kept whole and raw (a function body is code: a contracting word in it, even in a comment,
+ * is refused, the safe side). Split on the ; that end a statement, never on one inside a literal or a
+ * dollar-quoted body. */
+export function statements(sql) {
+  const out = []; let cur = ""; let i = 0;
+  while (i < sql.length) {
+    const c = sql[i], two = sql.slice(i, i + 2);
+    if (two === "--") { const e = sql.indexOf("\n", i); i = e < 0 ? sql.length : e; continue; }
+    if (two === "/*") { let depth = 0; do { if (sql.startsWith("/*", i)) { depth++; i += 2; } else if (sql.startsWith("*/", i)) { depth--; i += 2; } else i++; } while (depth > 0 && i < sql.length); cur += " "; continue; }
+    if (c === "'") { let j = i + 1; while (j < sql.length) { if (sql[j] === "'" && sql[j + 1] === "'") j += 2; else if (sql[j] === "'") break; else j++; } cur += "''"; i = j + 1; continue; }
+    if (c === "$") {
+      const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
+      if (m) { const end = sql.indexOf(m[0], i + m[0].length); const stop = end < 0 ? sql.length : end; cur += `$$${sql.slice(i + m[0].length, stop)}$$`; i = stop + m[0].length; continue; }
+    }
+    if (c === ";") { if (cur.trim()) out.push(cur.trim()); cur = ""; i++; continue; }
+    cur += c; i++;
+  }
+  if (cur.trim()) out.push(cur.trim());
+  return out;
+}
+
+// What contracts the schema, anywhere in a statement (inside a function body too): any DROP but the
+// relaxing `drop not null` and `drop default`; any RENAME; TRUNCATE as a command (a trigger event
+// `before truncate` is not one); a column type change.
+const CONTRACTING = [
+  ["drop", /\bdrop\s+(?!not\s+null\b|default\b)/i],
+  ["rename", /\brename\b/i],
+  ["truncate", /(?<!\b(?:before|after|or|of)\s+)\btruncate\b/i],
+  ["type change", /\balter\s+(?:column\s+)?(?:"[^"]+"|\w+)\s+(?:set\s+data\s+)?type\b/i],
+];
+
+/** The first contracting statement of a migration, as "<kind>: <statement>", or null. */
+export function contracting(sql) {
+  for (const st of statements(sql)) for (const [kind, re] of CONTRACTING) if (re.test(st)) return `${kind}: ${st.replace(/\s+/g, " ").slice(0, 120)}`;
+  return null;
+}
+
+/** The migrations to apply, in order, or a refusal: names NNNN_name.sql numbered 0001.. without a gap or
+ * a duplicate; every applied file still present and unchanged; nothing new numbered before an applied
+ * file (a reordering); nothing new that contracts the schema. */
+export function planMigrations(files, applied) {
+  const sorted = [...files].sort((a, b) => a.name.localeCompare(b.name));
+  sorted.forEach((f, k) => {
+    const m = NAME.exec(f.name);
+    if (!m) throw new Error(`${f.name}: a migration is named NNNN_name.sql (lower case)`);
+    if (Number(m[1]) !== k + 1) throw new Error(`${f.name}: the numbering has a gap or a duplicate (expected ${String(k + 1).padStart(4, "0")})`);
+  });
+  const names = new Set(sorted.map((f) => f.name));
+  for (const name of applied.keys()) if (!names.has(name)) throw new Error(`${name} was applied and is no longer in db/migrations`);
+  const lastApplied = Math.max(0, ...sorted.map((f, k) => (applied.has(f.name) ? k + 1 : 0)));
+  const plan = [];
+  sorted.forEach((f, k) => {
+    if (applied.has(f.name)) { if (applied.get(f.name) !== sha(f.text)) throw new Error(`${f.name} changed after it was applied`); return; }
+    if (k + 1 < lastApplied) throw new Error(`${f.name} is new and numbered before an applied migration: a reordering, refused`);
+    const why = contracting(f.text);
+    if (why) throw new Error(`${f.name} contracts the schema (${why}): refused, migrations are expansion only`);
+    plan.push(f);
+  });
+  return plan;
+}
 
 export function migrationTls(url, env = process.env) {
   const ca = env.DATABASE_CA ?? (env.DATABASE_CA_FILE ? readFileSync(env.DATABASE_CA_FILE, "utf8") : null);
@@ -29,12 +92,10 @@ export async function migrate(url, { log = console.log } = {}) {
     await sql`create schema if not exists rw_meta`;
     await sql`create table if not exists rw_meta.migration (name text primary key, sha256 text not null, applied_at timestamptz not null default now())`;
     const done = new Map((await sql`select name, sha256 from rw_meta.migration`).map((r) => [r.name, r.sha256]));
-    for (const f of readdirSync(DIR).filter((x) => x.endsWith(".sql")).sort()) {
-      const text = readFileSync(DIR + f, "utf8");
-      if (done.has(f)) { if (done.get(f) !== sha(text)) throw new Error(`${f} changed after it was applied`); continue; }
-      if (CONTRACTING.test(text.replace(/--[^\n]*/g, ""))) throw new Error(`${f} contracts the schema (drop, rename, truncate): refused, migrations are expansion only`);
-      await sql.begin(async (q) => { await q.unsafe(text); await q`insert into rw_meta.migration (name, sha256) values (${f}, ${sha(text)})`; });
-      log(`migrate: applied ${f}`);
+    const files = readdirSync(DIR).filter((x) => x.endsWith(".sql")).map((name) => ({ name, text: readFileSync(DIR + name, "utf8") }));
+    for (const f of planMigrations(files, done)) {
+      await sql.begin(async (q) => { await q.unsafe(f.text); await q`insert into rw_meta.migration (name, sha256) values (${f.name}, ${sha(f.text)})`; });
+      log(`migrate: applied ${f.name}`);
     }
     await sql.unsafe(readFileSync(GRANTS, "utf8"));
     log("migrate: grants applied");
