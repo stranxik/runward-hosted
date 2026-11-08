@@ -16,7 +16,7 @@ COPY package.json ./
 COPY src ./src
 COPY web ./web
 COPY db ./db
-COPY scripts/migrate.mjs scripts/isolation-deployed.mjs ./scripts/
+COPY scripts/migrate.mjs scripts/roles.mjs scripts/isolation-deployed.mjs ./scripts/
 COPY vendor/runward-fleet.lock.json ./vendor/runward-fleet.lock.json
 USER node
 EXPOSE 8080

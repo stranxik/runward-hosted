@@ -5,3 +5,7 @@ coverage/
 captures/
 tmp/
 *.log
+infra/scaleway/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
