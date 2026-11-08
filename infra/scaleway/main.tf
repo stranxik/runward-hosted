@@ -1,17 +1,19 @@
 # runward hosted on Scaleway, Paris (PADR-0009, PADR-0015 point 7), project "runward", region fr-par.
 # Two phases. Phase 1 (always): the network, the registry, the namespace, the bucket, the database, its
-# users and their privileges, the Secret Manager entries of the jobs. Phase 2 (only when `image` names a
-# real digest): the container, its domain, and the jobs (these also wait for `jobs_reach_database`).
+# users and their privileges. Phase 2 (only when `image` names a real digest): the service's container,
+# the operator's gateway (a private container in the private network, ADR-0016) and its two scheduled
+# triggers, then the domain app.runward.dev once its CNAME resolves (`app_domain`).
 # The CI runs `tofu init -backend=false && tofu validate` only; a session applies, after the author's
 # approval of the paid resources (runward/runbook.md §11 and §12).
 #
 # No secret is written here, in the plan or (for phase 1) in the state:
-#   - every database password is EPHEMERAL and lands only in WRITE-ONLY arguments (`password_wo`,
-#     `data_wo`), which OpenTofu (>= 1.11) never records in a plan or a state;
+#   - every database password of phase 1 is EPHEMERAL and lands only in WRITE-ONLY arguments
+#     (`password_wo`), which OpenTofu (>= 1.11) never records in a plan or a state;
 #   - phase 2 is the exception the hoster imposes: a Serverless Container has no secret reference and no
-#     write-only argument, so its DATABASE_URL and S3 keys are `sensitive` (not ephemeral) and are kept in
-#     the state; the state and the plan are encrypted (block `encryption`, enforced) and live outside any
-#     repository (the backend path is given at init, never committed).
+#     write-only argument, so the connection URLs and the S3 keys of the two containers are `sensitive`
+#     (not ephemeral) and are kept in the state; the state and the plan are encrypted (block `encryption`,
+#     enforced) and live outside any repository (the backend path is given at init, never committed).
+#     The operator's token is not among them: the gateway holds only its sha256.
 terraform {
   required_version = ">= 1.11.0"
   required_providers {
@@ -75,11 +77,6 @@ variable "witness_tenants" {
   default     = ""
   description = "the two witness tenants of the isolation suite, comma separated (RW_WITNESS_TENANTS)"
 }
-variable "jobs_reach_database" {
-  type        = bool
-  default     = false
-  description = "Serverless Jobs cannot join a Private Network (Scaleway FAQ, read 2026-11-08) and the database has no public endpoint: the jobs stay off until a path exists"
-}
 variable "database_host" {
   type        = string
   default     = ""
@@ -117,12 +114,30 @@ variable "db_password_rw_maint" {
   default   = null
 }
 
-# phase 2 only: what the container keeps in its secret environment (kept in the encrypted state)
+# phase 2 only: what the containers keep in their secret environment (kept in the encrypted state)
 variable "container_db_password" {
   type        = string
   sensitive   = true
   default     = null
-  description = "the rw_app password again (keychain runward-hosted-db / rw_app), for the container's DATABASE_URL"
+  description = "the rw_app password again (keychain runward-hosted-db / rw_app), for the service's DATABASE_URL and the gateway's isolation gesture"
+}
+variable "operator_db_password_admin" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "the rw_admin password again (keychain runward-hosted-db / admin), for the gateway's roles gesture"
+}
+variable "operator_db_password_rw_owner" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "the rw_owner password again (keychain runward-hosted-db / rw_owner), for the gateway's migrate gesture"
+}
+variable "operator_db_password_rw_maint" {
+  type        = string
+  sensitive   = true
+  default     = null
+  description = "the rw_maint password again (keychain runward-hosted-db / rw_maint), for the gateway's operator gestures"
 }
 variable "s3_access_key_id" {
   type        = string
@@ -136,15 +151,37 @@ variable "s3_secret_access_key" {
   default     = null
   description = "keychain runward-hosted-s3 / secret-access-key, phase 2 only"
 }
+variable "operator_token_sha256" {
+  type        = string
+  default     = ""
+  description = "the sha256 (64 hex) of the operator's token (keychain runward-hosted-operator / token; GitHub secret RW_OPERATOR_TOKEN). Not a secret: the token cannot be recovered from it"
+  validation {
+    condition     = var.operator_token_sha256 == "" || can(regex("^[0-9a-f]{64}$", var.operator_token_sha256))
+    error_message = "operator_token_sha256 is the sha256 of the token, 64 lower-case hex characters"
+  }
+}
+variable "app_domain" {
+  type        = bool
+  default     = false
+  description = "attach app.runward.dev to the service: only once its CNAME resolves to the service's endpoint (output service_endpoint), else the hoster's HTTP-01 check fails"
+}
 
 locals {
   phase2   = !can(regex("@sha256:0{64}$", var.image))
-  jobs     = local.phase2 && var.jobs_reach_database
   database = "runward_hosted"
   pn       = scaleway_rdb_instance.rw.private_network[0]
   db_host  = var.database_host != "" ? var.database_host : local.pn.ip
   db_port  = local.pn.port
-  # the instance's certificate is public: it is how a client checks the server (DATABASE_SSL=verify-full)
+  # a password may hold any character: it is URL-encoded in the connection URL
+  db_url = { for k, v in {
+    admin    = { user = "rw_admin", credential = var.operator_db_password_admin, database = "rdb" }
+    rw_owner = { user = "rw_owner", credential = var.operator_db_password_rw_owner, database = local.database }
+    rw_maint = { user = "rw_maint", credential = var.operator_db_password_rw_maint, database = local.database }
+    rw_app   = { user = "rw_app", credential = var.container_db_password, database = local.database }
+  } : k => format("postgres://%s:%s@%s:%d/%s", v.user, urlencode(coalesce(v.credential, "missing")), local.db_host, local.db_port, v.database) }
+  # the instance's certificate is public: it is how a client checks the server (DATABASE_SSL=verify-full).
+  # Read on 2026-11-08: subject CN=172.16.16.2, SAN DNS:172.16.16.2 and IP:172.16.16.2, so verify-full by
+  # the private IP holds.
   database_ca = scaleway_rdb_instance.rw.certificate
   common_env = {
     NODE_ENV     = "production"
@@ -155,8 +192,18 @@ locals {
     S3_BUCKET    = scaleway_object_bucket.rw.name
     DATABASE_SSL = "verify-full"
     DATABASE_CA  = local.database_ca
+    # the hoster's edge is the one proxy in front of both containers (read by the service's rate limits)
+    RW_TRUST_PROXY = "1"
   }
+  # what phase 2 lacks, said by name (whether a value is set is not itself a secret)
+  phase2_inputs_missing = compact([
+    nonsensitive(var.s3_access_key_id == null || var.s3_secret_access_key == null) ? "the bucket's key: store it in the keychain (service runward-hosted-s3, accounts access-key-id and secret-access-key) and pass TF_VAR_s3_access_key_id and TF_VAR_s3_secret_access_key" : "",
+    nonsensitive(var.container_db_password == null) ? "TF_VAR_container_db_password (keychain runward-hosted-db / rw_app)" : "",
+    nonsensitive(var.operator_db_password_admin == null || var.operator_db_password_rw_owner == null || var.operator_db_password_rw_maint == null) ? "TF_VAR_operator_db_password_admin, _rw_owner, _rw_maint (keychain runward-hosted-db / admin, rw_owner, rw_maint)" : "",
+    var.operator_token_sha256 == "" ? "-var operator_token_sha256=<sha256 of the token in keychain runward-hosted-operator / token>" : "",
+  ])
 }
+
 
 # ---------------------------------------------------------------------------------------------- phase 1
 resource "scaleway_vpc_private_network" "rw" {
@@ -278,62 +325,8 @@ resource "scaleway_rdb_privilege" "rw_maint" {
   depends_on    = [scaleway_rdb_privilege.rw_app]
 }
 
-# Secret Manager: the connection URLs the jobs read by `secret_reference` (Jobs have no other secret
-# channel). Values are written once per `credentials_version`, write-only, never in the state.
-# Created only with the jobs (`jobs_reach_database`): a secret no workload reads is not created, and the
-# provisioning key holds no Secret Manager right until the jobs' path to the private database is decided.
-locals {
-  db_secrets = !var.jobs_reach_database ? {} : {
-    admin    = { user = "rw_admin", database = "rdb", description = "rw_admin, for the roles job (database rdb)" }
-    rw_owner = { user = "rw_owner", database = local.database, description = "rw_owner, for the migrate job" }
-    rw_maint = { user = "rw_maint", database = local.database, description = "rw_maint, for the operator jobs" }
-    rw_app   = { user = "rw_app", database = local.database, description = "rw_app, for the isolation job" }
-  }
-}
-resource "scaleway_secret" "db" {
-  for_each    = local.db_secrets
-  name        = "database-url-${replace(each.key, "_", "-")}"
-  path        = "/runward-hosted"
-  description = each.value.description
-  type        = "opaque"
-}
-resource "scaleway_secret_version" "db" {
-  for_each    = local.db_secrets
-  secret_id   = scaleway_secret.db[each.key].id
-  description = "credentials version ${var.credentials_version}"
-  data_wo = format("postgres://%s:%s@%s:%d/%s", each.value.user, {
-    admin    = var.db_password_admin
-    rw_owner = var.db_password_rw_owner
-    rw_maint = var.db_password_rw_maint
-    rw_app   = var.db_password_rw_app
-  }[each.key], local.db_host, local.db_port, each.value.database)
-  data_wo_version = var.credentials_version
-  depends_on      = [scaleway_rdb_user.rw_owner, scaleway_rdb_user.rw_app, scaleway_rdb_user.rw_maint]
-}
-
 # ---------------------------------------------------------------------------------------------- phase 2
-resource "scaleway_secret" "s3" {
-  for_each    = local.phase2 && var.jobs_reach_database ? toset(["access-key-id", "secret-access-key"]) : toset([])
-  name        = "s3-${each.key}"
-  path        = "/runward-hosted"
-  description = "the bucket's key, for the operator jobs"
-  type        = "opaque"
-}
-resource "scaleway_secret_version" "s3" {
-  for_each        = scaleway_secret.s3
-  secret_id       = each.value.id
-  description     = "credentials version ${var.credentials_version}"
-  data_wo         = each.key == "access-key-id" ? var.s3_access_key_id : var.s3_secret_access_key
-  data_wo_version = var.credentials_version
-  lifecycle {
-    precondition {
-      condition     = var.s3_access_key_id != null && var.s3_secret_access_key != null
-      error_message = "phase 2 needs the bucket's key: store it in the keychain (service runward-hosted-s3, accounts access-key-id and secret-access-key) and pass TF_VAR_s3_access_key_id and TF_VAR_s3_secret_access_key"
-    }
-  }
-}
-
-# the container: 0.25 vCPU, 512 MB, scale 0 to 1, public, in the private network. The CI deploys (image,
+# The service: 0.25 vCPU, 512 MB, scale 0 to 1, public, in the private network. The CI deploys (image,
 # RW_COMMIT, RW_IMAGE); OpenTofu owns the rest.
 resource "scaleway_container" "rw" {
   count                  = local.phase2 ? 1 : 0
@@ -354,74 +347,92 @@ resource "scaleway_container" "rw" {
     RW_SEND_WORKFLOW_SHAS = var.send_workflow_shas
   }) : k => v if v != "" }
   secret_environment_variables = {
-    DATABASE_URL         = format("postgres://rw_app:%s@%s:%d/%s", coalesce(var.container_db_password, "missing"), local.db_host, local.db_port, local.database)
+    DATABASE_URL         = local.db_url.rw_app
     S3_ACCESS_KEY_ID     = coalesce(var.s3_access_key_id, "missing")
     S3_SECRET_ACCESS_KEY = coalesce(var.s3_secret_access_key, "missing")
   }
   lifecycle {
     ignore_changes = [image, registry_image, environment_variables["RW_COMMIT"], environment_variables["RW_IMAGE"]]
     precondition {
-      condition     = var.s3_access_key_id != null && var.s3_secret_access_key != null
-      error_message = "phase 2 needs the bucket's key: store it in the keychain (service runward-hosted-s3, accounts access-key-id and secret-access-key) and pass TF_VAR_s3_access_key_id and TF_VAR_s3_secret_access_key"
-    }
-    precondition {
-      condition     = var.container_db_password != null
-      error_message = "phase 2 needs TF_VAR_container_db_password (the rw_app password, keychain runward-hosted-db / rw_app)"
+      condition     = length(local.phase2_inputs_missing) == 0
+      error_message = "phase 2 needs: ${join("; ", local.phase2_inputs_missing)}"
     }
   }
 }
 resource "scaleway_container_domain" "app" {
-  count        = local.phase2 ? 1 : 0
+  count        = local.phase2 && var.app_domain ? 1 : 0
   container_id = scaleway_container.rw[0].id
   hostname     = "app.runward.dev"
 }
 
-# the jobs, same image. Each reads its connection URL (and the S3 key when it opens the store) from
-# Secret Manager. OFF until they can reach the private database (variable jobs_reach_database).
-locals {
-  s3_refs = { S3_ACCESS_KEY_ID = "access-key-id", S3_SECRET_ACCESS_KEY = "secret-access-key" }
-  job_specs = {
-    roles         = { args = ["scripts/roles.mjs"], url_env = "ADMIN_URL", secret = "admin", s3 = false, cron = null }
-    migrate       = { args = ["scripts/migrate.mjs"], url_env = "MIGRATE_URL", secret = "rw_owner", s3 = false, cron = null }
-    retention     = { args = ["src/operator.js", "retention"], url_env = "DATABASE_URL", secret = "rw_maint", s3 = true, cron = "23 3 * * *" }
-    verify-chains = { args = ["src/operator.js", "verify-chains"], url_env = "DATABASE_URL", secret = "rw_maint", s3 = true, cron = "37 3 * * *" }
-    operator      = { args = ["src/operator.js"], url_env = "DATABASE_URL", secret = "rw_maint", s3 = true, cron = null }
-    isolation     = { args = ["scripts/isolation-deployed.mjs"], url_env = "DATABASE_URL", secret = "rw_app", s3 = false, cron = null }
+# The operator's gateway (ADR-0016): Serverless Jobs cannot join a Private Network, so every gesture that
+# needs the private database and is not the service (roles, migrate, isolation, the operator's closed
+# list, the two daily gestures) is one authenticated call to this container. Its own namespace, so an IAM
+# rule (ContainersPrivateAccess, condition on the namespace) can open it alone. Private: the hoster
+# refuses a call without X-Auth-Token; the gateway then refuses a call without the operator's token (it
+# holds its sha256 only). Each gesture runs as a child process that receives one role's URL.
+resource "scaleway_container_namespace" "operator" {
+  count       = local.phase2 ? 1 : 0
+  name        = "runward-hosted-operator"
+  description = "the operator's gateway to the private database (ADR-0016)"
+}
+resource "scaleway_container" "operator" {
+  count                  = local.phase2 ? 1 : 0
+  name                   = "runward-hosted-operator"
+  namespace_id           = scaleway_container_namespace.operator[0].id
+  image                  = var.image
+  command                = ["node"]
+  args                   = ["src/operator-gateway.js"]
+  port                   = 8080
+  cpu_limit              = 250
+  memory_limit_bytes     = 536870912 # 512 MiB
+  min_scale              = 0
+  max_scale              = 1   # one gesture at a time, in one process
+  timeout                = 900 # above the longest gesture's own deadline (14 min)
+  privacy                = "private"
+  protocol               = "http1"
+  https_connections_only = true
+  private_network_id     = scaleway_vpc_private_network.rw.id
+  environment_variables = { for k, v in merge(local.common_env, {
+    RW_SEND_WORKFLOW_SHAS    = var.send_workflow_shas
+    RW_WITNESS_TENANTS       = var.witness_tenants
+    RW_OPERATOR_TOKEN_SHA256 = var.operator_token_sha256
+  }) : k => v if v != "" }
+  secret_environment_variables = {
+    RW_OPERATOR_URL_ADMIN = local.db_url.admin
+    RW_OPERATOR_URL_OWNER = local.db_url.rw_owner
+    RW_OPERATOR_URL_MAINT = local.db_url.rw_maint
+    RW_OPERATOR_URL_APP   = local.db_url.rw_app
+    S3_ACCESS_KEY_ID      = coalesce(var.s3_access_key_id, "missing")
+    S3_SECRET_ACCESS_KEY  = coalesce(var.s3_secret_access_key, "missing")
+  }
+  lifecycle {
+    ignore_changes = [image, registry_image, environment_variables["RW_COMMIT"], environment_variables["RW_IMAGE"]]
+    precondition {
+      condition     = length(local.phase2_inputs_missing) == 0
+      error_message = "phase 2 needs: ${join("; ", local.phase2_inputs_missing)}"
+    }
   }
 }
-resource "scaleway_job_definition" "rw" {
-  for_each               = local.jobs ? local.job_specs : {}
-  name                   = "runward-hosted-${each.key}"
-  cpu_limit              = 250
-  memory_limit           = 512
-  local_storage_capacity = 1000
-  image_uri              = var.image
-  startup_command        = ["node"]
-  args                   = each.value.args
-  timeout                = "900s"
-  env = { for k, v in merge(local.common_env, {
-    RW_SEND_WORKFLOW_SHAS = var.send_workflow_shas
-    RW_WITNESS_TENANTS    = var.witness_tenants
-  }) : k => v if v != "" }
-  secret_reference {
-    secret_id      = scaleway_secret.db[each.value.secret].id
-    secret_version = tostring(scaleway_secret_version.db[each.value.secret].revision)
-    environment    = each.value.url_env
+
+# The two daily gestures, at the hour of Paris (the trigger carries its time zone). The schedule cannot
+# hold a secret in clear, so it calls /scheduled/<gesture>, which runs only these two idempotent,
+# argument-free gestures; every other gesture needs the operator's token.
+locals {
+  scheduled = { retention = "23 3 * * *", verify-chains = "37 3 * * *" }
+}
+resource "scaleway_container_trigger" "scheduled" {
+  for_each     = local.phase2 ? local.scheduled : {}
+  container_id = scaleway_container.operator[0].id
+  name         = "runward-hosted-${each.key}"
+  description  = "daily ${each.key}, Europe/Paris (ADR-0016)"
+  destination_config {
+    http_path   = "/scheduled/${each.key}"
+    http_method = "post"
   }
-  dynamic "secret_reference" {
-    for_each = each.value.s3 ? local.s3_refs : {}
-    content {
-      secret_id      = scaleway_secret.s3[secret_reference.value].id
-      secret_version = tostring(scaleway_secret_version.s3[secret_reference.value].revision)
-      environment    = secret_reference.key
-    }
-  }
-  dynamic "cron" {
-    for_each = each.value.cron == null ? [] : [each.value.cron]
-    content {
-      schedule = cron.value
-      timezone = "Europe/Paris"
-    }
+  cron {
+    schedule = each.value
+    timezone = "Europe/Paris"
   }
 }
 
@@ -430,4 +441,12 @@ output "database_private_ip" { value = local.pn.ip }
 output "database_private_hostname" { value = local.pn.hostname }
 output "database_ca" { value = local.database_ca }
 output "container_id" { value = one(scaleway_container.rw[*].id) }
-output "job_ids" { value = { for k, j in scaleway_job_definition.rw : k => j.id } }
+output "service_endpoint" {
+  description = "the CNAME target of app.runward.dev"
+  value       = one(scaleway_container.rw[*].public_endpoint)
+}
+output "operator_container_id" { value = one(scaleway_container.operator[*].id) }
+output "operator_endpoint" {
+  description = "the gateway's URL (vars.RW_OPERATOR_URL); a call needs X-Auth-Token and X-RW-Operator-Token"
+  value       = one(scaleway_container.operator[*].public_endpoint)
+}

@@ -20,6 +20,7 @@ COPY scripts/migrate.mjs scripts/roles.mjs scripts/isolation-deployed.mjs ./scri
 COPY vendor/runward-fleet.lock.json ./vendor/runward-fleet.lock.json
 USER node
 EXPOSE 8080
-# the service; the operator's jobs run the same image with: node src/operator.js <gesture>
+# the service; the operator's gateway (ADR-0016) runs the same image with: node src/operator-gateway.js,
+# which runs scripts/roles.mjs, scripts/migrate.mjs, scripts/isolation-deployed.mjs and src/operator.js
 ENTRYPOINT ["node"]
 CMD ["src/main.js"]

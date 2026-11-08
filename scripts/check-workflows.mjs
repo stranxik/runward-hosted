@@ -3,7 +3,7 @@
 // no pull_request_target or workflow_run anywhere; in send.yml, only the send job holds id-token, the
 // check job never passes --hooks and writes under $RUNNER_TEMP, and the send job runs no third-party
 // action besides GitHub's artifact actions. A deploy or rollback workflow stays off unless its repository
-// variable is set. Exit 1 with the list of faults.
+// variable is set; push-image runs by hand from main only. Exit 1 with the list of faults.
 import { readFileSync, readdirSync } from "node:fs";
 
 const DIR = process.env.RW_WORKFLOWS_DIR ?? new URL("../.github/workflows/", import.meta.url).pathname;
@@ -18,6 +18,8 @@ for (const f of readdirSync(DIR).filter((x) => /\.ya?ml$/.test(x))) {
   if (/pull_request_target|workflow_run/.test(t)) faults.push(`${f}: pull_request_target or workflow_run`);
   if (/self-hosted/.test(t)) faults.push(`${f}: a self-hosted runner in a public repository`);
   if (/^(deploy|rollback)\.yml$/.test(f) && !/vars\.RW_DEPLOY_ENABLED == 'true'/.test(t)) faults.push(`${f}: not gated by vars.RW_DEPLOY_ENABLED`);
+  // push-image builds and pushes before any container exists (ADR-0016): by hand only, from main only
+  if (f === "push-image.yml" && (!/^on:\n  workflow_dispatch:\n(?! )/m.test(t) || !/github\.ref == 'refs\/heads\/main'/.test(t))) faults.push(`${f}: not manual-only from main`);
 }
 const send = readFileSync(DIR + "send.yml", "utf8");
 const jobs = send.split(/^  (?=[a-z]+:\s*$)/m);

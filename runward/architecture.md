@@ -81,3 +81,4 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Licence and hosting | ADR-0013 |
 | Design tokens in one file | pending: ADR-0014, proposed |
 | The in-memory store as reference adapter | pending: ADR-0015, proposed |
+| The operator's gateway to the private database | pending: ADR-0016, proposed |

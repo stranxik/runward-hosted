@@ -59,27 +59,33 @@
 
 ## 7. Deploy and roll back
 
-- Deploy: a push to `main` with `vars.RW_DEPLOY_ENABLED == 'true'`; `.github/workflows/deploy.yml` deploys by digest only after the ci run of that commit is green, then checks the served revision at the hoster (S5), `/api/version`, the smoke, the real send workflow to the witness tenant, the isolation suite on the deployed base; any failure redeploys the previous digest.
-- Roll back by hand: `gh workflow run rollback.yml --repo stranxik/runward-hosted -f digest=rg.fr-par.scw.cloud/runward/runward-hosted@sha256:<digest of a green deploy>`; it waits for `/api/version` and writes the time it took in the run summary.
+- Deploy: a push to `main` with `vars.RW_DEPLOY_ENABLED == 'true'`; `.github/workflows/deploy.yml` deploys by digest only after the ci run of that commit is green: first the operator's gateway, which runs `roles` and `migrate` (ADR-0016), then the service; it checks the served revision of each at the hoster (S5) and that their environment was merged, not replaced, then `/api/version`, the smoke, the real send workflow to the witness tenant, the isolation suite on the deployed base (through the gateway), and purges the registry beyond the 5 newest images (never a digest served or named for rollback); any failure redeploys the previous digest on both containers.
+- Roll back by hand: `gh workflow run rollback.yml --repo stranxik/runward-hosted -f digest=rg.fr-par.scw.cloud/runward/runward-hosted@sha256:<digest of a green deploy>`; it rolls back the service only (the gateway keeps the newest code; migrations are expansion only), waits for `/api/version` and writes the time it took in the run summary.
 - Migrations are expansion only, so the previous image runs on the new schema: a rollback never needs a down migration.
 
 ## 8. Operator gestures (the closed list)
 
-All run as `node src/operator.js <gesture>` inside the hoster's private network (the same image, a job), started by an approved workflow of the private repository `stranxik/runward-hosted-ops` (environment `operateur`). The token of a link is drawn on the author's workstation (`npm run operateur:amorcage`, `npm run operateur:reprise -- --tenant <id> --member <id>`); only its sha256 is passed.
+All run inside the hoster's private network through the operator's gateway (ADR-0016): a private Serverless Container of the same image, one authenticated call per gesture, each run under its own database role. From the CI, from the private repository `stranxik/runward-hosted-ops` (environment `operateur`) or from the author's workstation: `scripts/operator-call.sh <gesture> '<json args>'` with `SCW_SECRET_KEY` (the hoster's barrier), `RW_OPERATOR_TOKEN` (the gateway's) and `RW_OPERATOR_URL` (output `operator_endpoint`). The token of a link is drawn on the author's workstation (`npm run operateur:amorcage`, `npm run operateur:reprise -- --tenant <id> --member <id>`); only its sha256 is passed. The gateway's arguments are the commands' flags in camelCase, for example `scripts/operator-call.sh open-bootstrap '{"hash":"<sha256>","witness":true}'`.
 
-| Gesture | Command |
+| Gesture | Role | Command (what the gateway runs) |
+|---|---|---|
+| roles (before the first migration, and at each deploy) | `rw_admin` | `node scripts/roles.mjs` |
+| migrate (each deploy, before the service switches) | `rw_owner` | `node scripts/migrate.mjs` |
+| isolation (each deploy, after the smoke) | `rw_app` | `node scripts/isolation-deployed.mjs` |
+
+| Gesture (role `rw_maint`) | Command |
 |---|---|
 | open a bootstrap | `open-bootstrap --hash <sha256> [--tenant <id>] [--witness] [--title <text>]` |
 | open a recovery | `open-recovery --hash <sha256> --tenant <id> --member <id>` |
 | reset a tenant's access | `reset-access --hash <sha256> --tenant <id>` |
 | maintenance | `maintenance --on --until <iso> --reason <text>` / `maintenance --off` |
-| retention (daily) | `retention` |
-| chain check (daily) | `verify-chains` |
+| retention (daily, 03:23 Paris, trigger) | `retention` |
+| chain check (daily, 03:37 Paris, trigger) | `verify-chains` |
 | after a restore | `restore-replay --since <ulid>` |
 
 ## 9. Secrets
 
-`SCW_SECRET_KEY` (environment `production` of this repository, reserved to `main`), the database roles' passwords and the S3 keys (secret variables of the container and the jobs). Rotation of the Scaleway key: create the new key, set it in the environment, run a deploy, revoke the old key. A value is put in the macOS keychain by masked input only: `security add-generic-password -U -s <service> -a <account> -w`.
+`SCW_SECRET_KEY` (environment `production` of this repository, reserved to `main`), `RW_OPERATOR_TOKEN` (same environment; keychain `runward-hosted-operator` / `token`; the gateway holds only its sha256), the database roles' passwords and the S3 keys (secret variables of the two containers). Rotation of the Scaleway key: create the new key, set it in the environment, run a deploy, revoke the old key. A value is put in the macOS keychain by masked input only: `security add-generic-password -U -s <service> -a <account> -w`.
 
 ## 10. Watching
 
@@ -101,32 +107,51 @@ Described in `infra/scaleway/main.tf` (OpenTofu, provider scaleway 2.88.0), proj
 | Database `runward_hosted`, users `rw_owner`, `rw_app`, `rw_maint` and their privileges | passwords write-only, never in the plan or the state | 0 EUR |
 | Secret Manager, path `/runward-hosted` | 4 secrets (connection URLs of `rw_admin`, `rw_owner`, `rw_maint`, `rw_app`), one version each | 0.18 EUR (0.044 EUR per version), access 0.03 EUR per 10 000 reads |
 
-**Phase 2** (when `image` names a real digest; 12 more resources with the jobs):
+**Phase 2** (when `image` names a real digest; 5 more resources, then the domain):
 
 | Resource | Setting | Monthly cost |
 |---|---|---|
-| Serverless Container `runward-hosted` | 0.25 vCPU, 512 MiB, scale 0 to 1, public, in the private network | about 0 EUR within the monthly free tier (200 000 vCPU-s, 400 000 GB-s); about 6.50 EUR if the minimum scale becomes 1 |
-| Domain `app.runward.dev` | container domain; the CNAME is set at the DNS host | 0 EUR |
-| Secret Manager | 2 more secrets (the bucket's key, for the operator jobs) | 0.09 EUR |
-| Serverless Jobs `roles`, `migrate`, `retention` (03:23), `verify-chains` (03:37), `operator`, `isolation` | 0.25 vCPU, 512 MB, timeout 900 s; **off** until `jobs_reach_database` (see below) | about 0.01 EUR (0.00001 EUR per vCPU-s) |
+| Serverless Container `runward-hosted` (the service) | 0.25 vCPU, 512 MiB, scale 0 to 1, public, in the private network | about 0 EUR within the monthly free tier (200 000 vCPU-s, 400 000 GB-s); about 6.50 EUR if the minimum scale becomes 1 |
+| Serverless Containers namespace `runward-hosted-operator` and container `runward-hosted-operator` (the operator's gateway, ADR-0016) | 0.25 vCPU, 512 MiB, scale 0 to 1, **private**, in the private network, request timeout 900 s | about 0 EUR (a few minutes a day, within the same free tier) |
+| Two scheduled triggers of the gateway | `retention` 03:23 and `verify-chains` 03:37, time zone `Europe/Paris` | 0 EUR |
+| Domain `app.runward.dev` | container domain, applied with `-var app_domain=true` once the CNAME resolves | 0 EUR |
 | Cockpit (logs) | the products' own logs | to confirm, free or cents |
-| **Total** | | **about 12.4 EUR a month** (phase 1 about 12.3 EUR) |
+| **Total** | | **about 12.3 EUR a month** (phase 1 alone about 12.3 EUR) |
 | One-off: restore drill | a throwaway DB-DEV-S for a few hours | cents |
 
-**What the hoster does not allow, as of 2026-11-08:**
-- Serverless Jobs cannot join a Private Network (Scaleway's Serverless Jobs FAQ: "does not currently support Scaleway VPC or Private Networks"; no such field in the provider 2.88.0 nor in the jobs API v1alpha2). The database has no public endpoint, so no job can reach it: the jobs stay off (`jobs_reach_database = false`), and `roles` and `migrate`, which must run before the service starts, have no path yet. A decision (ADR) is needed: a private second container in the private network that runs one gesture per authenticated call, a short-lived bastion in the private network, or waiting for the feature. A public database endpoint is not an option.
-- A Serverless Container has no Secret Manager reference and no write-only argument: its `DATABASE_URL` (rw_app) and S3 keys are `secret_environment_variables`, kept in the state. The state and the plan are encrypted by OpenTofu (`encryption` block, pbkdf2 + AES-GCM, enforced) and kept outside any repository.
+No Serverless Job and no Secret Manager entry is created any more (ADR-0016): the provisioning key needs no Secret Manager right.
+
+**What the hoster does not allow, as of 2026-11-08, and how it is met:**
+- Serverless Jobs cannot join a Private Network (Scaleway's Serverless Jobs FAQ: "does not currently support Scaleway VPC or Private Networks"; no such field in the provider 2.88.0). The database has no public endpoint (and will not have one). So roles, migrate, isolation and the operator's gestures go through the operator's gateway, a private container attached to the private network (ADR-0016).
+- A Serverless Container has no Secret Manager reference and no write-only argument: the connection URLs (the service's `rw_app`; the gateway's four roles) and the S3 keys are `secret_environment_variables`, kept in the state. The state and the plan are encrypted by OpenTofu (`encryption` block, pbkdf2 + AES-GCM, enforced) and kept outside any repository. The operator's token is not in the state: the gateway holds its sha256 (`operator_token_sha256`).
+- A trigger cannot carry a secret except in clear in its configuration: the two daily gestures are reached by `POST /scheduled/retention` and `/scheduled/verify-chains`, which take no token and no argument and run nothing else (ADR-0016).
+- The API that updates a container documents a merge for `secret_environment_variables` only; `environment_variables` is sent as the whole map. The CI therefore reads the current map, sets `RW_IMAGE` (and `RW_COMMIT`) on it and sends it whole, then checks that no key was lost (`scripts/container-deploy.sh`).
 - The database API creates LOGIN users only and sets no attribute or membership: `rw_resolve` (NOLOGIN) and `grant rw_resolve to rw_owner` are made by `scripts/roles.mjs` as `rw_admin`, which also refuses to finish if `rw_app` or `rw_maint` can bypass RLS (PostgreSQL 16 lets only a BYPASSRLS role change that attribute: it is checked, not set). `db/roles.sql` stays the reference for a plain PostgreSQL. The privilege levels are none, readonly, readwrite, all: `rw_owner` gets `all` (CREATE, for the schemas it owns), `rw_app` and `rw_maint` get `readonly`, the smallest level that carries CONNECT (its table rights apply to the schema `public`, which the service does not use); everything in the schema `rw` comes from `db/grants.sql`, applied by `scripts/migrate.mjs` as `rw_owner`.
-- TLS: the clients use `DATABASE_SSL=verify-full` with `DATABASE_CA`, the instance certificate (attribute `certificate`, public). Whether it names the private IP (or the private hostname) can be read only once the instance exists: `tofu output -raw database_ca | openssl x509 -noout -subject -issuer -ext subjectAltName,basicConstraints`. If the private IP is absent, set `database_host` to a name the certificate carries, or fall back to checking the CA alone and say so.
+- TLS: the clients use `DATABASE_SSL=verify-full` with `DATABASE_CA`, the instance certificate (attribute `certificate`, public). Read after phase 1 (2026-11-08): self-signed, subject `CN=172.16.16.2`, SAN `DNS:172.16.16.2` and `IP:172.16.16.2` (and a second, public, IP address of the hoster), valid to 2036-11-05; verify-full by the private IP holds, `database_host` stays empty.
 
 ## 12. The author's gestures
 
-- Approve each paid resource above (done for the budget on 2026-11-06), then let a session apply phase 1, and phase 2 once the jobs question is decided.
-- Give the provisioning key, in the project `runward`, `SecretManagerFullAccess` in addition to the eight sets already granted (ContainerRegistryFullAccess, ContainersFullAccess, IPAMReadOnly, ObjectStorageFullAccess, PrivateNetworksFullAccess, RelationalDatabasesFullAccess, ServerlessJobsFullAccess, VPCFullAccess).
+- Approve each paid resource above (done for the budget on 2026-11-06; phase 1 applied on 2026-11-08), then let a session apply phase 2 with the first image (sequence below).
 - Create the bucket's key (an IAM application restricted to Object Storage in the project `runward`) and store it in the keychain by masked input: service `runward-hosted-s3`, accounts `access-key-id` and `secret-access-key`. Phase 2 refuses to plan without it.
-- Set `vars.RW_DEPLOY_ENABLED`, `vars.SCW_CONTAINER_ID`, `vars.SCW_ISOLATION_JOB_ID`, the secret `SCW_SECRET_KEY` of the environment `production` (reserved to `main`), and later `vars.RW_PROBE_ENABLED`, `vars.RW_READER_ENABLED`, `vars.RW_READER_FLEETS`.
+- Give the CI's key (the secret `SCW_SECRET_KEY` of the environment `production`, reserved to `main`) ContainerRegistryFullAccess, ContainersFullAccess and ContainersPrivateAccess in the project `runward` (the last can carry the condition `resource.name == "runward-hosted-operator"`).
 - Publish the first release of this repository (its SHA becomes `RW_SEND_WORKFLOW_SHAS`).
 - The passkey ceremonies, in a real browser: the founder's link (`npm run operateur:amorcage`, approve the run, open the link, create the passkey), the second passkey (a security key or another manager), a sign-in, a per-gesture verification (declare with consent), a removal then a restore of a passkey.
+
+**The first deploy** (the chicken and the egg: the containers must exist before `deploy.yml` updates them, and an image must exist before OpenTofu creates them; no image is built on a workstation). A session does each step, after the author's two gestures above:
+
+1. The operator's token, drawn once, never shown: into the keychain and into the environment `production`, its sha256 kept for OpenTofu.
+   ```sh
+   t=$(openssl rand -hex 32)
+   printf 'add-generic-password -U -s runward-hosted-operator -a token -w %s\n' "$t" | security -i
+   printf %s "$t" | gh secret set RW_OPERATOR_TOKEN --env production -R stranxik/runward-hosted
+   printf %s "$t" | shasum -a 256 | cut -d' ' -f1 > "$HOME/Desktop/Thibault_Souris_Architecture/08_Runward/app-hebergee/infra-etat/operator-token.sha256"; unset t
+   ```
+2. With this branch merged and its ci run green: `gh workflow run push-image.yml -R stranxik/runward-hosted --ref main`, then read the digest in the run summary (`gh run view <id> -R stranxik/runward-hosted --log | grep 'image:'`).
+3. Phase 2, plan then apply (secrets as in "Applying" below, plus the phase 2 variables): `-var image=<digest> -var operator_token_sha256=$(cat .../operator-token.sha256)`; `app_domain` stays false.
+4. The repository's variables from the outputs: `gh variable set SCW_CONTAINER_ID`, `SCW_OPERATOR_CONTAINER_ID`, `RW_OPERATOR_URL` (value: `https://` + output `operator_endpoint`).
+5. The first gestures through the gateway, from the workstation (the hoster's barrier with the provisioning key, which needs ContainersPrivateAccess if ContainersFullAccess does not carry it: an HTTP 403 says so; the gateway's with the token): `roles`, then `migrate`, each answering 200 (`scripts/operator-call.sh roles`, `scripts/operator-call.sh migrate`, with `SCW_SECRET_KEY`, `RW_OPERATOR_TOKEN` read from the keychain and `RW_OPERATOR_URL`). Then a call without `X-Auth-Token` must be refused by the hoster (ADR-0016, "what would settle it").
+6. The CNAME `app.runward.dev` to the output `service_endpoint` at the DNS host; once `dig app.runward.dev @1.1.1.1` answers it, apply again with `-var app_domain=true`.
+7. The two witness tenants (`open-bootstrap` with `witness`, through the gateway), `witness_tenants` set and applied, the first release's SHA in `send_workflow_shas`; then `gh variable set RW_DEPLOY_ENABLED --body true`. From then on, a push to `main` deploys (§7): the gateway first, `roles` and `migrate`, the service, the smoke, the real send, `isolation`, the purge of the registry beyond the 5 newest images.
 
 **Applying** (a session, from `infra/scaleway`, every secret read from the keychain by name inside the command, never printed): the state lives in `08_Runward/app-hebergee/infra-etat/` of the author's architecture folder, outside any repository.
 
@@ -143,7 +168,7 @@ run plan -out="$HOME/Desktop/Thibault_Souris_Architecture/08_Runward/app-heberge
 run apply "$HOME/Desktop/Thibault_Souris_Architecture/08_Runward/app-hebergee/infra-etat/phase1.tfplan"   # ephemeral values are passed again
 ```
 
-After phase 1: no public endpoint (`run state show scaleway_rdb_instance.rw | grep -c load_balancer` gives 0), the certificate's names (§11, TLS), and the four passwords absent from the state (`grep -c -F` of each keychain value on the decrypted `run show -json` gives 0). Phase 2 adds `-var image=<digest>`, `TF_VAR_container_db_password` (keychain `runward-hosted-db` / `rw_app`), `TF_VAR_s3_access_key_id` and `TF_VAR_s3_secret_access_key` (keychain `runward-hosted-s3`). A password rotation: new values in the keychain, then `-var credentials_version=<n+1>`.
+After phase 1: no public endpoint (`run state show scaleway_rdb_instance.rw | grep -c load_balancer` gives 0), the certificate's names (§11, TLS), and the four passwords absent from the state (`grep -c -F` of each keychain value on the decrypted `run show -json` gives 0). Phase 2 adds `-var image=<digest>`, `-var operator_token_sha256=<sha256>`, `TF_VAR_container_db_password` (keychain `runward-hosted-db` / `rw_app`), `TF_VAR_operator_db_password_admin`, `TF_VAR_operator_db_password_rw_owner`, `TF_VAR_operator_db_password_rw_maint` (keychain `runward-hosted-db` / `admin`, `rw_owner`, `rw_maint`), `TF_VAR_s3_access_key_id` and `TF_VAR_s3_secret_access_key` (keychain `runward-hosted-s3`); it refuses to plan, naming what is missing, without any of them. A password rotation: new values in the keychain, then `-var credentials_version=<n+1>`.
 
 ## References
 

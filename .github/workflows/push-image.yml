@@ -1,0 +1,41 @@
+# Build and push the image of a green commit of main WITHOUT deploying it (ADR-0016; runbook §12): the
+# first deploy's chicken and egg. The containers must exist before deploy.yml can update them, and an
+# image must exist before OpenTofu can create them; no image is ever built on a workstation (PADR-0015
+# point 2). So: this workflow, by hand, once, prints the digest; OpenTofu phase 2 is applied with it; then
+# deploy.yml takes over. Manual only, from main, behind the environment "production".
+name: push-image
+on:
+  workflow_dispatch:
+permissions: {}
+concurrency: { group: deploy-production, cancel-in-progress: false }
+env:
+  REGISTRY: rg.fr-par.scw.cloud/runward
+jobs:
+  verdict:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions: { actions: read, checks: read, contents: read }
+    steps:
+      - name: the ci run of this exact commit is green, every job (no check is a refusal)
+        env: { GH_TOKEN: "${{ github.token }}", SHA: "${{ github.sha }}", REPO: "${{ github.repository }}" }
+        run: |
+          run=$(gh run list -R "$REPO" --workflow ci.yml --commit "$SHA" --json databaseId,status,conclusion -q '.[0]')
+          [ -n "$run" ] && [ "$(echo "$run" | jq -r .status)" = "completed" ] && [ "$(echo "$run" | jq -r .conclusion)" = "success" ] || { echo "ci is not green for $SHA: no image"; exit 1; }
+
+  push:
+    needs: verdict
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - name: build at ${{ github.sha }} and push; the digest names what was built
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}" }
+        run: |
+          docker build --pull=false --build-arg RW_COMMIT=${{ github.sha }} -t "$REGISTRY/runward-hosted:${{ github.sha }}" .
+          echo "$SCW_SECRET_KEY" | docker login rg.fr-par.scw.cloud -u nologin --password-stdin
+          docker push "$REGISTRY/runward-hosted:${{ github.sha }}"
+          digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/runward-hosted:${{ github.sha }}")
+          [[ "$digest" =~ ^rg\.fr-par\.scw\.cloud/runward/runward-hosted@sha256:[0-9a-f]{64}$ ]] || { echo "unexpected digest: $digest"; exit 1; }
+          echo "image: \`$digest\` (commit ${{ github.sha }})" | tee -a "$GITHUB_STEP_SUMMARY"
