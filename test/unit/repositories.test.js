@@ -169,3 +169,19 @@ test("a repository confirmed without consented content enters the index, declare
   const idx = JSON.parse((await h.app.reading.index(f.tenant)).bytes.toString("utf8"));
   assert.equal(idx.missions.find((m) => m.id === "radar").latest, "not-observed");
 });
+
+test("the default branch is declared with the repository (main by default), validated, changeable (PADR-0021 point 8)", async () => {
+  const h = harness();
+  const f = await founder(h);
+  let s = await fresh(h, f);
+  assert.equal(await refusal(h.app.repositories.declare(s, { name: "a/b", defaultBranch: "../x" }, {})), "branch-malformed");
+  assert.equal(await refusal(h.app.repositories.declare(s, { name: "a/b", defaultBranch: "feat/x.lock" }, {})), "branch-malformed");
+  const d = await h.app.repositories.declare(s, { name: "a/b" }, {});
+  const e = await h.app.repositories.declare(await fresh(h, f), { name: "a/c", defaultBranch: "trunk", missions: [{ id: "c" }] }, {});
+  let v = await h.app.identity.accessView(await h.app.identity.sessionFrom(f.token));
+  assert.equal(v.repositories.find((r) => r.id === d.id).defaultBranch, "main");
+  assert.equal(v.repositories.find((r) => r.id === e.id).defaultBranch, "trunk");
+  await h.app.repositories.patch(await fresh(h, f), d.id, { defaultBranch: "release/2026" }, {});
+  v = await h.app.identity.accessView(await h.app.identity.sessionFrom(f.token));
+  assert.equal(v.repositories.find((r) => r.id === d.id).defaultBranch, "release/2026");
+});

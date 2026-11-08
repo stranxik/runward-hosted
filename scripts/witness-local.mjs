@@ -55,7 +55,7 @@ const browser = await chromium.launch({ headless: true, channel: "chrome" });
 const report = [];
 let failed = 0;
 try {
-  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "fr-FR" });
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "fr-FR", permissions: ["clipboard-read", "clipboard-write"] });
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
@@ -144,6 +144,18 @@ try {
   await page.check('input[name="content"]');
   await page.getByRole("button", { name: "Déclarer ce dépôt" }).click(); await page.waitForTimeout(1200);
   await screen("08-arrivee-declare");
+  // the install path without any right: the link opens GitHub's create-file page, prefilled; the copy button copies
+  const href = await page.locator("a[data-install]").getAttribute("href").catch(() => null);
+  const u = href ? new URL(href) : null;
+  const value = u ? u.searchParams.get("value") ?? "" : "";
+  const okLink = u && u.origin === "https://github.com" && u.pathname === "/stranxik/dropyour/new/main" && u.searchParams.get("filename") === ".github/workflows/runward.yml"
+    && value.includes("mission: dropyour") && value.includes(`send.yml@${SEND_SHA}`) && value.includes("id-token: write")
+    && (await page.locator("a[data-install]").getAttribute("target")) === "_blank" && /noopener/.test(await page.locator("a[data-install]").getAttribute("rel"));
+  if (!okLink) { console.log(`witness: FAULT the install link is not GitHub's create-file page, prefilled (${href})`); failed++; }
+  await page.getByRole("button", { name: "Copier l'extrait" }).click(); await page.waitForTimeout(300);
+  const copied = (await page.locator("[data-do=copy]").textContent()) === "Copié" && (await page.evaluate(() => navigator.clipboard.readText())) === `${value}`;
+  if (!copied) { console.log("witness: FAULT the copy button did not copy the extract, or said nothing"); failed++; }
+  await screen("08b-arrivee-copie", { mobile: true });
   // 5. the CI's first upload: kept, awaiting confirmation
   const first = await upload();
   console.log(`witness: first upload -> ${first.status} ${first.body.refusal ?? ""}`);

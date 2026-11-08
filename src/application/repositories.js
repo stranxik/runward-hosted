@@ -1,6 +1,6 @@
 // Declared repositories, their missions, consent and erasure (architecture §3.1, §3.4; PADR-0017).
 import { Refusal } from "../domain/refusals.js";
-import { readDeclaration, checkRestoreRepository, confirmation, MISSION_ID, REMOVED_KEEP } from "../domain/repository.js";
+import { readDeclaration, readBranch, checkRestoreRepository, confirmation, MISSION_ID, REMOVED_KEEP } from "../domain/repository.js";
 import { StoreConflict } from "../ports/errors.js";
 import { iso } from "./context.js";
 
@@ -31,9 +31,9 @@ export function repositoryCases(ctx, identity) {
         for (const m of d.missions) if (existing.some((x) => x.id === m.id)) throw new Refusal("mission-exists");
         const id = store.newId();
         await tx.insert("forge_repository", { id, forge: "github", nameKey: d.nameKey, name: d.name, state: "pending" });
-        await tx.insert("repository", { id, name: d.name, workflow: d.workflow, consent: d.consent, consentAt: d.consent ? now() : null, declaredAt: now() });
+        await tx.insert("repository", { id, name: d.name, workflow: d.workflow, defaultBranch: d.defaultBranch, consent: d.consent, consentAt: d.consent ? now() : null, declaredAt: now() });
         for (const m of d.missions) await tx.insert("mission", { id: m.id, repositoryRef: id, path: m.path, addedAt: now() });
-        const e = await append(tx, { who: human(s), what: "repository-declared", object: id, requestId, detail: { name: d.name, workflow: d.workflow, missions: d.missions.map((m) => m.id) } });
+        const e = await append(tx, { who: human(s), what: "repository-declared", object: id, requestId, detail: { name: d.name, workflow: d.workflow, defaultBranch: d.defaultBranch, missions: d.missions.map((m) => m.id) } });
         if (d.consent) { await security(tx, { what: "consent-given", repository: id }); await append(tx, { who: human(s), what: "consent-given", object: id, requestId }); }
         return { id, state: "pending", entry: e, expiresAt: iso(now() + 7 * 86_400_000) };
       });
@@ -53,6 +53,11 @@ export function repositoryCases(ctx, identity) {
         const d = readDeclaration({ name: r.name, workflow: input.workflow, missions: [{ id: "x" }] });
         await tx.update("repository", { id }, { workflow: d.workflow, epoch: r.epoch + 1 });
         changes.workflow = d.workflow; changes.epoch = r.epoch + 1;
+      }
+      if (input.defaultBranch !== undefined && input.defaultBranch !== r.defaultBranch) {
+        const b = readBranch(input.defaultBranch);
+        await tx.update("repository", { id }, { defaultBranch: b });
+        changes.defaultBranch = b;
       }
       const missions = await tx.list("mission");
       for (const m of input.addMissions ?? []) {

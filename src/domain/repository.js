@@ -13,6 +13,13 @@ const OWNER_REPO = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9_.-]{1,100}
 const WORKFLOW = /^\.github\/workflows\/[A-Za-z0-9_.-]{1,100}\.ya?ml$/;
 export const MISSION_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+/** A branch name as git accepts it, conservatively: no "..", no "//", no leading or trailing "/" or ".", no ".lock". */
+export function readBranch(v) {
+  const b = String(v ?? "main").trim() || "main";
+  if (!/^[A-Za-z0-9._/-]{1,100}$/.test(b) || b.includes("..") || b.includes("//") || /^[/.]|[/.]$/.test(b) || b.endsWith(".lock") || b.split("/").some((x) => x.startsWith("."))) throw new Refusal("branch-malformed");
+  return b;
+}
+
 /** Validate a declaration: { name: "owner/repo", workflow, missions: [{ id, path }], consent }. */
 export function readDeclaration(input) {
   const name = String(input?.name ?? "").trim();
@@ -30,7 +37,7 @@ export function readDeclaration(input) {
     if (path.startsWith("/") || path.split("/").includes("..") || path.length > 200) throw new Refusal("mission-malformed");
     return { id, path };
   });
-  return { name, nameKey: name.toLowerCase(), workflow, missions, consent: input?.consent === true };
+  return { name, nameKey: name.toLowerCase(), workflow, missions, consent: input?.consent === true, defaultBranch: readBranch(input?.defaultBranch) };
 }
 
 /** The repository's state for a reader: pending (and its expiry), pinned, removed (and its restore window). */

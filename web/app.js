@@ -198,21 +198,45 @@ function viewReprise() {
 }
 
 // ------------------------------------------------------------- the send workflow call, as the app shows it
-function snippet(mission = "dropyour") {
-  const sw = S.session?.sendWorkflow ?? [];
-  const sha = sw[0] ?? null;
-  return `<pre class="term" tabindex="0" aria-label="Extrait du workflow à ajouter dans votre dépôt" lang="en">name: runward
+// The install path without any right (PADR-0021 point 7, proposed): the extract, a button that opens GitHub's
+// create-file page for this repository and its default branch with the path and the content prefilled, and a
+// copy button. The prefill by query parameter is not documented by GitHub; it was checked for real in Chrome on
+// 2026-11-08 (/new/<branch>?filename=…&value=… fills both; /new/HEAD answers 404, hence the declared branch).
+// Nothing is sent to GitHub by the service: the browser opens the page, the member commits it, or not.
+function workflowText(repo) {
+  const sha = (S.session?.sendWorkflow ?? [])[0] ?? null;
+  const branch = repo?.defaultBranch ?? "main";
+  const mission = repo?.missions?.[0]?.id ?? "<mission>";
+  return { sha, branch, text: `name: runward
 on:
-  push: { branches: [main] }
+  push: { branches: [${branch}] }
   pull_request:
 permissions: {}
 jobs:
   runward:
     permissions: { contents: read, id-token: write }
-    uses: stranxik/runward-hosted/.github/workflows/send.yml@${esc(sha ?? "<sha of the first release>")}
+    uses: stranxik/runward-hosted/.github/workflows/send.yml@${sha ?? "<sha of the first release>"}
     with:
-      mission: ${esc(mission)}</pre>
-${sha ? "" : `<p class="note">${mk("void", "aucune release")} Le workflow d'envoi n'a pas encore de release publiée : l'appel s'écrira avec son commit dès la première.</p>`}
+      mission: ${mission}
+` };
+}
+/** GitHub's create-file page for this repository and branch, with the workflow's path and content prefilled. */
+function installUrl(repo, text) {
+  const [owner, name] = String(repo.name).split("/");
+  const branch = String(repo.defaultBranch ?? "main").split("/").map(encodeURIComponent).join("/");
+  return `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/new/${branch}?filename=${encodeURIComponent(".github/workflows/runward.yml")}&value=${encodeURIComponent(text)}`;
+}
+function snippet(repo) {
+  const w = workflowText(repo);
+  const install = repo?.name ? `<div class="actions install">
+      ${w.sha ? `<a class="btn" href="${esc(installUrl(repo, w.text))}" target="_blank" rel="noopener noreferrer" data-install>Ajouter le workflow</a>` : `<button class="btn" type="button" disabled>Ajouter le workflow</button>`}
+      <button class="btn btn-q" type="button" data-do="copy" data-copy-target="extrait" aria-describedby="copie-etat">Copier l'extrait</button>
+      <span class="small soft" id="copie-etat" role="status" aria-live="polite"></span></div>
+    <p class="note">« Ajouter le workflow » ouvre, dans un nouvel onglet, la page de GitHub qui crée <code>.github/workflows/runward.yml</code> sur la branche <code>${esc(w.branch)}</code> de <span translate="no">${esc(repo.name)}</span>, déjà remplie : il ne vous reste qu'à valider le commit. Ce service n'écrit rien dans votre dépôt et n'y demande aucun droit.</p>
+    ${w.branch !== "main" ? `<p class="avert">Votre branche par défaut est <code>${esc(w.branch)}</code>. Aujourd'hui, seul un push sur <code>main</code> envoie : le workflow jugera vos commits, l'envoi attend l'acceptation des autres branches par défaut.</p>` : ""}` : "";
+  return `<pre class="term" tabindex="0" id="extrait" aria-label="Extrait du workflow à ajouter dans votre dépôt" lang="en">${esc(w.text.trimEnd())}</pre>
+${install}
+${w.sha ? "" : `<p class="note">${mk("void", "aucune release")} Le workflow d'envoi n'a pas encore de release publiée : l'appel s'écrira avec son commit dès la première, et le bouton s'ouvrira alors.</p>`}
 <p class="note">Ce workflow, publié par le service et épinglé par son commit, lance <code>runward check</code> sur votre commit et envoie ce que runward a écrit : aucun fichier de votre dépôt n'est envoyé à sa place, aucun secret n'est rangé. Sur une PR, il juge sans rien envoyer. Un refus de runward est envoyé aussi, et votre CI reste à la couleur de runward. Si le service ne répond pas, votre CI ne casse pas : le résumé du job dit ce qui n'est pas parti.</p>`;
 }
 
@@ -261,7 +285,7 @@ function viewArrivee(sub) {
     <ol class="steps">
       <li><div class="body"><h3>Ajoutez une seconde passkey</h3>${step1}</div></li>
       <li class="${open ? "" : "ferme"}"><div class="body"><h3>Déclarez le dépôt</h3>${step2}</div></li>
-      <li class="${open ? "" : "ferme"}"><div class="body"><h3>Appelez le workflow d'envoi dans votre CI</h3>${open ? snippet(declared?.missions[0]?.id) : ferme}</div></li>
+      <li class="${open ? "" : "ferme"}"><div class="body"><h3>Appelez le workflow d'envoi dans votre CI</h3>${open ? snippet(declared) : ferme}</div></li>
       <li class="${open ? "" : "ferme"}"><div class="body"><h3>Fusionnez sur main, puis confirmez le premier envoi</h3>${step4}</div></li>
     </ol>` };
 }
@@ -271,19 +295,20 @@ function declareForm() {
   const e = (field) => (err && err.field === field ? ` aria-invalid="true" aria-describedby="e-${field}"` : "");
   const em = (field) => (err && err.field === field ? `<span class="err" id="e-${field}">${esc(err.message)} ${esc(err.action)}</span>` : "");
   const top = err && !err.field ? `<p class="erreur" role="alert" id="e-top">${mk("inv", "non déclaré")} ${esc(err.message)} <span class="soft">${esc(err.action)}</span>${reqNote(err)}</p>` : "";
-  const v = S.formValues ?? { repo: "", wf: ".github/workflows/runward.yml", mission: "", path: "." };
+  const v = S.formValues ?? { repo: "", wf: ".github/workflows/runward.yml", mission: "", path: ".", branch: "main" };
   return `<form id="declare" novalidate>${top}
       <label class="f"><span class="k">Dépôt (propriétaire/dépôt)</span><input class="in" name="repo" value="${esc(v.repo)}" placeholder="stranxik/dropyour" autocomplete="off" spellcheck="false" translate="no"${e("repo")}>${em("repo")}</label>
       <label class="f"><span class="k">Workflow appelant, celui qui appelle le workflow d'envoi</span><input class="in" name="wf" value="${esc(v.wf)}" autocomplete="off" spellcheck="false" translate="no"${e("wf")}>${em("wf")}</label>
       <div class="mis"><label class="f"><span class="k">Mission</span><input class="in" name="mission" value="${esc(v.mission)}" placeholder="dropyour" autocomplete="off" spellcheck="false" translate="no"${e("mission")}>${em("mission")}</label>
         <label class="f"><span class="k">Chemin dans le dépôt</span><input class="in" name="path" value="${esc(v.path)}" autocomplete="off" spellcheck="false" translate="no"></label></div>
-      <p class="small"><span class="k">Branche</span><code>main</code>, seule à pouvoir envoyer</p>
+      <label class="f"><span class="k">Branche par défaut du dépôt</span><input class="in" name="branch" value="${esc(v.branch ?? "main")}" autocomplete="off" spellcheck="false" translate="no"${e("branch")}>${em("branch")}</label>
+      <p class="small soft">Vous la déclarez : GitHub ne la donne pas sans jeton pour un dépôt privé, et ce service n'en tient aucun. Elle sert au bouton qui ouvre la page de création du workflow. Aujourd'hui, seul <code>main</code> envoie.</p>
       <label class="check"><input type="checkbox" name="content"><span>J'accepte que ce service reçoive le contenu des exports de ce dépôt : verdict, écarts, livrables et noms déclarés par la charte. Sans cet accord, aucun envoi de ce dépôt n'est accepté, attestation comprise. Je peux le retirer à tout moment dans Accès. Cocher cette case vous redemande votre passkey pour ce geste.</span></label>
       <div class="actions"><button class="btn" type="submit">Déclarer ce dépôt</button></div>
       <p class="note">Votre passkey vous est redemandée si votre dernière vérification date de plus de 5 minutes. Le dépôt reste en attente jusqu'à son premier envoi, que vous confirmerez.</p>
     </form>`;
 }
-const FIELD_OF = { "repository-malformed": "repo", "workflow-malformed": "wf", "mission-malformed": "mission", "mission-exists": "mission" };
+const FIELD_OF = { "repository-malformed": "repo", "workflow-malformed": "wf", "mission-malformed": "mission", "mission-exists": "mission", "branch-malformed": "branch" };
 
 // ------------------------------------------------------------- declare, confirm, modify
 function viewDeclarer(sub) {
@@ -295,7 +320,7 @@ function viewDeclarer(sub) {
     <h1 class="v" tabindex="-1">${esc(repo.name)} est déclaré.</h1>
     <p class="face lede">${mk("half", "en attente du premier envoi")} Ajoutez l'appel du workflow d'envoi, puis fusionnez sur <code>main</code>. Le premier envoi sera gardé sans être publié jusqu'à ce que vous le confirmiez ici.</p>
     <p class="small">Cette déclaration expire le ${when(repo.expiresAt, { sec: false })} si aucun envoi n'arrive. Sans consentement au contenu, le premier envoi sert seulement à confirmer le dépôt : ses octets ne sont pas gardés.</p>
-    ${snippet(repo.missions[0]?.id)}<div class="actions">${go("#/acces", "Revenir à Accès", { q: true })}</div>` };
+    ${snippet(repo)}<div class="actions">${go("#/acces", "Revenir à Accès", { q: true })}</div>` };
   if (what === "confirmer" && repo) {
     if (!repo.pendingSend || repo.pendingSend.reason === "owner-changed" && repo.state !== "pinned") {
       return { title: "Rien à confirmer", key: "declarer", signed: "in", html: `${head("déclarer · confirmer", "")}<h1 class="v">Il n'y a rien à confirmer.</h1><p class="face">${repo.state === "pinned" ? `${mk("full", "déjà épinglé")} ${esc(repo.name)} a été confirmé le ${when(repo.confirmedAt, { sec: false })}. Rien n'a changé.` : `${mk("half", "en attente du premier envoi")} Aucun envoi n'est encore arrivé de ${esc(repo.name)}.`}</p><div class="actions">${go("#/acces", "Voir Accès")}</div>` };
@@ -316,6 +341,7 @@ function viewDeclarer(sub) {
     return { title: "Modifier un dépôt", key: "declarer", signed: "in", html: `${head("déclarer · modifier", "passkey récente")}<h1 class="v">Modifier ${esc(repo.name)}.</h1>
       <form id="modify" data-id="${esc(repo.id)}" novalidate>${S.formError ? `<p class="erreur" role="alert">${mk("inv", "non enregistré")} ${esc(S.formError.message)} <span class="soft">${esc(S.formError.action)}</span></p>` : ""}
       <label class="f"><span class="k">Workflow appelant</span><input class="in" name="wf" value="${esc(repo.workflow)}" autocomplete="off" spellcheck="false" translate="no"></label>
+      <label class="f"><span class="k">Branche par défaut du dépôt</span><input class="in" name="branch" value="${esc(repo.defaultBranch ?? "main")}" autocomplete="off" spellcheck="false" translate="no"></label>
       <p class="small soft">Changer de workflow ouvre une nouvelle série dans l'ordre des envois ; les envois de l'ancien restent au journal.</p>
       ${ms.map((m) => `<p class="small"><code>${esc(m.id)}</code> <span class="soft">${esc(m.path)}</span> · <label><input type="checkbox" name="remove" value="${esc(m.id)}"> retirer (ses envois restent au journal)</label></p>`).join("")}
       <div class="mis"><label class="f"><span class="k">Ajouter une mission</span><input class="in" name="mission" autocomplete="off" spellcheck="false" translate="no"></label><label class="f"><span class="k">Chemin dans le dépôt</span><input class="in" name="path" value="." autocomplete="off" spellcheck="false" translate="no"></label></div>
@@ -1005,6 +1031,13 @@ document.addEventListener("click", async (e) => {
   if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; loadedFor = null; location.hash = "#/entree/sortie"; say("Vous êtes déconnecté."); return; }
   if (what === "reload") { location.reload(); return; }
   if (what === "reload-screen") { S.error = null; S.session = undefined; loadedFor = null; location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
+  if (what === "copy") {
+    const pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");
+    try { await navigator.clipboard.writeText(pre.textContent + "\n"); b.textContent = "Copié"; if (out) out.textContent = "L'extrait est dans votre presse-papiers."; }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = "Extrait sélectionné : copiez-le avec ⌘C ou Ctrl+C."; }
+    setTimeout(() => { b.textContent = "Copier l'extrait"; }, 2400);
+    return;
+  }
   if (what === "scroll") { mobEl.open = false; document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
@@ -1034,9 +1067,9 @@ main.addEventListener("submit", async (e) => {
   const f = e.target;
   const val = (n) => f.elements[n]?.value?.trim() ?? "";
   if (f.id === "declare") {
-    S.formValues = { repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || "." };
+    S.formValues = { repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
     const consent = f.elements.content.checked;
-    const body = { name: S.formValues.repo, workflow: S.formValues.wf, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
+    const body = { name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
     const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: S.formValues.repo.toLowerCase() } : {});
     if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: "La vérification n'a pas abouti. Rien n'a changé.", action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
     S.formError = null; S.formValues = null; say("Dépôt déclaré, en attente du premier envoi.");
@@ -1047,7 +1080,7 @@ main.addEventListener("submit", async (e) => {
   if (f.id === "modify") {
     const id = f.dataset.id;
     const remove = [...f.querySelectorAll('input[name="remove"]:checked')].map((x) => x.value);
-    const body = { workflow: val("wf"), addMissions: val("mission") ? [{ id: val("mission"), path: val("path") || "." }] : [], removeMissions: remove, knowingSendsStay: remove.length > 0 };
+    const body = { workflow: val("wf"), defaultBranch: val("branch") || "main", addMissions: val("mission") ? [{ id: val("mission"), path: val("path") || "." }] : [], removeMissions: remove, knowingSendsStay: remove.length > 0 };
     const r = await write("PATCH", `/api/v0/repositories/${id}`, body);
     if (!r.ok) { const x = r.data ? r : { message: "La vérification n'a pas abouti. Rien n'a changé.", action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
     S.formError = null; say("Dépôt modifié."); await refreshScreen(); location.hash = "#/acces";

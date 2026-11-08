@@ -249,7 +249,7 @@ export function identityCases(ctx) {
         repositories: repos.filter((r) => !r.removedAt || now() - r.removedAt < 30 * 86_400_000).map((r) => {
           const f = forge.find((x) => x.id === r.id);
           return {
-            id: r.id, name: r.name, workflow: r.workflow, state: r.removedAt ? "removed" : f?.state ?? "pending", consent: r.consent, consentAt: iso(r.consentAt),
+            id: r.id, name: r.name, workflow: r.workflow, defaultBranch: r.defaultBranch ?? "main", state: r.removedAt ? "removed" : f?.state ?? "pending", consent: r.consent, consentAt: iso(r.consentAt),
             declaredAt: iso(r.declaredAt), confirmedAt: iso(r.confirmedAt), removedAt: iso(r.removedAt), restorableUntil: r.removedAt ? iso(r.removedAt + 30 * 86_400_000) : null,
             expiresAt: f?.state === "pending" ? iso(r.declaredAt + 7 * 86_400_000) : null,
             repositoryId: f?.repositoryId ?? null, ownerId: f?.ownerId ?? null,

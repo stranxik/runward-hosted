@@ -360,3 +360,6 @@ body:not(.connecte) details.mob{ display:none; }
 /* a phone, signed out: the brand, « Se connecter » and the menu; the theme moves into the menu */
 .theme-m{ display:none; }
 @media (max-width:480px){ body.public .top .wrap > .theme{ display:none; } body.public .theme-m{ display:flex; } }
+/* code inside the service's prose breaks only when a long path must, never in the middle of a short word
+   (the fleet stylesheet's break-all is right for digests in tables, wrong for « main » in a sentence) */
+.face code, .lede code, .note code, p.small code, .avert code, .intent code{ word-break:normal; overflow-wrap:anywhere; }
