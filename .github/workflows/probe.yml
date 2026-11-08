@@ -1,5 +1,6 @@
 # The hourly probe (PADR-0018 points 1 and 9): public, no secret, no tenant data. It reads /api/health and
-# /api/version; after two failures in a row it opens (or updates) an issue "service unavailable", and
+# /api/version, and raises the error-rate alert (more than 5 % of answers at 500 or more over five minutes,
+# scripts/probe-verdict.mjs); after two failures in a row it opens (or updates) an issue "service unavailable", and
 # closes it when the service answers again. It also watches the certificate (14 days) and its own
 # disabling by GitHub after 60 days without activity (a warning issue at 45). Off until the service is
 # deployed: set the repository variable RW_PROBE_ENABLED to true.
@@ -16,19 +17,23 @@ jobs:
     permissions: { issues: write, actions: read, contents: read }
     env: { SERVICE: "https://app.runward.dev", GH_TOKEN: "${{ github.token }}", REPO: "${{ github.repository }}" }
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
       - id: read
-        name: read /api/health and /api/version
+        name: read /api/health and /api/version, judge them (availability and error rate)
         run: |
           set +e
-          h=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "$SERVICE/api/health")
-          v=$(curl -s --max-time 30 "$SERVICE/api/version" | jq -r '.commit // empty')
+          h=$(curl -s -o "$RUNNER_TEMP/health.json" -w '%{http_code}' --max-time 30 "$SERVICE/api/health")
+          curl -s -o "$RUNNER_TEMP/version.json" --max-time 30 "$SERVICE/api/version"
+          v=$(jq -r '.commit // empty' "$RUNNER_TEMP/version.json" 2>/dev/null)
+          verdict=$(node scripts/probe-verdict.mjs "$RUNNER_TEMP/health.json" "$h" "$RUNNER_TEMP/version.json"); vcode=$?
           end=$(echo | openssl s_client -servername app.runward.dev -connect app.runward.dev:443 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
           days=$(( ( $(date -d "$end" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
-          echo "health=$h commit=$v cert_days=$days" | tee -a "$GITHUB_STEP_SUMMARY"
-          ok=$([ "$h" = "200" ] && [ -n "$v" ] && echo yes || echo no)
-          echo "ok=$ok" >> "$GITHUB_OUTPUT"; echo "days=$days" >> "$GITHUB_OUTPUT"
+          echo "health=$h commit=$v cert_days=$days $verdict" | tee -a "$GITHUB_STEP_SUMMARY"
+          ok=$([ "$vcode" = "0" ] && echo yes || echo no)
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"; echo "days=$days" >> "$GITHUB_OUTPUT"; echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
       - name: open, update or close the issue
-        env: { OK: "${{ steps.read.outputs.ok }}", DAYS: "${{ steps.read.outputs.days }}" }
+        env: { OK: "${{ steps.read.outputs.ok }}", DAYS: "${{ steps.read.outputs.days }}", VERDICT: "${{ steps.read.outputs.verdict }}" }
         run: |
           open=$(gh issue list -R "$REPO" --label probe --state open --json number -q '.[0].number')
           prev=$(gh run list -R "$REPO" --workflow probe.yml --limit 2 --json conclusion -q '.[1].conclusion')
@@ -36,7 +41,7 @@ jobs:
             [ -n "$open" ] && gh issue close -R "$REPO" "$open" -c "The service answers again ($(date -u +%FT%TZ))."
           else
             if [ -n "$open" ]; then gh issue comment -R "$REPO" "$open" -b "Still unavailable at $(date -u +%FT%TZ)."
-            elif [ "$prev" = "failure" ]; then gh issue create -R "$REPO" --label probe -t "service unavailable" -b "Two probes in a row could not read /api/health and /api/version ($(date -u +%FT%TZ))."; fi
+            elif [ "$prev" = "failure" ]; then gh issue create -R "$REPO" --label probe -t "service unavailable or erring" -b "Two probes in a row failed: $VERDICT ($(date -u +%FT%TZ))."; fi
           fi
           if [ "${DAYS:-0}" -lt 14 ]; then gh issue create -R "$REPO" --label probe -t "certificate expires in ${DAYS} days" -b "Renew the certificate of app.runward.dev." || true; fi
           last=$(gh api "repos/$REPO/commits?per_page=1" -q '.[0].commit.committer.date')
