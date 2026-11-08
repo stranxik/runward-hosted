@@ -30,8 +30,12 @@ export function boundFetch(allowedHosts, fetchImpl = globalThis.fetch, { timeout
     if (c.openUntil && c.trial) throw new EgressUnavailable(u.host, "circuit half open, a trial is in flight");
     const half = c.openUntil !== 0;
     if (half) c.trial = true;
-    const deadline = AbortSignal.timeout(timeoutMs);
-    const signal = init.signal ? AbortSignal.any([init.signal, deadline]) : deadline;
+    // The deadline is a timer of our own, not AbortSignal.timeout (whose timer never holds the process): a
+    // call in flight keeps the process alive until it answers or its deadline cuts it. Once the headers are
+    // in, the timer still bounds the body but no longer holds the process.
+    const deadline = new AbortController();
+    const timer = setTimeout(() => deadline.abort(new Error(`no answer within ${timeoutMs} ms`)), timeoutMs);
+    const signal = init.signal ? AbortSignal.any([init.signal, deadline.signal]) : deadline.signal;
     const failed = (why) => {
       c.failed++; c.trial = false;
       if (half || c.failed >= failures) { c.openUntil = now() + openMs; c.failed = 0; }
@@ -40,10 +44,13 @@ export function boundFetch(allowedHosts, fetchImpl = globalThis.fetch, { timeout
     let r;
     try { r = await fetchImpl(url, { ...init, signal, redirect: "error" }); }
     catch (e) {
+      clearTimeout(timer);
       // the caller gave up: not the host's failure, the circuit is left as it was
-      if (init.signal?.aborted && !deadline.aborted) { if (half) c.trial = false; throw e; }
-      throw failed(deadline.aborted ? `no answer within ${timeoutMs} ms` : String(e?.message ?? e).slice(0, 120)); }
-    if (r.status >= 500) { failed(`status ${r.status}`); return r; }
+      if (init.signal?.aborted && !deadline.signal.aborted) { if (half) c.trial = false; throw e; }
+      throw failed(deadline.signal.aborted ? `no answer within ${timeoutMs} ms` : String(e?.message ?? e).slice(0, 120));
+    }
+    timer.unref?.();
+    if (r.status >= 500) { clearTimeout(timer); failed(`status ${r.status}`); return r; }
     c.failed = 0; c.openUntil = 0; c.trial = false;
     return r;
   };
