@@ -25,7 +25,11 @@ const MIN = 60_000;
 const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-const ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2})$/;
+// A date-time (YYYY-MM-DDTHH:MM[:SS[.mmm]] then Z or ±HH:MM), checked in small unambiguous pieces: one
+// pattern with nested optional groups is the shape the regex scan refuses.
+const ISO_PARTS = /^\d{4}-\d{2}-\d{2}T([0-9:.]{5,12})(Z|[+-]\d{2}:\d{2})$/;
+const ISO_TIMES = [/^\d{2}:\d{2}$/, /^\d{2}:\d{2}:\d{2}$/, /^\d{2}:\d{2}:\d{2}\.\d{1,3}$/];
+const ISO = { test: (s) => { const m = ISO_PARTS.exec(s); return m !== null && ISO_TIMES.some((t) => t.test(m[1])); } };
 const TEXT = /^[^\u0000-\u001f\u007f]{1,200}$/;
 
 // the database role of each URL variable of the gateway, and the name the child reads it under

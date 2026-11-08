@@ -1,8 +1,8 @@
 # ADR-0017: No load test before the preview; the bounds are tested, a k6 run comes before the first third-party tenant
 
 **Date**: 2026-11-08
-**Status**: proposed
-**Deciders**: proposed by an agent session; Thibault Souris (author) decides.
+**Status**: accepted (2026-11-09), by the author in chat ("je confirme et j'accepte")
+**Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop
 
 ## Context

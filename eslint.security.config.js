@@ -19,8 +19,10 @@
 //          sha256 in the database).
 import security from "eslint-plugin-security";
 
-export const ENV_READERS = ["src/main.js", "src/operator.js"];
-const ENV_MESSAGE = "config-secrets-boundary: the environment, and every secret in it, is read by the composition roots only (src/main.js, src/operator.js); pass typed configuration in instead.";
+// src/operator-gateway.js is the composition root of its own process (the private operator container,
+// ADR-0016): its start block reads the environment and hands typed configuration to createGateway.
+export const ENV_READERS = ["src/main.js", "src/operator.js", "src/operator-gateway.js"];
+const ENV_MESSAGE = "config-secrets-boundary: the environment, and every secret in it, is read by the composition roots only (src/main.js, src/operator.js, src/operator-gateway.js); pass typed configuration in instead.";
 
 export default [
   { ignores: ["node_modules/**", "reports/**", "vendor/**", "web/**", "test/**", "scripts/**"] },
@@ -48,4 +50,7 @@ export default [
     },
   },
   { files: ENV_READERS, rules: { "no-restricted-properties": "off" } },
+  // The one process that spawns: the operator gateway runs each gesture in a child holding the one URL of its
+  // role (ADR-0016). The service itself still spawns nothing.
+  { files: ["src/operator-gateway.js"], rules: { "no-restricted-imports": "off", "security/detect-child-process": "off" } },
 ];
