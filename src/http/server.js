@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
+import { rateLimiter, clientAddress, errorWindow, PUBLIC_LIMITS } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
 const JSON_LIMIT = 64 * 1024;
@@ -119,6 +120,9 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   const allowed = new Set(config.hosts.map((h) => h.toLowerCase()));
   const secure = config.origin.startsWith("https://");
   const origin = config.origin;
+  const limits = config.publicLimits ?? PUBLIC_LIMITS;
+  const errors = errorWindow({ now: () => clock.now() });
+  const limiters = { writes: rateLimiter({ ...limits.writes, now: () => clock.now() }), reads: rateLimiter({ ...limits.reads, now: () => clock.now() }) };
 
   const baseHeaders = (requestId) => ({
     "runward-request-id": requestId, "runward-version": config.commit, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
@@ -128,6 +132,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   });
 
   function send(res, status, headers, body) {
+    errors.record(status);
     res.writeHead(status, headers);
     res.end(body);
   }
@@ -184,9 +189,15 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       }
       route = r.re.source;
       const params = path.match(r.re).slice(1);
+      const write = ["POST", "PATCH", "DELETE"].includes(req.method);
+
+      // ---- the public routes are limited, per address and for the instance, before anything is read
+      if (r.w === "public") {
+        const t = limiters[write ? "writes" : "reads"].take(clientAddress(req, config.trustProxy));
+        if (!t.ok) return fail("too-many-requests", { retryAfter: t.retryAfter });
+      }
 
       // ---- writes from a browser: same origin, checked before the body is read
-      const write = ["POST", "PATCH", "DELETE"].includes(req.method);
       if (write && r.w !== "workload" && r.w !== "reader") {
         const o = req.headers.origin;
         const okOrigin = o ? o === origin : req.headers["sec-fetch-site"] === "same-origin";
@@ -214,7 +225,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
           if (!body || typeof body !== "object" || Array.isArray(body)) return fail("body-invalid");
         }
       }
-      const q = { headers: req.headers, url, body, session, requestId, lang, config, version, health: () => health.body(),
+      const q = { headers: req.headers, url, body, session, requestId, lang, config, version, health: async () => { const h = await health.body(); return { ...h, body: { ...h.body, errors: errors.read() } }; },
         readRaw: (limit) => readLimited(req, Math.min(limit, MAX_EXPORT_BYTES)) };
       const out = await r.h(q, params);
       const shaped = out && typeof out === "object" && ("status" in out && ("body" in out || "raw" in out)) ? out : { status: 200, body: out };

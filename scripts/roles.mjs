@@ -9,21 +9,14 @@
 // The grants of db/grants.sql are not applied here: they run as rw_owner, the owner of the schema rw, at
 // the end of scripts/migrate.mjs.
 import postgres from "postgres";
+// The one TLS path of the scripts (verify-full checks the URL's host, an IP against the IP SANs; a bare
+// { ca, rejectUnauthorized } would check "localhost" and refuse the real instance).
+import { migrationTls } from "./migrate.mjs";
 
 const DATABASE = process.env.RW_DATABASE ?? "runward_hosted";
 
-function tls() {
-  const mode = process.env.DATABASE_SSL ?? "verify-full";
-  if (mode === "disable") return false;
-  if (mode === "verify-full") {
-    if (!process.env.DATABASE_CA) throw new Error("DATABASE_SSL=verify-full needs DATABASE_CA");
-    return { ca: process.env.DATABASE_CA, rejectUnauthorized: true };
-  }
-  return mode;
-}
-
 export async function roles(url, { log = console.log } = {}) {
-  const sql = postgres(url, { max: 1, onnotice: () => {}, ssl: tls() });
+  const sql = postgres(url, { max: 1, onnotice: () => {}, ssl: migrationTls(url) });
   try {
     await sql.unsafe(`do $$ begin
       if not exists (select 1 from pg_roles where rolname = 'rw_resolve') then create role rw_resolve nologin; end if;

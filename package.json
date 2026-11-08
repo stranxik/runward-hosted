@@ -5,13 +5,22 @@
   "description": "runward hosted: the fleet view of runward, behind a sign-in, fed by each repository's CI.",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
     "test": "node --test --test-reporter=spec \"test/unit/**/*.test.js\"",
     "test:pg": "node --test --test-concurrency=1 --test-reporter=spec \"test/pg/**/*.test.js\"",
-    "check": "npm test && node scripts/verify-runward-fleet.mjs --offline",
+    "lint": "eslint src && eslint -c eslint.security.config.js src && node scripts/format-check.mjs",
+    "test:junit": "node scripts/junit-committable.mjs",
+    "test:eslint": "node scripts/eslint-committable.mjs",
+    "test:security": "node scripts/security-scans.mjs",
+    "test:reports": "node scripts/reports-fresh.mjs",
+    "test:reports:write": "npm run test:eslint && npm run test:security && npm run test:junit",
+    "contract:write": "node scripts/api-contract.mjs --write",
+    "check": "npm test && npm run lint && node scripts/verify-runward-fleet.mjs --offline",
     "operateur:amorcage": "node scripts/operator-link.mjs bootstrap",
     "operateur:reprise": "node scripts/operator-link.mjs recovery",
     "operateur:invitation": "node scripts/operator-link.mjs invitation"
@@ -23,7 +32,12 @@
     "runward-fleet": "file:vendor/runward-fleet-0.46.0-2ab48025.tgz"
   },
   "devDependencies": {
+    "@secretlint/secretlint-formatter-sarif": "13.1.0",
+    "@secretlint/secretlint-rule-preset-recommend": "13.1.0",
     "axe-core": "4.14.0",
-    "playwright-core": "1.64.1"
+    "eslint": "10.13.0",
+    "eslint-plugin-security": "4.2.0",
+    "playwright-core": "1.64.1",
+    "secretlint": "13.1.0"
   }
 }

@@ -27,6 +27,17 @@ jobs:
       - name: PostgreSQL isolation suite (two tenants, catalog, planted controls)
         env: { PG_ADMIN_URL: "postgres://postgres@localhost:5432/postgres" }
         run: npm run test:pg
+      - name: lint (the hexagon, the security scan, the format)
+        run: npm run lint
+      - name: the committed reports describe this tree (JUnit, ESLint, SARIF; regenerated and compared)
+        env: { PG_ADMIN_URL: "postgres://postgres@localhost:5432/postgres" }
+        run: npm run test:reports
+      - name: keep the reports this job regenerated (whoever commits reports/ takes them from here)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with: { name: reports-reference, path: reports/, if-no-files-found: ignore, retention-days: 14 }
+      - name: dependency audit (production dependencies, high and critical refused)
+        run: npm audit --omit=dev --audit-level=high
       - name: the vendored runward-fleet is the code at its pinned commit
         run: node scripts/verify-runward-fleet.mjs
       - name: the send workflow never passes --hooks and pins every action by commit

@@ -13,6 +13,10 @@ import { readConfig, compose } from "./main.js";
 
 export const GESTURES = ["open-bootstrap", "open-recovery", "reset-access", "maintenance", "retention", "verify-chains", "restore-replay"];
 
+/** A daily job that recorded a failed tenant (or a broken chain) ends non-zero, so the hoster's job shows
+ *  it; the failure itself is already in the operator journal (operatorCases#eachTenant). */
+export const jobIncomplete = (r) => Array.isArray(r) && r.some((x) => x.failed === true || x.ok === false);
+
 export function parse(argv) {
   const [gesture, ...rest] = argv;
   if (!GESTURES.includes(gesture)) throw new Error(`gesture must be one of: ${GESTURES.join(", ")}`);
@@ -41,6 +45,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     "verify-chains": () => op.verifyChains(),
     "restore-replay": () => op.restoreReplay({ since: o.since, headBefore: o.headBefore ?? null, recoveryHash: o.recoveryHash ?? null }),
   }[gesture];
-  run().then((r) => { console.log(JSON.stringify({ gesture, result: r }, null, 2)); return c.store.close(); })
+  run().then((r) => { console.log(JSON.stringify({ gesture, result: r }, null, 2)); return c.store.close().then(() => { if (jobIncomplete(r)) process.exit(1); }); })
     .catch((e) => { console.error(`operator: ${gesture} refused: ${e.message}`); c.store.close().finally(() => process.exit(1)); });
 }

@@ -1,0 +1,84 @@
+// The daily jobs (async-job-guardrails; review finding of 2026-11-08: the operator note was written on
+// success only, a failure went to stderr, and one tenant's error stopped the next ones). Each tenant is
+// isolated, retried a bounded number of times, and every outcome reaches the operator journal.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { harness, founder, pinnedRepository, send, gesture } from "../helpers.js";
+import { DAY } from "../../src/domain/identity.js";
+
+/** A harness whose store fails, on purpose, for the transactions `fails(tenant, n)` selects. */
+function failing(fails) {
+  const h = harness({ config: { jobRetryWaits: [0, 0] } });
+  const real = h.store.tx.bind(h.store);
+  const calls = new Map();
+  h.store.tx = (tenant, fn) => {
+    const n = (calls.get(tenant) ?? 0) + 1; calls.set(tenant, n);
+    return fails(tenant, n) ? Promise.reject(new Error(`planted failure ${n}`)) : real(tenant, fn);
+  };
+  return { h, calls };
+}
+const notes = (h, what) => h.store._state.operator.filter((n) => n.what === what);
+
+test("a daily job: a failing tenant is retried three times, journalled with its error, and the next tenants still run", async () => {
+  let bad = null;
+  const { h, calls } = failing((t) => t !== null && t === bad);
+  const a = await founder(h, { prefix: "a" });
+  const b = await founder(h, { prefix: "b" });
+  bad = a.tenant;
+  calls.clear();
+  const report = await h.app.operator.retention();
+  const ra = report.find((r) => r.tenant === a.tenant), rb = report.find((r) => r.tenant === b.tenant);
+  assert.deepEqual({ failed: ra.failed, attempts: ra.attempts }, { failed: true, attempts: 3 });
+  assert.match(ra.error, /planted failure 3/);
+  assert.equal(calls.get(a.tenant), 3, "bounded: three attempts, no more");
+  assert.equal(rb.failed, undefined);
+  assert.equal(rb.attempts, 1);
+  const [note] = notes(h, "retention");
+  assert.equal(note.detail.failed, 1, "the failure is in the operator journal, not only on stderr");
+  assert.equal(note.detail.report.length, 2);
+});
+
+test("a daily job: a failure that clears on a later attempt is retried, not reported", async () => {
+  let armed = null;
+  const { h } = failing((t) => { if (t !== null && t === armed) { armed = null; return true; } return false; });
+  const a = await founder(h, { prefix: "a" });
+  armed = a.tenant;
+  const report = await h.app.operator.verifyChains();
+  assert.deepEqual({ failed: report[0].failed, ok: report[0].ok, attempts: report[0].attempts }, { failed: undefined, ok: true, attempts: 2 });
+  assert.equal(notes(h, "verify-chains")[0].detail.failed, 0);
+});
+
+test("a daily job: when the tenant list itself cannot be read, the failure is noted before the job stops", async () => {
+  let armed = false;
+  const { h } = failing((t) => { if (t === null && armed) { armed = false; return true; } return false; });
+  await founder(h, { prefix: "a" });
+  armed = true;
+  await assert.rejects(h.app.operator.retention(), /planted failure/);
+  const [note] = notes(h, "retention");
+  assert.equal(note.detail.failed, 1);
+  assert.equal(note.detail.stage, "tenant list");
+});
+
+test("the retention job is idempotent: a second pass erases nothing and journals nothing more", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const r = await pinnedRepository(h, f);
+  await send(h, { run_number: "5", run_id: "40000000005" });
+  await gesture(h, f.session, null, null);
+  await h.app.repositories.remove(await h.app.identity.sessionFrom(f.token), r.id, {});
+  h.clock.advance(31 * DAY);
+  const first = await h.app.operator.retention();
+  assert.ok(first[0].erased >= 1, "the bytes of a repository removed 30 days ago are erased");
+  const ledger = (await h.store.tx(f.tenant, (tx) => tx.ledgerAll())).length;
+  const second = await h.app.operator.retention();
+  assert.deepEqual({ erased: second[0].erased, archives: second[0].archives, expired: second[0].expired }, { erased: 0, archives: 0, expired: 0 });
+  assert.equal((await h.store.tx(f.tenant, (tx) => tx.ledgerAll())).length, ledger, "no second entry in the tenant's journal");
+});
+
+test("the operator's run of a daily job ends non-zero when a tenant failed or a chain is broken", async () => {
+  const { jobIncomplete } = await import("../../src/operator.js");
+  assert.equal(jobIncomplete([{ tenant: "a", erased: 0, attempts: 1 }]), false);
+  assert.equal(jobIncomplete([{ tenant: "a", erased: 0 }, { tenant: "b", failed: true, error: "x", attempts: 3 }]), true);
+  assert.equal(jobIncomplete([{ tenant: "a", ok: false, at: 3, why: "hash" }]), true);
+  assert.equal(jobIncomplete({ opened: true }), false, "a gesture that is not a daily job");
+});

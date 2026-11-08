@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- generated: node v22.23.4 linux -->
+<testsuites>
+	<testcase name="the migration is idempotent: a second run applies nothing" classname="test"/>
+	<testcase name="two real tenants, made through the application under rw_app" classname="test"/>
+	<testcase name="S4: 0 row read or written outside its tenant, both ways, as rw_app" classname="test"/>
+	<testcase name="the resolution functions answer by exact key, one answer for absent and elsewhere" classname="test"/>
+	<testcase name="catalog: forced RLS on every tenant table, rw_app without bypass, no USING (true), the exact definer list" classname="test"/>
+	<testcase name="planted controls: a twin table without RLS, or with USING (true), makes the suite fail" classname="test"/>
+	<testcase name="the journal is append only for the service; truncate is refused even to the owner's trigger" classname="test"/>
+	<testcase name="jsonb columns hold objects, never a JSON string (guard on a defect found here)" classname="test"/>
+	<testcase name="a link's dates are written by the database, never by its caller" classname="test"/>
+	<testcase name="the application on PostgreSQL: history, quarantine, removal and restore, export and replay" classname="test"/>
+	<testcase name="two instances on one PostgreSQL share every state: a session, a challenge, a token already used" classname="test"/>
+	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
+	<testcase name="the domain and the application keep their boundary" classname="test"/>
+	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
+	<testcase name="the API contract served is the committed one: same routes, same refusals, same digest" classname="test"/>
+	<testcase name="planted control: one more route, or a route opened to the public, changes the digest" classname="test"/>
+	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
+	<testcase name="the chain detects a changed entry, a gap and a reordering" classname="test"/>
+	<testcase name="the current upload: the highest run_number, then run_attempt; a regression of run_number opens an epoch" classname="test"/>
+	<testcase name="link states: seven, each by its rule" classname="test"/>
+	<testcase name="sessions: idle 12 h, absolute 7 days, closed" classname="test"/>
+	<testcase name="claims are untrusted data: bounded, control characters removed; malformed ones refused" classname="test"/>
+	<testcase name="upload headers: digest as RFC 9530, size announced" classname="test"/>
+	<testcase name="every refusal has French and English, a message and an action, and one status" classname="test"/>
+	<testcase name="the words the product never says are absent from every text it shows" classname="test"/>
+	<testcase name="declarations: owner/repo, a workflow file, missions" classname="test"/>
+	<testcase name="same provider: two passkeys of one known provider" classname="test"/>
+	<testcase name="egress: a host outside the list is refused before any socket" classname="test"/>
+	<testcase name="egress: a call that does not answer is cut at its deadline, and the caller's own signal still counts" classname="test"/>
+	<testcase name="egress: after five failures in a row the circuit opens, refuses without a socket, then lets one trial through" classname="test"/>
+	<testcase name="egress: one host's open circuit does not close the way to another" classname="test"/>
+	<testcase name="egress: a caller that gives up is not counted against the host" classname="test"/>
+	<testcase name="egress: the service's composition bounds the issuer and S3 fetches (deadline and circuit)" classname="test"/>
+	<testcase name="a host outside the list gets 421 before anything" classname="test"/>
+	<testcase name="every response carries the request id, the version and the security headers" classname="test"/>
+	<testcase name="/api/version names the commit, the image, the views, the contract and the send workflow" classname="test"/>
+	<testcase name="the session cookie is Secure whatever the origin: __Host- requires it (guard on a defect the local witness found)" classname="test"/>
+	<testcase name="security.txt and health" classname="test"/>
+	<testcase name="a write without this origin is refused before its body is read; a GET never writes" classname="test"/>
+	<testcase name="the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload, fleet, journal" classname="test"/>
+	<testcase name="the served assets: immutable names, views.js byte for byte the pinned one" classname="test"/>
+	<testcase name="the served views say « niveau non atteint » and &amp;quot;level not met&amp;quot; for level-not-met, from the pinned package (author's rule)" classname="test"/>
+	<testcase name="bootstrap: the link opens the founder's account once, then is closed for good" classname="test"/>
+	<testcase name="a link: invalid without oracle, expires after 24 h, nothing consumed on inspect" classname="test"/>
+	<testcase name="a challenge is single use and consumed before the ceremony is verified" classname="test"/>
+	<testcase name="sign-in: unknown passkey, then a session; idle 12 h and absolute 7 days" classname="test"/>
+	<testcase name="gestures: fresh within 5 minutes; per gesture bound to its gesture and object, single use" classname="test"/>
+	<testcase name="passkeys: never the last; removing the one that opened the session closes it; restore for 24 h only" classname="test"/>
+	<testcase name="the second passkey: same device refused passkey-exists; same provider warned; single choice written" classname="test"/>
+	<testcase name="recovery: usable 24 h after it opens, for 24 h; cancellable from a session; arrival closes everything" classname="test"/>
+	<testcase name="recovery cancelled from an open session" classname="test"/>
+	<testcase name="reset-access withdraws every access, keeps the data, reopens a bootstrap" classname="test"/>
+	<testcase name="the security log is written before the database commits: a failing write fails the gesture" classname="test"/>
+	<testcase name="a passkey added is announced in the OTHER sessions, never in the one that added it (guard on a witness finding)" classname="test"/>
+	<testcase name="a first upload of a pending repository is kept, not published; the confirmation publishes it" classname="test"/>
+	<testcase name="an accepted upload answers 201 with seq, head and the index digest the service then serves" classname="test"/>
+	<testcase name="an old run re-run later is kept as history, never as the current upload (T23)" classname="test"/>
+	<testcase name="refusals before the repository write nothing to any tenant's journal (T18)" classname="test"/>
+	<testcase name="the token: audience, expiry, replay, signature" classname="test"/>
+	<testcase name="the repository's pins: calling workflow, owner, mission, consent" classname="test"/>
+	<testcase name="headers before the body: kind, size, digest" classname="test"/>
+	<testcase name="a retry of an accepted upload replays the first answer; another digest in the same run is refused" classname="test"/>
+	<testcase name="without consent every upload is refused content-not-consented, its claims kept for the confirmation" classname="test"/>
+	<testcase name="the rate limit counts runs, not files (T17)" classname="test"/>
+	<testcase name="a removed repository's uploads are written to its own journal, not accepted" classname="test"/>
+	<testcase name="maintenance answers 503 maintenance to every upload" classname="test"/>
+	<testcase name="the verifier fetches the issuer's keys and nothing else" classname="test"/>
+	<testcase name="a daily job: a failing tenant is retried three times, journalled with its error, and the next tenants still run" classname="test"/>
+	<testcase name="a daily job: a failure that clears on a later attempt is retried, not reported" classname="test"/>
+	<testcase name="a daily job: when the tenant list itself cannot be read, the failure is noted before the job stops" classname="test"/>
+	<testcase name="the retention job is idempotent: a second pass erases nothing and journals nothing more" classname="test"/>
+	<testcase name="the operator's run of a daily job ends non-zero when a tenant failed or a chain is broken" classname="test"/>
+	<testcase name="public routes: past the limit per address, 429 too-many-requests with Retry-After; the next minute opens again" classname="test"/>
+	<testcase name="public routes: the instance-wide limit holds whatever the addresses; behind the proxy, the address is the one it appended" classname="test"/>
+	<testcase name="public routes: without the proxy setting, X-Forwarded-For is ignored (a client cannot pick a fresh counter)" classname="test"/>
+	<testcase name="the limiter's table of addresses is bounded: new addresses past the bound share one counter" classname="test"/>
+	<testcase name="RW_TRUST_PROXY: the number of proxies in front, read from the configuration, and which entry it counts" classname="test"/>
+	<testcase name="the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error" classname="test"/>
+	<testcase name="the hexagon's allowed arrows pass, and the tree as it is lints clean" classname="test"/>
+	<testcase name="the security scan refuses a read of the environment outside the composition roots, and eval" classname="test"/>
+	<testcase name="migrations: a contracting statement is refused wherever it sits, in any spelling" classname="test"/>
+	<testcase name="migrations: comments and quoted strings are not statements, and expansion passes" classname="test"/>
+	<testcase name="migrations: every committed migration is expansion only and the directory is a closed sequence" classname="test"/>
+	<testcase name="migrations: a gap, a duplicate number, a bad name, a reordering, a vanished or changed file are refused" classname="test"/>
+	<testcase name="the service refuses to start half configured: exit 78, each missing variable named, no value echoed" classname="test"/>
+	<testcase name="a log line keeps only the fields of its schema: no body, no token, no secret, no path" classname="test"/>
+	<testcase name="the error rate: answers at 500 or more over five minutes, shown by /api/health" classname="test"/>
+	<testcase name="the error window counts by minute and forgets after five" classname="test"/>
+	<testcase name="the probe alerts on an unavailable service and on an error rate above 5 % over at least 20 requests" classname="test"/>
+	<testcase name="declaring: malformed, already here, unavailable elsewhere (one answer, no oracle)" classname="test"/>
+	<testcase name="consent given in the declaration needs the per-gesture verification, and the box is empty by default" classname="test"/>
+	<testcase name="withdrawing consent refuses the next uploads and may erase what was received; the journal keeps the digests" classname="test"/>
+	<testcase name="removing then restoring a repository, with an upload during the removal (AR)" classname="test"/>
+	<testcase name="a pending declaration expires after 7 days without an upload" classname="test"/>
+	<testcase name="the export replays: every published index is rebuilt byte for byte by runward-fleet (S1 b)" classname="test"/>
+	<testcase name="the hosted index never shows machine-established, even if an export claims it (PADR-0011 point 2, planted)" classname="test"/>
+	<testcase name="an export that breaks runward-fleet is kept in quarantine; the fleet goes on" classname="test"/>
+	<testcase name="the language of the index is the tenant's setting, and rebuilds it" classname="test"/>
+	<testcase name="changing the calling workflow opens a new order epoch" classname="test"/>
+	<testcase name="a mission that has uploads is removed only knowingly; its uploads stay in the journal" classname="test"/>
+	<testcase name="a repository confirmed without consented content enters the index, declared and silent (guard on a witness finding)" classname="test"/>
+	<testcase name="the default branch is declared with the repository (main by default), validated, changeable (PADR-0021 point 8)" classname="test"/>
+	<testcase name="send.yml: an unavailable service is retried with backoff 2 s, 8 s, 30 s, four attempts, then the CI is warned, not failed" classname="test"/>
+	<testcase name="send.yml: a named refusal is never retried, and fails the run only under send-strict" classname="test"/>
+	<testcase name="send.yml: a 429 is retried like an unavailable service, and a later success is sent" classname="test"/>
+	<testcase name="database TLS: the instance's authority and an IP named in the IP SANs complete the handshake" classname="test"/>
+	<testcase name="database TLS: the migration and witness scripts verify the same way (DATABASE_CA)" classname="test"/>
+	<testcase name="database TLS: a certificate from another authority is refused (the client never sets rejectUnauthorized: false)" classname="test"/>
+	<testcase name="database TLS: an IP address absent from the certificate's SANs is refused" classname="test"/>
+	<testcase name="database TLS: an IP address that the certificate names only as a DNS SAN is refused (Node wants the IP type)" classname="test"/>
+	<testcase name="database TLS: a host name that the certificate does not name is refused" classname="test"/>
+	<testcase name="database TLS: a server that declines TLS is never spoken to in clear" classname="test"/>
+	<testcase name="database TLS: why the explicit identity check exists (a bare { ca, rejectUnauthorized } checks the name localhost, not the IP)" classname="test"/>
+	<testcase name="database TLS: the store refuses a mode string, and the TLS options never skip the check" classname="test"/>
+	<testcase name="database TLS in production: verify-full with the authority, or the service does not start" classname="test"/>
+	<testcase name="database TLS: every PostgreSQL client of the tree goes through the verifying configuration" classname="test"/>
+	<testcase name="no literal colour outside web/tokens.css" classname="test"/>
+	<testcase name="planted control: a literal colour is seen" classname="test"/>
+	<testcase name="every custom property used is defined by the family structure or the runward layer" classname="test"/>
+	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
+	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
+	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
+	<!-- tests 122 -->
+	<!-- suites 0 -->
+	<!-- pass 122 -->
+	<!-- fail 0 -->
+	<!-- cancelled 0 -->
+	<!-- skipped 0 -->
+	<!-- todo 0 -->
+</testsuites>

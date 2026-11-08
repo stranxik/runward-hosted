@@ -4,6 +4,7 @@
 import { createApp } from "./application/app.js";
 import { memoryStore } from "./adapters/store/memory.js";
 import { postgresStore } from "./adapters/store/postgres.js";
+import { databaseTls, databaseTlsProblems } from "./adapters/store/tls.js";
 import { memoryObjects, s3Objects } from "./adapters/objects/objects.js";
 import { githubVerifier, GITHUB_ISSUER } from "./adapters/oidc/github.js";
 import { simpleWebAuthn } from "./adapters/webauthn/simplewebauthn.js";
@@ -16,21 +17,33 @@ import { ulid } from "./adapters/system/ulid.js";
 import { createHttp, routes, apiContract } from "./http/server.js";
 import { buildAssets } from "./http/assets.js";
 import { INDEX_FORMAT } from "runward-fleet";
+import { readFileSync } from "node:fs";
 
 const LOCK = new URL("../vendor/runward-fleet.lock.json", import.meta.url).pathname;
 const SHA40 = /^[0-9a-f]{40}$/;
+
+/** An origin: http or https, a lower-case host, an optional port, nothing else (parsed, not matched). */
+const isOrigin = (o) => { try { const u = new URL(o); return (u.protocol === "https:" || u.protocol === "http:") && u.origin === o && /^[a-z0-9.-]+$/.test(u.hostname); } catch { return false; } };
 
 /** Read and check the configuration. Throws a list of what is missing, never a value. */
 export function readConfig(env) {
   const problems = [];
   const origin = env.RW_ORIGIN ?? "https://app.runward.dev";
-  if (!/^https?:\/\/[a-z0-9.-]+(:\d+)?$/.test(origin)) problems.push("RW_ORIGIN must be an origin (scheme, host, optional port)");
+  if (!isOrigin(origin)) problems.push("RW_ORIGIN must be an origin (scheme, host, optional port)");
   const store = env.RW_STORE ?? (env.DATABASE_URL ? "postgres" : "missing");
   if (store === "missing") problems.push("DATABASE_URL is required (or RW_STORE=memory for a local witness)");
   if (store === "memory" && env.NODE_ENV === "production") problems.push("RW_STORE=memory is refused in production");
   const objects = env.RW_OBJECTS ?? (env.S3_BUCKET ? "s3" : store === "memory" ? "memory" : "missing");
   if (objects === "missing") problems.push("S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY are required");
   if (objects === "s3") for (const k of ["S3_ENDPOINT", "S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"]) if (!env[k]) problems.push(`${k} is required`);
+  let ca = env.DATABASE_CA ?? null;
+  if (!ca && env.DATABASE_CA_FILE) { try { ca = readFileSync(env.DATABASE_CA_FILE, "utf8"); } catch { problems.push("DATABASE_CA_FILE cannot be read"); } }
+  const tlsMode = env.DATABASE_SSL ?? "verify-full";
+  if (store === "postgres") problems.push(...databaseTlsProblems({ url: env.DATABASE_URL, mode: tlsMode, ca, production: env.NODE_ENV === "production" }));
+  // RW_TRUST_PROXY: how many proxies of the hoster stand in front of the service (0 or unset: none, the
+  // socket's peer is the client); it chooses which X-Forwarded-For entry the rate limits count.
+  const trustProxy = env.RW_TRUST_PROXY === undefined || env.RW_TRUST_PROXY === "" ? 0 : Number(env.RW_TRUST_PROXY);
+  if (!Number.isInteger(trustProxy) || trustProxy < 0 || trustProxy > 5) problems.push("RW_TRUST_PROXY must be an integer from 0 to 5 (the number of proxies in front of the service)");
   const published = (env.RW_SEND_WORKFLOW_SHAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   for (const s of published) if (!SHA40.test(s)) problems.push("RW_SEND_WORKFLOW_SHAS holds a value that is not a 40-hex commit");
   const revoked = (env.RW_SEND_WORKFLOW_REVOKED ?? "").split(",").map((s) => s.trim()).filter(Boolean).map((x) => { const [sha, upgradeTo] = x.split(":"); return { sha, upgradeTo: upgradeTo ?? null }; });
@@ -46,15 +59,17 @@ export function readConfig(env) {
     issuer: env.RW_OIDC_ISSUER ?? GITHUB_ISSUER,
     securityTxt: `Contact: ${env.RW_SECURITY_CONTACT ?? "https://github.com/stranxik/runward-hosted/security/advisories/new"}\nExpires: ${env.RW_SECURITY_EXPIRES ?? "2027-11-06T00:00:00Z"}\nPreferred-Languages: fr, en\nCanonical: ${origin}/.well-known/security.txt\n`,
     s3: { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, bucket: env.S3_BUCKET, accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
-    databaseUrl: env.DATABASE_URL, databaseSsl: env.DATABASE_SSL ?? "require",
+    databaseUrl: env.DATABASE_URL, databaseTls: { mode: tlsMode, ca },
+    trustProxy,
   };
 }
 
-export function compose(config, { clock = systemClock, log = jsonLog({ clock }), fetchImpl = globalThis.fetch, store: givenStore, objects: givenObjects, authn: givenAuthn, verifier: givenVerifier } = {}) {
+export function compose(config, { clock = systemClock, log = jsonLog({ clock }), fetchImpl = globalThis.fetch, egressOptions = {}, store: givenStore, objects: givenObjects, authn: givenAuthn, verifier: givenVerifier } = {}) {
   const issuerHost = new URL(config.issuer).host;
   const s3Host = config.objects === "s3" ? new URL(config.s3.endpoint).host : null;
-  const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl);
-  const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: config.databaseSsl === "disable" ? false : config.databaseSsl }) : memoryStore({ clock }));
+  // every call out has a deadline and each host a circuit breaker (egress.js, EGRESS_DEFAULTS)
+  const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
+  const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
   const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
   const ports = {

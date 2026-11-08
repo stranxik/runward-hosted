@@ -11,9 +11,40 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const operator = { type: "operator", id: "operateur" };
 
+/** Waits between the attempts of a daily job on one tenant: three attempts in all. */
+export const JOB_RETRY_WAITS = [1000, 4000];
+
 export function operatorCases(ctx) {
-  const { store, clock, append, security, objects, republish } = ctx;
+  const { store, clock, append, security, objects, config, ports } = ctx;
   const now = () => clock.now();
+  const waits = config?.jobRetryWaits ?? JOB_RETRY_WAITS;
+  const sleep = ports?.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  const why = (e) => String(e?.message ?? e).slice(0, 200);
+
+  /**
+   * A daily job over every tenant (review finding of 2026-11-08: the note was written on success only, a
+   * failure went to stderr, and one tenant's error stopped the next ones). Each tenant is a separate
+   * transaction with a bounded number of attempts; a tenant that still fails is recorded with its error
+   * and the job goes on to the next. The operator journal receives the note in every case, failures
+   * included; if even the tenant list cannot be read, that failure is noted before the job stops.
+   */
+  async function eachTenant(job, fn) {
+    let tenants;
+    try { tenants = await store.tx(null, (tx) => tx.tenantIds()); }
+    catch (e) { await store.tx(null, (tx) => tx.operatorNote(job, { report: [], failed: 1, error: why(e), stage: "tenant list" })); throw e; }
+    const report = [];
+    for (const tenant of tenants) {
+      for (let attempt = 1; ; attempt++) {
+        try { report.push({ tenant, ...(await fn(tenant)), attempts: attempt }); break; }
+        catch (e) {
+          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), attempts: attempt }); break; }
+          await sleep(waits[attempt - 1]);
+        }
+      }
+    }
+    await store.tx(null, (tx) => tx.operatorNote(job, { report, failed: report.filter((r) => r.failed).length }));
+    return report;
+  }
   const need = (re, v, what) => { if (!re.test(String(v ?? ""))) throw new Error(`${what} is malformed`); return v; };
 
   /** Open the founder's link of a new (or still memberless) tenant. */
@@ -72,9 +103,7 @@ export function operatorCases(ctx) {
 
   /** The daily job: expired declarations, bytes of repositories removed 30 days ago, archives older than 24 h. */
   async function retention() {
-    const report = [];
-    for (const tenant of await store.tx(null, (tx) => tx.tenantIds())) {
-      const r = await store.tx(tenant, async (tx) => {
+    return eachTenant("retention", (tenant) => store.tx(tenant, async (tx) => {
         let erased = 0, archives = 0, expired = 0;
         for (const repo of await tx.list("repository")) {
           const f = await tx.get("forge_repository", { id: repo.id });
@@ -100,23 +129,16 @@ export function operatorCases(ctx) {
           }
         }
         for (const a of await tx.list("archive", { erasedAt: null })) if (archiveExpired(a, now())) { await objects.removeArchive(tenant, a.id); await tx.update("archive", { id: a.id }, { erasedAt: now() }); archives++; }
-        return { tenant, erased, archives, expired };
-      });
-      report.push(r);
-    }
-    await store.tx(null, (tx) => tx.operatorNote("retention", { report }));
-    return report;
+        return { erased, archives, expired };
+    }));
   }
 
   /** The daily check of every tenant's chain (PADR-0018 point 2). */
   async function verifyChains() {
-    const report = [];
-    for (const tenant of await store.tx(null, (tx) => tx.tenantIds())) {
+    return eachTenant("verify-chains", async (tenant) => {
       const v = await store.tx(tenant, async (tx) => verifyChain(await tx.ledgerAll()));
-      report.push({ tenant, ok: v.ok, head: v.head ?? null, ...(v.ok ? {} : { at: v.at, why: v.why }) });
-    }
-    await store.tx(null, (tx) => tx.operatorNote("verify-chains", { report }));
-    return report;
+      return { ok: v.ok, head: v.head ?? null, ...(v.ok ? {} : { at: v.at, why: v.why }) };
+    });
   }
 
   /**

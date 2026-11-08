@@ -23,7 +23,7 @@ test("declaring: malformed, already here, unavailable elsewhere (one answer, no 
   assert.equal(await refusal(h.app.repositories.declare(s, { name: "org/two", missions: [{ id: "repo" }] }, {})), "mission-exists");
 });
 
-test("consent given in the declaration needs the per-gesture verification; the box is empty by default", async () => {
+test("consent given in the declaration needs the per-gesture verification, and the box is empty by default", async () => {
   const h = harness();
   const f = await founder(h);
   const s = await fresh(h, f);
