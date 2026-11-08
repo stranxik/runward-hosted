@@ -1,8 +1,8 @@
 # ADR-0016: The operator's gestures reach the private database through a private gateway container, one role per gesture
 
 **Date**: 2026-11-08
-**Status**: proposed
-**Deciders**: Thibault Souris (author), to ratify. Written by an agent session.
+**Status**: accepted (2026-11-08), ratified by the author in chat ("ratifie", "ratify"), the session having recommended it
+**Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (provider 2.88.0 schema, the hoster's documentation and the phase 1 state), sourced state of the art, challenge, durable position
 
 ## Context
