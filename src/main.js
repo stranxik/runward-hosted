@@ -56,10 +56,11 @@ export function readConfig(env) {
   };
 }
 
-export function compose(config, { clock = systemClock, log = jsonLog({ clock }), fetchImpl = globalThis.fetch, store: givenStore, objects: givenObjects, authn: givenAuthn, verifier: givenVerifier } = {}) {
+export function compose(config, { clock = systemClock, log = jsonLog({ clock }), fetchImpl = globalThis.fetch, egressOptions = {}, store: givenStore, objects: givenObjects, authn: givenAuthn, verifier: givenVerifier } = {}) {
   const issuerHost = new URL(config.issuer).host;
   const s3Host = config.objects === "s3" ? new URL(config.s3.endpoint).host : null;
-  const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl);
+  // every call out has a deadline and each host a circuit breaker (egress.js, EGRESS_DEFAULTS)
+  const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
   const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
   const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
