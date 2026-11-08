@@ -95,7 +95,14 @@ resource "scaleway_container" "rw" {
   http_option     = "redirected"
   deploy          = true
   private_network_id = scaleway_vpc_private_network.rw.id
-  environment_variables = {
+  environment_variables = local.service_env
+  # DATABASE_URL (role rw_app), S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are secret environment variables,
+  # set at the console or by `scw container container update ... secret-environment-variables`, never here.
+}
+# What the service and its jobs read that is not a secret. DATABASE_CA is the instance's own certificate
+# (public): TLS to PostgreSQL is verify-full, and the service refuses to start in production without it.
+locals {
+  service_env = {
     NODE_ENV              = "production"
     RW_ORIGIN             = "https://app.runward.dev"
     RW_STORE              = "postgres"
@@ -103,10 +110,10 @@ resource "scaleway_container" "rw" {
     S3_REGION             = "fr-par"
     S3_BUCKET             = scaleway_object_bucket.rw.name
     RW_SEND_WORKFLOW_SHAS = var.send_workflow_shas
-    DATABASE_SSL          = "require"
+    RW_TRUST_PROXY        = "1"
+    DATABASE_SSL          = "verify-full"
+    DATABASE_CA           = scaleway_rdb_instance.rw.certificate
   }
-  # DATABASE_URL (role rw_app), S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are secret environment variables,
-  # set at the console or by `scw container container update ... secret-environment-variables`, never here.
 }
 resource "scaleway_container_domain" "app" {
   container_id = scaleway_container.rw.id
@@ -120,6 +127,7 @@ resource "scaleway_job_definition" "retention" {
   memory_limit           = 512
   local_storage_capacity = 1000
   image_uri              = var.image
+  env                    = local.service_env
   command      = "node src/operator.js retention"
   cron {
     schedule = "23 3 * * *"
@@ -132,6 +140,7 @@ resource "scaleway_job_definition" "verify_chains" {
   memory_limit           = 512
   local_storage_capacity = 1000
   image_uri              = var.image
+  env                    = local.service_env
   command      = "node src/operator.js verify-chains"
   cron {
     schedule = "37 3 * * *"
@@ -144,6 +153,7 @@ resource "scaleway_job_definition" "operator" {
   memory_limit           = 512
   local_storage_capacity = 1000
   image_uri              = var.image
+  env                    = local.service_env
   command      = "node src/operator.js"
 }
 resource "scaleway_job_definition" "isolation" {
@@ -152,6 +162,7 @@ resource "scaleway_job_definition" "isolation" {
   memory_limit           = 512
   local_storage_capacity = 1000
   image_uri              = var.image
+  env                    = local.service_env
   command      = "node scripts/isolation-deployed.mjs"
 }
 

@@ -4,6 +4,7 @@
 import { createApp } from "./application/app.js";
 import { memoryStore } from "./adapters/store/memory.js";
 import { postgresStore } from "./adapters/store/postgres.js";
+import { databaseTls, databaseTlsProblems } from "./adapters/store/tls.js";
 import { memoryObjects, s3Objects } from "./adapters/objects/objects.js";
 import { githubVerifier, GITHUB_ISSUER } from "./adapters/oidc/github.js";
 import { simpleWebAuthn } from "./adapters/webauthn/simplewebauthn.js";
@@ -16,6 +17,7 @@ import { ulid } from "./adapters/system/ulid.js";
 import { createHttp, routes, apiContract } from "./http/server.js";
 import { buildAssets } from "./http/assets.js";
 import { INDEX_FORMAT } from "runward-fleet";
+import { readFileSync } from "node:fs";
 
 const LOCK = new URL("../vendor/runward-fleet.lock.json", import.meta.url).pathname;
 const SHA40 = /^[0-9a-f]{40}$/;
@@ -31,6 +33,10 @@ export function readConfig(env) {
   const objects = env.RW_OBJECTS ?? (env.S3_BUCKET ? "s3" : store === "memory" ? "memory" : "missing");
   if (objects === "missing") problems.push("S3_ENDPOINT, S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY are required");
   if (objects === "s3") for (const k of ["S3_ENDPOINT", "S3_REGION", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"]) if (!env[k]) problems.push(`${k} is required`);
+  let ca = env.DATABASE_CA ?? null;
+  if (!ca && env.DATABASE_CA_FILE) { try { ca = readFileSync(env.DATABASE_CA_FILE, "utf8"); } catch { problems.push("DATABASE_CA_FILE cannot be read"); } }
+  const tlsMode = env.DATABASE_SSL ?? "verify-full";
+  if (store === "postgres") problems.push(...databaseTlsProblems({ url: env.DATABASE_URL, mode: tlsMode, ca, production: env.NODE_ENV === "production" }));
   const published = (env.RW_SEND_WORKFLOW_SHAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   for (const s of published) if (!SHA40.test(s)) problems.push("RW_SEND_WORKFLOW_SHAS holds a value that is not a 40-hex commit");
   const revoked = (env.RW_SEND_WORKFLOW_REVOKED ?? "").split(",").map((s) => s.trim()).filter(Boolean).map((x) => { const [sha, upgradeTo] = x.split(":"); return { sha, upgradeTo: upgradeTo ?? null }; });
@@ -46,7 +52,7 @@ export function readConfig(env) {
     issuer: env.RW_OIDC_ISSUER ?? GITHUB_ISSUER,
     securityTxt: `Contact: ${env.RW_SECURITY_CONTACT ?? "https://github.com/stranxik/runward-hosted/security/advisories/new"}\nExpires: ${env.RW_SECURITY_EXPIRES ?? "2027-11-06T00:00:00Z"}\nPreferred-Languages: fr, en\nCanonical: ${origin}/.well-known/security.txt\n`,
     s3: { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, bucket: env.S3_BUCKET, accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
-    databaseUrl: env.DATABASE_URL, databaseSsl: env.DATABASE_SSL ?? "require",
+    databaseUrl: env.DATABASE_URL, databaseTls: { mode: tlsMode, ca },
   };
 }
 
@@ -54,7 +60,7 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   const issuerHost = new URL(config.issuer).host;
   const s3Host = config.objects === "s3" ? new URL(config.s3.endpoint).host : null;
   const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl);
-  const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: config.databaseSsl === "disable" ? false : config.databaseSsl }) : memoryStore({ clock }));
+  const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
   const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
   const ports = {

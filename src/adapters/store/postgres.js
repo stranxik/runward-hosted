@@ -40,7 +40,9 @@ function wrapConflict(e) {
   throw e;
 }
 
-export function postgresStore({ url, max = 4, ssl = "prefer" }) {
+export function postgresStore({ url, max = 4, ssl }) {
+  // false or a verifying object (tls.js#databaseTls); a string mode would let the client skip the check.
+  if (ssl !== false && (typeof ssl !== "object" || ssl === null || ssl.rejectUnauthorized !== true)) throw new Error("postgresStore: ssl must be false or a verifying TLS configuration (databaseTls)");
   const sql = postgres(url, { max, ssl, idle_timeout: 20, connect_timeout: 10, prepare: false, onnotice: () => {}, connection: { application_name: "runward-hosted", statement_timeout: 10_000 } });
 
   function tx(q, tenantId) {
