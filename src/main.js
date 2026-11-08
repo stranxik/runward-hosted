@@ -37,6 +37,10 @@ export function readConfig(env) {
   if (!ca && env.DATABASE_CA_FILE) { try { ca = readFileSync(env.DATABASE_CA_FILE, "utf8"); } catch { problems.push("DATABASE_CA_FILE cannot be read"); } }
   const tlsMode = env.DATABASE_SSL ?? "verify-full";
   if (store === "postgres") problems.push(...databaseTlsProblems({ url: env.DATABASE_URL, mode: tlsMode, ca, production: env.NODE_ENV === "production" }));
+  // RW_TRUST_PROXY: how many proxies of the hoster stand in front of the service (0 or unset: none, the
+  // socket's peer is the client); it chooses which X-Forwarded-For entry the rate limits count.
+  const trustProxy = env.RW_TRUST_PROXY === undefined || env.RW_TRUST_PROXY === "" ? 0 : Number(env.RW_TRUST_PROXY);
+  if (!Number.isInteger(trustProxy) || trustProxy < 0 || trustProxy > 5) problems.push("RW_TRUST_PROXY must be an integer from 0 to 5 (the number of proxies in front of the service)");
   const published = (env.RW_SEND_WORKFLOW_SHAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   for (const s of published) if (!SHA40.test(s)) problems.push("RW_SEND_WORKFLOW_SHAS holds a value that is not a 40-hex commit");
   const revoked = (env.RW_SEND_WORKFLOW_REVOKED ?? "").split(",").map((s) => s.trim()).filter(Boolean).map((x) => { const [sha, upgradeTo] = x.split(":"); return { sha, upgradeTo: upgradeTo ?? null }; });
@@ -53,6 +57,7 @@ export function readConfig(env) {
     securityTxt: `Contact: ${env.RW_SECURITY_CONTACT ?? "https://github.com/stranxik/runward-hosted/security/advisories/new"}\nExpires: ${env.RW_SECURITY_EXPIRES ?? "2027-11-06T00:00:00Z"}\nPreferred-Languages: fr, en\nCanonical: ${origin}/.well-known/security.txt\n`,
     s3: { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, bucket: env.S3_BUCKET, accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
     databaseUrl: env.DATABASE_URL, databaseTls: { mode: tlsMode, ca },
+    trustProxy,
   };
 }
 
