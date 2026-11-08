@@ -9,7 +9,8 @@ import { randomBytes } from "node:crypto";
 import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
-import { harness, founder, pinnedRepository, send, gesture, sha } from "../helpers.js";
+import { harness, founder, pinnedRepository, send, gesture, sha, token, claimsFor } from "../helpers.js";
+import { readFileSync, writeFileSync } from "node:fs";
 import { replay } from "../../scripts/replay-export.mjs";
 
 const ADMIN = process.env.PG_ADMIN_URL;
@@ -221,4 +222,46 @@ test("the application on PostgreSQL: history, quarantine, removal and restore, e
   assert.equal(r.chainOk, true);
   const chains = await (async () => { const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false }); const hm = harness({ store: maint, realTime: true }); const v = await hm.app.operator.verifyChains(); await maint.close(); return v; })();
   assert.ok(chains.length >= 2 && chains.every((c) => c.ok), JSON.stringify(chains));
+});
+
+test("two instances on one PostgreSQL share every state: a session, a challenge, a token already used", async () => {
+  // scaling-state-externalization: nothing a request needs lives in an instance's memory
+  const other = postgresStore({ url: urlAs("rw_app"), ssl: false });
+  try {
+    const h2 = harness({ store: other, realTime: true });
+    const s1 = await h.app.identity.sessionFrom(A.token);
+    const s2 = await h2.app.identity.sessionFrom(A.token);
+    assert.equal(s2?.id, s1.id, "a session opened on one instance is read on the other");
+    const cred = (await h.store.tx(s1.tenantId, (tx) => tx.get("passkey", { id: s1.passkeyId }))).credentialId;
+    const o = await h.app.identity.freshOptions(s1, {});
+    await h2.app.identity.fresh(s2, { challengeId: o.challengeId, response: { id: cred, challenge: o.options.challenge } });
+    await assert.rejects(h.app.identity.fresh(s1, { challengeId: o.challengeId, response: { id: cred, challenge: o.options.challenge } }), (e) => e.code === "challenge-invalid", "consumed on the other instance, so single use across both");
+    const t = token(claimsFor(h.clock, { repository: "org-a/repo", repository_id: "5001", run_number: "7", run_id: "40000000007" }));
+    const first = await send(h, {}, { mission: "mission-a", auth: `Bearer ${t}` });
+    assert.equal(first.status, 201);
+    assert.equal((await send(h2, {}, { mission: "mission-a", auth: `Bearer ${t}` })).refusal, "token-replayed", "a token used on one instance is refused on the other");
+  } finally { await other.close(); }
+});
+
+// The schema the migrations build, committed (checklist-day-zero-project: schema drift): tables, columns,
+// constraints, indexes, policies, functions, triggers and grants of rw and rw_meta. A migration that
+// changes any of them changes db/schema.snapshot.txt in the same diff (UPDATE_SCHEMA_SNAPSHOT=1 writes it).
+const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
+test("the schema the migrations build is the committed snapshot (no drift)", async () => {
+  const lines = (await adminDb.unsafe(`
+    select format('table %s.%s rls=%s force=%s', n.nspname, c.relname, c.relrowsecurity, c.relforcerowsecurity) as l from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname in ('rw', 'rw_meta') and c.relkind = 'r'
+    union all select format('column %s.%s.%s %s null=%s default=%s', table_schema, table_name, column_name, data_type, is_nullable, coalesce(column_default, '')) from information_schema.columns where table_schema in ('rw', 'rw_meta')
+    union all select format('constraint %s %s %s', conrelid::regclass, conname, pg_get_constraintdef(c.oid)) from pg_constraint c join pg_namespace n on n.oid = c.connamespace where n.nspname in ('rw', 'rw_meta')
+    union all select format('index %s', indexdef) from pg_indexes where schemaname in ('rw', 'rw_meta')
+    union all select format('policy %s.%s %s %s to=%s using=%s check=%s', schemaname, tablename, policyname, cmd, roles, coalesce(qual, ''), coalesce(with_check, '')) from pg_policies where schemaname in ('rw', 'rw_meta')
+    union all select format('function %s.%s(%s) definer=%s owner=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
+    union all select format('trigger %s', pg_get_triggerdef(t.oid)) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where not t.tgisinternal and n.nspname in ('rw', 'rw_meta')
+    union all select format('grant %s.%s %s %s', table_schema, table_name, grantee, privilege_type) from information_schema.role_table_grants where table_schema in ('rw', 'rw_meta') and grantee like 'rw\\_%'
+  `)).map((r) => r.l).sort();
+  const text = `${lines.join("\n")}\n`;
+  if (process.env.UPDATE_SCHEMA_SNAPSHOT === "1") writeFileSync(SNAPSHOT, text);
+  const committed = readFileSync(SNAPSHOT, "utf8");
+  const was = new Set(committed.split("\n")), now = new Set(lines);
+  const added = lines.filter((l) => !was.has(l)), gone = [...was].filter((l) => l && !now.has(l));
+  assert.deepEqual({ added, gone }, { added: [], gone: [] }, "the schema drifted from db/schema.snapshot.txt: commit the snapshot with the migration (UPDATE_SCHEMA_SNAPSHOT=1)");
 });
