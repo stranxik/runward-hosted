@@ -1,7 +1,7 @@
 # ADR-0014: Design tokens: the family's structure, then one runward layer that holds every colour, font, radius and motion value
 
 **Date**: 2026-11-06
-**Status**: proposed (to ratify by the author)
+**Status**: accepted (2026-11-08), ratified on the author's delegation in chat ("ratifie pour moi", "ratify for me"), the session having recommended it; the author did not read this text again before delegating
 **Deciders**: proposed by an agent session; Thibault Souris (author) decides.
 **Method**: decision-loop
 
