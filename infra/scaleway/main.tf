@@ -280,8 +280,10 @@ resource "scaleway_rdb_privilege" "rw_maint" {
 
 # Secret Manager: the connection URLs the jobs read by `secret_reference` (Jobs have no other secret
 # channel). Values are written once per `credentials_version`, write-only, never in the state.
+# Created only with the jobs (`jobs_reach_database`): a secret no workload reads is not created, and the
+# provisioning key holds no Secret Manager right until the jobs' path to the private database is decided.
 locals {
-  db_secrets = {
+  db_secrets = !var.jobs_reach_database ? {} : {
     admin    = { user = "rw_admin", database = "rdb", description = "rw_admin, for the roles job (database rdb)" }
     rw_owner = { user = "rw_owner", database = local.database, description = "rw_owner, for the migrate job" }
     rw_maint = { user = "rw_maint", database = local.database, description = "rw_maint, for the operator jobs" }
@@ -311,7 +313,7 @@ resource "scaleway_secret_version" "db" {
 
 # ---------------------------------------------------------------------------------------------- phase 2
 resource "scaleway_secret" "s3" {
-  for_each    = local.phase2 ? toset(["access-key-id", "secret-access-key"]) : toset([])
+  for_each    = local.phase2 && var.jobs_reach_database ? toset(["access-key-id", "secret-access-key"]) : toset([])
   name        = "s3-${each.key}"
   path        = "/runward-hosted"
   description = "the bucket's key, for the operator jobs"
