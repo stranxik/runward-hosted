@@ -54,4 +54,3 @@ Four questions, in order. If none fires, stay on the sober default.
 | Non-critical vs sensitive | default (reads degrade; gestures fail closed, the security log before commit) | ADR-0007 |
 | Agent identity | default (the CI's workload identity, the witness reader's own) | ADR-0003 |
 | Execution secrets | default (secrets at the boundary: environment of the container and of the GitHub environment) | ADR-0008 |
-

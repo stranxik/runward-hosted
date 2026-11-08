@@ -9,6 +9,18 @@ import { join } from "node:path";
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const WEB = new URL("../../web/", import.meta.url).pathname;
 
+/** The selector without the comments before it (a loop, not a nested quantifier: no backtracking). */
+function leadingCommentsOff(selector) {
+  let s = selector;
+  for (;;) {
+    const t = s.trimStart();
+    if (!t.startsWith("/*")) return t;
+    const close = t.indexOf("*/", 2);
+    if (close < 0) return t;
+    s = t.slice(close + 2);
+  }
+}
+
 /** Remove every rule whose selector starts with :root, including inside an at-rule; drop at-rules left empty. */
 export function stripRootBlocks(css) {
   let out = "", i = 0;
@@ -18,7 +30,7 @@ export function stripRootBlocks(css) {
     if (open < 0) { out += css.slice(i); break; }
     const selector = css.slice(i, open);
     const end = block(open);
-    if (/^\s*(\/\*[\s\S]*?\*\/\s*)*:root\b/.test(selector)) { out += selector.replace(/[^\n]*$/, ""); i = end; continue; }
+    if (/^\s*:root\b/.test(leadingCommentsOff(selector))) { out += selector.replace(/[^\n]*$/, ""); i = end; continue; }
     if (/^\s*@media/.test(selector.trim().split("\n").pop() ?? "")) {
       const inner = stripRootBlocks(css.slice(open + 1, end - 1));
       out += inner.trim() ? `${selector}{${inner}}` : selector.replace(/[^\n]*$/, "");

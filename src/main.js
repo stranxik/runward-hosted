@@ -22,11 +22,14 @@ import { readFileSync } from "node:fs";
 const LOCK = new URL("../vendor/runward-fleet.lock.json", import.meta.url).pathname;
 const SHA40 = /^[0-9a-f]{40}$/;
 
+/** An origin: http or https, a lower-case host, an optional port, nothing else (parsed, not matched). */
+const isOrigin = (o) => { try { const u = new URL(o); return (u.protocol === "https:" || u.protocol === "http:") && u.origin === o && /^[a-z0-9.-]+$/.test(u.hostname); } catch { return false; } };
+
 /** Read and check the configuration. Throws a list of what is missing, never a value. */
 export function readConfig(env) {
   const problems = [];
   const origin = env.RW_ORIGIN ?? "https://app.runward.dev";
-  if (!/^https?:\/\/[a-z0-9.-]+(:\d+)?$/.test(origin)) problems.push("RW_ORIGIN must be an origin (scheme, host, optional port)");
+  if (!isOrigin(origin)) problems.push("RW_ORIGIN must be an origin (scheme, host, optional port)");
   const store = env.RW_STORE ?? (env.DATABASE_URL ? "postgres" : "missing");
   if (store === "missing") problems.push("DATABASE_URL is required (or RW_STORE=memory for a local witness)");
   if (store === "memory" && env.NODE_ENV === "production") problems.push("RW_STORE=memory is refused in production");
