@@ -90,6 +90,16 @@
 	<testcase name="the error rate: answers at 500 or more over five minutes, shown by /api/health" classname="test"/>
 	<testcase name="the error window counts by minute and forgets after five" classname="test"/>
 	<testcase name="the probe alerts on an unavailable service and on an error rate above 5 % over at least 20 requests" classname="test"/>
+	<testcase name="a call without a valid operator token is refused, journalled, and starts nothing" classname="test"/>
+	<testcase name="each gesture runs under its own role: the child receives that role's URL and no other credential" classname="test"/>
+	<testcase name="a failing gesture is journalled with its exit and its last line, secrets removed, and answered 500" classname="test"/>
+	<testcase name="a gesture past its deadline is killed, answered 504 and journalled; the next call is not blocked" classname="test"/>
+	<testcase name="one gesture at a time: a second call while one runs is refused 409" classname="test"/>
+	<testcase name="arguments: a closed list per gesture, each checked, passed as argv (never through a shell)" classname="test"/>
+	<testcase name="the gateway refuses to start without the token's hash, a role's URL or the bucket's key" classname="test"/>
+	<testcase name="the 5 newest tags stay, the older ones go, whatever order the API answers in" classname="test"/>
+	<testcase name="a digest still named by a container or the rollback target is never deleted" classname="test"/>
+	<testcase name="nothing is guessed: an unreadable tag or protection stops the purge" classname="test"/>
 	<testcase name="declaring: malformed, already here, unavailable elsewhere (one answer, no oracle)" classname="test"/>
 	<testcase name="consent given in the declaration needs the per-gesture verification, and the box is empty by default" classname="test"/>
 	<testcase name="withdrawing consent refuses the next uploads and may erase what was received; the journal keeps the digests" classname="test"/>
@@ -123,9 +133,9 @@
 	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 122 -->
+	<!-- tests 132 -->
 	<!-- suites 0 -->
-	<!-- pass 122 -->
+	<!-- pass 132 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
