@@ -69,6 +69,12 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
 - Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.
 
+## 2026-11-10 - ADR-0019 accepted
+
+- Done: the author accepted ADR-0019 in chat, in answer to a list that named it; ADR-0014 is marked superseded by it, and the architecture note's row says so.
+- Decided: ADR-0019, the app's own design layer, accepted.
+- Next: nothing on this boundary until its reevaluation on 2026-11-19.
+
 ## 2026-11-10 - runward-fleet re-pinned at main@d05b597, measured: the index changes under the same version
 
 - Done: runward-fleet packed at main@d05b597, where PR #499 of runward merged (the decision reading, `decide` and `renderDecision`), twice to the same sha256; the lock, `package.json` and `package-lock.json` name it; the 22 files proved against GitHub. Measured before deciding: from the same `fleet.json` and exports the two pins give different index bytes (fields added, none changed or removed), even for an empty fleet, and the version stays 0.46.0; an export archive of the old pin, replayed by the new one, was said `different` because the replay matched on the version. `scripts/replay-export.mjs` now matches on the archive digest recorded on each index (`other-archive`, exit 2 when nothing could be rebuilt), with a test and a planted control. The app's router leaves the views' new `decision` route out; a test holds it and checks the new exports are importable.

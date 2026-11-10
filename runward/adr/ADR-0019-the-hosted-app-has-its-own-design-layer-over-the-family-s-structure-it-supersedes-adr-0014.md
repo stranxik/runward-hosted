@@ -1,8 +1,8 @@
 # ADR-0019: The hosted app has its own design layer over the family's structure; it supersedes ADR-0014
 
 **Date**: 2026-11-10
-**Status**: proposed (the author agreed to its direction on 2026-11-10 and validated the mock-up of all states; acceptance is his)
-**Supersedes, once accepted**: ADR-0014 (accepted 2026-11-08), whose trigger fired on 2026-11-10
+**Status**: accepted 2026-11-10 by the author in chat ("je suis ok pour tout ce que tu m'as cité", in answer to a list that named this record), after he agreed to its direction and validated the mock-up of all states the same day
+**Supersedes**: ADR-0014 (accepted 2026-11-08), whose trigger fired on 2026-11-10
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: the layer and the token test at `main`; the author's design references of 2026-11-10; a palette validator; two adversarial reviews of the mock-up; durable position
 
@@ -56,6 +56,6 @@ Reopen on 2026-11-19 on what was observed on 2026-11-18, or earlier: the author 
 
 ## References
 
-- ADR-0014 (superseded once this record is accepted)
+- ADR-0014 (superseded by this record)
 - The family's structure (`web/famille.css`) and its contract for a product layer
 - M. Okabe and K. Ito, Color Universal Design (2008)
