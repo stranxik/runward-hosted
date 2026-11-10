@@ -9,7 +9,9 @@
 #   3. the revision served, read from the hoster's API (not from /api/version), carries that digest (S5),
 #      and the container's environment was merged, not replaced (scripts/container-deploy.sh);
 #   4. /api/version says the same commit and image;
-#   5. smoke: health, version, sign-in options, the page, 421, the request budget;
+#   5. smoke: health, version, sign-in options, the page, 421, the request budget; the 421 is the app's own
+#      (host-not-allowed), asked under the container's default hostname at the hoster, which the hoster
+#      routes to the service and the app does not serve (vars.RW_SERVICE_HOST; without it nothing is built);
 #   6. the real send workflow of this commit sends to the witness tenant (job smoke-send);
 #   7. the isolation suite on the deployed base, through the gateway in the private network, under rw_app (S4);
 #   8. the registry keeps the 5 newest images and every digest still served or named for rollback;
@@ -56,6 +58,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with: { persist-credentials: false }
+      - name: the smoke can reach the app's own 421 (vars.RW_SERVICE_HOST is set), or nothing is built or deployed
+        env: { RW_SERVICE_HOST: "${{ vars.RW_SERVICE_HOST }}" }
+        run: |
+          [ -n "$RW_SERVICE_HOST" ] || { echo "vars.RW_SERVICE_HOST is not set: the container's default hostname at the hoster (runward/runbook.md §12, step 4). Without it the smoke cannot prove the app's 421: no deploy."; exit 1; }
+          [ "https://$RW_SERVICE_HOST" != "$SERVICE" ] || { echo "vars.RW_SERVICE_HOST is the service's own host: the app serves it, it would not be refused"; exit 1; }
       - name: the digests served before this deploy (the rollback targets)
         id: before
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}" }
@@ -96,7 +103,8 @@ jobs:
           echo "/api/version does not serve ${{ github.sha }} at $DIGEST"; exit 1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with: { node-version: "22" }
-      - name: smoke (health, version, sign-in options, page, 421, budget of the entry screen)
+      - name: smoke (health, version, sign-in options, page, the app's own 421, budget of the entry screen)
+        env: { RW_SERVICE_HOST: "${{ vars.RW_SERVICE_HOST }}" }
         run: node scripts/smoke.mjs "$SERVICE" "${{ github.sha }}"
 
   smoke-send:
