@@ -1,7 +1,7 @@
 // What a member (or the witness reader) reads: the served index, the per-mission status line, the
 // journal, the export archive with replay.json (PADR-0011 4 bis and 6 bis, PADR-0014, PADR-0017 point 10,
 // PADR-0020).
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 import { verifyChain } from "../domain/ledger.js";
 import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE } from "../domain/repository.js";
 import { iso, sha256, manifestExports } from "./context.js";

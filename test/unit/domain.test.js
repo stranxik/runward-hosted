@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { canonical, nextEntry, verifyChain, entryBody, GENESIS } from "../../src/domain/ledger.js";
 import { placeUpload, readClaims, checkUploadHeaders, cleanClaim } from "../../src/domain/workload.js";
 import { linkState, linkWindow, sessionOpen, DAY, HOUR, sameProvider } from "../../src/domain/identity.js";
-import { REFUSALS, refusal } from "../../src/domain/refusals.js";
+import { REFUSALS, refusal, mergeRefusals } from "../../src/domain/refusals/index.js";
+import { FLOOR } from "../../src/domain/refusals/floor.js";
 import { readDeclaration } from "../../src/domain/repository.js";
 
 test("canonical encoding: sorted keys, no whitespace, non-negative integers only", () => {
@@ -82,9 +83,22 @@ test("every refusal has French and English, a message and an action, and one sta
   assert.equal(refusal("ref-not-main", "en").message, "The ref is not refs/heads/main.");
 });
 
+test("the catalogue of refusals is merged from one file per domain: every code of every file, and a code declared twice is refused", () => {
+  assert.deepEqual(Object.keys(REFUSALS), Object.keys(FLOOR), "today the floor's file is the only part: same codes, same order");
+  for (const code of Object.keys(FLOOR)) assert.equal(REFUSALS[code], FLOOR[code], code);
+  const def = { status: 400, fr: ["a", "b"], en: ["a", "b"] };
+  assert.deepEqual(Object.keys(mergeRefusals([["floor", { "one": def }], ["lot", { "two": def }]])), ["one", "two"]);
+  // planted control: the same code in two files
+  assert.throws(() => mergeRefusals([["floor", { "one": def }], ["lot", { "one": def }]]), /refusal code declared twice: one \(floor, lot\)/);
+});
+
 test("the words the product never says are absent from every text it shows", async () => {
-  const { readFileSync } = await import("node:fs");
-  const texts = [JSON.stringify(REFUSALS), readFileSync(new URL("../../web/app.js", import.meta.url), "utf8"), readFileSync(new URL("../../web/index.html", import.meta.url), "utf8")].join("\n");
+  const { readFileSync, readdirSync } = await import("node:fs");
+  // every script under web/, served or not: web/app.js and the modules of web/views/
+  const web = new URL("../../web/", import.meta.url);
+  const scripts = readdirSync(web, { recursive: true }).filter((f) => f.endsWith(".js")).sort();
+  assert.ok(scripts.includes("app.js") && scripts.length >= 25, "the guard must see the shell's modules, or it proves nothing");
+  const texts = [JSON.stringify(REFUSALS), ...scripts.map((f) => readFileSync(new URL(f, web), "utf8")), readFileSync(new URL("index.html", web), "utf8")].join("\n");
   for (const w of [/\bcompliant\b/i, /\bcertif(y|ied|ication)\b/i, /\bguarantee/i, /tamper-proof/i, /no human/i, /\bplatform\b/i, /\bsovereign/i, /\bplateforme\b/i, /\bsouverain/i, /garanti/i, /certifi/i, /conforme\b/i]) assert.equal(w.test(texts), false, String(w));
 });
 

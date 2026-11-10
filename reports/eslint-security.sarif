@@ -81,7 +81,7 @@
             "plugins": {
               "eslint-plugin-security": "4.2.0"
             },
-            "files": 33
+            "files": 43
           }
         }
       },

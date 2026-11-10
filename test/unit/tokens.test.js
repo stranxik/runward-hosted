@@ -9,7 +9,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import { fleetCss, FONTS } from "../../src/http/assets.js";
+import { fleetCss, FONTS, MODULES } from "../../src/http/assets.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const PIN = new URL("../../node_modules/runward-fleet/", import.meta.url).pathname;
@@ -23,9 +23,11 @@ export function literalColours(text) {
 }
 
 const layer = () => readFileSync(`${WEB}${LAYER}`, "utf8");
+/** The shell's scripts, every module of the served list (web/app.js and web/views/), by their path. */
+const scripts = () => Object.fromEntries(MODULES.map((f) => [`web/${f}`, readFileSync(`${WEB}${f}`, "utf8")]));
 const served = () => ({
   "web/app.css": readFileSync(`${WEB}app.css`, "utf8"),
-  "web/app.js": readFileSync(`${WEB}app.js`, "utf8"),
+  ...scripts(),
   "web/index.html": readFileSync(`${WEB}index.html`, "utf8"),
   "web/famille.css": readFileSync(`${WEB}famille.css`, "utf8"),
   "fleet css as served": fleetCss(PIN),
@@ -175,7 +177,7 @@ test("no entrance animation in the app (family rule); only the loading line loop
   const css = readFileSync(`${WEB}app.css`, "utf8");
   const anims = [...css.matchAll(/animation\s*:\s*([a-z-]+)/g)].map((m) => m[1]);
   assert.deepEqual(anims.filter((a) => a !== "none"), ["charge"]);
-  assert.equal(/\.anim\b|IntersectionObserver/.test(css + readFileSync(`${WEB}app.js`, "utf8")), false);
+  assert.equal(/\.anim\b|IntersectionObserver/.test(css + Object.values(scripts()).join("\n")), false);
 });
 
 test("the relevés in the mono read at 12 px, the fleet views' included (author's rule)", () => {

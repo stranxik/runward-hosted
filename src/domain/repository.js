@@ -1,6 +1,6 @@
 // Declared repositories, missions, consent and retention as pure rules (architecture §3.4, PADR-0017,
 // PADR-0011 relation repository / workflow / mission).
-import { Refusal } from "./refusals.js";
+import { Refusal } from "./refusals/index.js";
 import { DAY } from "./identity.js";
 
 export const PENDING_LIFE = 7 * DAY;

@@ -1,7 +1,8 @@
 // The shell's files as the service serves them, on a real socket: every slot of the page is filled, every
 // file the page names is served with its media type, the app's layer and fonts included (web/fonts/, by a
 // closed list), and a path off the list is answered 404, the fonts the app used to take from the pinned
-// fleet package included. The content security policy is unchanged: fonts and styles from this origin only.
+// fleet package included. The shell's scripts are modules (web/app.js and web/views/), served by a closed
+// list under one folder named by the digest of them all. The content security policy is unchanged: fonts and styles from this origin only.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,7 +12,7 @@ import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
 import { silentLog } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
-import { FONTS } from "../../src/http/assets.js";
+import { FONTS, MODULES, modulesFolder } from "../../src/http/assets.js";
 import { fakeAuthn, testJwk, sha, SEND_SHA } from "../helpers.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
@@ -83,4 +84,44 @@ test("the content security policy is unchanged: fonts and stylesheets from this 
   assert.match(csp, /(^|; )font-src 'self'(;|$)/);
   assert.match(csp, /(^|; )style-src-elem 'self'(;|$)/);
   assert.equal(/data:|unsafe-inline/.test(/font-src[^;]*/.exec(csp)[0] + /style-src-elem[^;]*/.exec(csp)[0]), false);
+});
+
+test("the shell's modules are served by a closed list under one folder named by their digest, immutable, the slot of the pinned views filled", async () => {
+  const html = await (await get("/")).text();
+  const entry = /<script type="module" src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"><\/script>/.exec(html);
+  assert.ok(entry, "the page loads the entry from the modules' folder");
+  const views = /<link rel="modulepreload" href="(\/assets\/views-[^"]+\.js)">/.exec(html)[1];
+  assert.ok(MODULES.length >= 25 && MODULES[0] === "app.js");
+  for (const f of MODULES) {
+    const r = await get(`${entry[1]}${f}`);
+    assert.equal(r.status, 200, f);
+    assert.equal(r.headers.get("content-type"), "text/javascript; charset=utf-8", f);
+    assert.match(r.headers.get("cache-control"), /immutable/, f);
+    const text = await r.text();
+    assert.equal(text, readFileSync(`${WEB}${f}`, "utf8").replace('"__VIEWS__"', JSON.stringify(views)), f);
+    assert.equal(/__VIEWS__/.test(text), false, f);
+  }
+  const bridge = await (await get(`${entry[1]}views/fleet-views.js`)).text();
+  assert.ok(bridge.includes(`from ${JSON.stringify(views)};`), "the one module that names the pinned views imports the file the page preloads");
+});
+
+test("a module off the list is answered 404: another name, the folder itself, another digest, the source folder", async () => {
+  const html = await (await get("/")).text();
+  const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
+  for (const p of [`${folder}views/planted.js`, `${folder}views/`, folder, `${folder}views/acces/`, `${folder}index.html`, `${folder}app.css`, `${folder}views/base.js.map`,
+    "/assets/app.0000000000000000/app.js", "/assets/app.js", "/assets/views/base.js", "/web/app.js", "/web/views/base.js", "/views/base.js", `${folder}views%2Fbase.js`]) {
+    const r = await get(p);
+    assert.equal(r.status, 404, p);
+    assert.match(r.headers.get("content-type"), /^text\/html/, p);
+  }
+});
+
+test("the modules' folder is named by every name and every byte: one byte or one name changed renames it (planted controls)", () => {
+  const a = [["app.js", Buffer.from("import \"./views/base.js\";\n")], ["views/base.js", Buffer.from("export const x = 1;\n")]];
+  const name = modulesFolder(a);
+  assert.match(name, /^\/assets\/app\.[0-9a-f]{16}\/$/);
+  assert.equal(modulesFolder(a.map(([f, b]) => [f, Buffer.from(b)])), name, "the same files give the same folder");
+  assert.notEqual(modulesFolder([a[0], ["views/base.js", Buffer.from("export const x = 2;\n")]]), name, "one byte");
+  assert.notEqual(modulesFolder([a[0], ["views/other.js", a[1][1]]]), name, "one name");
+  assert.notEqual(modulesFolder([["app.js", Buffer.from("import \"./views/base.js\";\nviews/base.js")], ["", Buffer.from("export const x = 1;\n")]]), name, "bytes moved across the boundary of two files");
 });

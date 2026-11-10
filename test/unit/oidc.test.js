@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { githubVerifier, KeysUnavailable, KEYS_RETRY_MS, KEYS_REFRESH_MS } from "../../src/adapters/oidc/github.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
-import { statusOf, REFUSALS } from "../../src/domain/refusals.js";
+import { statusOf, REFUSALS } from "../../src/domain/refusals/index.js";
 import { harness, send, token, claimsFor, testJwk, ORIGIN, SEND_SHA, fakeAuthn } from "../helpers.js";
 import { readConfig, compose } from "../../src/main.js";
 import { memoryStore } from "../../src/adapters/store/memory.js";

@@ -1,5 +1,5 @@
 // Declared repositories, their missions, consent and erasure (architecture §3.1, §3.4; PADR-0017).
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 import { readDeclaration, readBranch, checkRestoreRepository, confirmation, MISSION_ID, REMOVED_KEEP } from "../domain/repository.js";
 import { StoreConflict } from "../ports/errors.js";
 import { iso } from "./context.js";

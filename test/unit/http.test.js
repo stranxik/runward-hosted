@@ -147,8 +147,11 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   assert.match(r.headers.get("cache-control"), /immutable/);
   const { readFileSync } = await import("node:fs");
   assert.equal(sha(Buffer.from(await r.arrayBuffer())), sha(readFileSync(new URL("../../node_modules/runward-fleet/ui/views.js", import.meta.url))));
-  const app = /src="(\/assets\/app\.[0-9a-f]{16}\.js)"/.exec(html)[1];
-  const js = await (await call("GET", app)).text();
+  // the shell is modules under one folder named by their digest; one of them names the pinned views
+  const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
+  const app = await call("GET", `${folder}app.js`);
+  assert.match(app.headers.get("cache-control"), /immutable/);
+  const js = await (await call("GET", `${folder}views/fleet-views.js`)).text();
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
 
@@ -162,15 +165,23 @@ test("the pin of ADR-0021: the decision reading is importable from the pinned pa
   assert.ok(Array.isArray(build.ENDORSEMENTS));
   assert.ok(views.ROUTES.includes("decision"), "the pinned views route the decision reading");
   const html = await (await call("GET", "/")).text();
-  const js = await (await call("GET", /src="(\/assets\/app\.[0-9a-f]{16}\.js)"/.exec(html)[1])).text();
+  // the shell is modules (lot L0): the router is web/views/router.js, the address reader is in web/views/base.js
+  const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
+  const { MODULES } = await import("../../src/http/assets.js");
+  const served = {};
+  for (const f of MODULES) served[f] = await (await call("GET", `${folder}${f}`)).text();
+  const js = served["views/router.js"];
   assert.ok(js.includes('const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");'), "the shell leaves the decision route out");
-  assert.equal(/(?<!FLEET_)ROUTES\.includes\(|\.\.\.ROUTES\b/.test(js), false, "the router reads FLEET_ROUTES, never the views' own list");
+  for (const [f, text] of Object.entries(served)) assert.equal(/(?<!FLEET_)ROUTES\.includes\(|\.\.\.ROUTES\b/.test(text), false, `${f}: the router reads FLEET_ROUTES, never the views' own list`);
+  assert.deepEqual(Object.keys(served).filter((f) => /\bROUTES\b/.test(served[f].replace(/FLEET_ROUTES/g, ""))).sort(), ["views/fleet-views.js", "views/router.js"], "no other module reads the views' own list");
   // the router itself, as served, run on the pinned ROUTES (the review of 3afe41d, C44: reading its source
   // let a router that also accepted the views' own list through). Its screens are stood for by their names.
-  const from = js.indexOf("const parts = ");
+  const parts = /^export (const parts = [^\n]*)$/m.exec(served["views/base.js"]);
+  assert.ok(parts, "the address reader is where this test reads it");
+  const from = js.indexOf("const FLEET_ROUTES = ");
   const to = js.indexOf("\nlet loadedFor");
   assert.ok(from > 0 && to > from, "the router is where this test reads it");
-  const router = js.slice(from, to);
+  const router = `${parts[1]}\n${js.slice(from, to)}`;
   assert.ok(router.includes("function resolve() {"));
   const screens = [...new Set(router.match(/\bview[A-Z]\w*/g))];
   assert.ok(screens.includes("viewFleet"));

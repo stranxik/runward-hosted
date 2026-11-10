@@ -2,7 +2,7 @@
 // (PADR-0010 and its note; PADR-0011 points 1, 3, 1 bis; PADR-0017 point 8).
 // Order (T18): headers and token, then the repository, then the body. A refusal before the repository is
 // resolved writes nothing to any tenant's journal; it goes to the global counter of refused tokens.
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 import { readClaims, checkGenericClaims, checkRepositoryClaims, checkUploadHeaders, placeUpload, rateWindow, RUNS_PER_HOUR } from "../domain/workload.js";
 import { sha256, iso } from "./context.js";
 import { StoreConflict, VerifierUnavailable } from "../ports/errors.js";

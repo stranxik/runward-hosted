@@ -3,7 +3,7 @@
 // and publication of a tenant's index from its current uploads (PADR-0011 points 1, 3, 3 bis, 6 bis).
 import { createHash, randomBytes } from "node:crypto";
 import { nextEntry, entryBody } from "../domain/ledger.js";
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 
 export const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 export const newToken = () => randomBytes(32).toString("base64url");

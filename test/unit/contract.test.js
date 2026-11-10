@@ -3,7 +3,7 @@
 // runward/contracts/api-contract.json. A change of contract is a change of that file, in the same diff.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { readConfig, compose } from "../../src/main.js";
 import { memoryStore } from "../../src/adapters/store/memory.js";
 import { memoryObjects } from "../../src/adapters/objects/objects.js";
@@ -29,4 +29,23 @@ test("planted control: one more route, or a route opened to the public, changes 
   assert.equal(apiContract(table), committed.digest);
   assert.notEqual(apiContract([...table, ["GET", "/api/v0/extra", "public", null]]), committed.digest);
   assert.notEqual(apiContract(table.map((r) => (r[1] === "/api/v0/access" ? [r[0], r[1], "public", r[3]] : r))), committed.digest);
+});
+
+// The rows live in src/http/routes/, one file per domain (lot L0). A file a lot adds there and forgets to
+// name in src/http/server.js#routes would serve nothing, silently: every row every file exports is in the table.
+test("every row of every file of src/http/routes is in the route table, once", async () => {
+  const dir = new URL("../../src/http/routes/", import.meta.url);
+  const handlers = new Proxy({}, { get: () => new Proxy({}, { get: () => () => null }) });
+  const key = ([m, p, w]) => `${m} ${p} ${w}`;
+  const table = routes(handlers).map(key);
+  assert.equal(new Set(table).size, table.length, "no row twice");
+  const fromFiles = [];
+  for (const f of readdirSync(dir).filter((x) => x.endsWith(".js")).sort()) {
+    const mod = await import(new URL(f, dir));
+    for (const [name, fn] of Object.entries(mod)) if (typeof fn === "function") { assert.match(name, /Routes$/, `${f}: ${name}`); fromFiles.push(...fn(handlers).map(key)); }
+  }
+  assert.ok(fromFiles.length >= 40, "the guard must see the real rows, or it proves nothing");
+  assert.deepEqual([...fromFiles].sort(), [...table].sort());
+  // planted control: a row a file exports and the table does not carry is seen
+  assert.notDeepEqual([...fromFiles, "GET /api/v0/extra public"].sort(), [...table].sort());
 });

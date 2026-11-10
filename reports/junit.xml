@@ -39,6 +39,9 @@
 	<testcase name="the fonts of the closed list are served from web/fonts with their media type, byte for byte" classname="test"/>
 	<testcase name="a path off the list is answered 404: another file name, the fonts of the fleet package, the source folders" classname="test"/>
 	<testcase name="the content security policy is unchanged: fonts and stylesheets from this origin only, nothing inline" classname="test"/>
+	<testcase name="the shell's modules are served by a closed list under one folder named by their digest, immutable, the slot of the pinned views filled" classname="test"/>
+	<testcase name="a module off the list is answered 404: another name, the folder itself, another digest, the source folder" classname="test"/>
+	<testcase name="the modules' folder is named by every name and every byte: one byte or one name changed renames it (planted controls)" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
 	<testcase name="the charter: every script it names exists and can be run, and its shell scripts parse" classname="test"/>
@@ -52,6 +55,7 @@
 	<testcase name="container-deploy: a tag, another registry, or an API other than the hoster's or the loopback is refused before any call" classname="test"/>
 	<testcase name="the API contract served is the committed one: same routes, same refusals, same digest" classname="test"/>
 	<testcase name="planted control: one more route, or a route opened to the public, changes the digest" classname="test"/>
+	<testcase name="every row of every file of src/http/routes is in the route table, once" classname="test"/>
 	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
 	<testcase name="the chain detects a changed entry, a gap and a reordering" classname="test"/>
 	<testcase name="the current upload: the highest run_number, then run_attempt; a regression of run_number opens an epoch" classname="test"/>
@@ -60,6 +64,7 @@
 	<testcase name="claims are untrusted data: bounded, control characters removed; malformed ones refused" classname="test"/>
 	<testcase name="upload headers: digest as RFC 9530, size announced" classname="test"/>
 	<testcase name="every refusal has French and English, a message and an action, and one status" classname="test"/>
+	<testcase name="the catalogue of refusals is merged from one file per domain: every code of every file, and a code declared twice is refused" classname="test"/>
 	<testcase name="the words the product never says are absent from every text it shows" classname="test"/>
 	<testcase name="declarations: owner/repo, a workflow file, missions" classname="test"/>
 	<testcase name="same provider: two passkeys of one known provider" classname="test"/>
@@ -260,6 +265,12 @@
 	<testcase name="send.yml: a 429 is retried like an unavailable service, and a later success is sent" classname="test"/>
 	<testcase name="send.yml: a token endpoint that does not answer is cut at its own deadline (10 s) and retried like an unavailable service" classname="test"/>
 	<testcase name="C15, send.yml: on a runner without Node.js 22 the send job says &amp;quot;not sent: this runner has no Node.js 22&amp;quot; and keeps runward's verdict; it fails only with send-strict" classname="test"/>
+	<testcase name="the served list of the shell's modules is the scripts under web/: none off the list, none missing, none twice" classname="test"/>
+	<testcase name="planted controls: a file off the list, a listed file that is missing, a name listed twice" classname="test"/>
+	<testcase name="every import of every module names a module of the list and a name it exports; only one module names the pinned views" classname="test"/>
+	<testcase name="planted controls: an import off the list, a name not exported, a bare specifier, a second module naming the pinned views, a default import, a cycle" classname="test"/>
+	<testcase name="no module of the shell uses a name it neither declares nor imports, or writes to a name it imports" classname="test"/>
+	<testcase name="planted controls: a name never imported, a write to an imported name, a module that does not parse" classname="test"/>
 	<testcase name="the TLS server name stays the origin's while Host names the service's default hostname, and the app's 421 passes" classname="test"/>
 	<testcase name="a 404 from the router is a fault, never the app's guard: an unknown host does not reach the app" classname="test"/>
 	<testcase name="a 421 that is not the app's refusal, and any other status, are faults" classname="test"/>
@@ -294,9 +305,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 293 -->
+	<!-- tests 304 -->
 	<!-- suites 0 -->
-	<!-- pass 293 -->
+	<!-- pass 304 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

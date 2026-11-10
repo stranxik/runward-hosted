@@ -2,7 +2,7 @@
 // verification, the links that open an access (bootstrap, recovery, invitation), passkeys and sessions
 // on the Access screen. Every challenge is consumed in its own transaction BEFORE the ceremony is
 // verified, so a replayed challenge fails even when the ceremony would pass.
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 import {
   linkState, sessionOpen, requireFresh, requireGesture, checkRemovable, checkRestorable, sameProvider,
   meaningfulAaguid, providerOf, deviceFromUserAgent, arrivalOpen, MAX_PASSKEYS, PASSKEY_RESTORE_WINDOW, FRESH_WINDOW,
