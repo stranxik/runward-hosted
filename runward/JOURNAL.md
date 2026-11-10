@@ -68,3 +68,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 
 - Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
 - Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.
+
+## 2026-11-10 - erasure reaches the earlier versions of the index
+
+- Done: erasing content now empties every published version of the index built from it (its digests, `seq` and `fleet.json` stay), on request, at retention, at the replay of an erasure after a restore, and for what an earlier erasure left whole; the export archive no longer packs such a version, and a prepared archive is removed. Migration `0006_fleet_index_erasure.sql` (column, constraint, trigger `fleet_index_written_once`) and a bounded `UPDATE` for `rw_maint`. `test/unit/erasure.test.js` (7 cases) and `test/pg/erasure.test.js` (3 cases) search a content marker everywhere, with a positive control and another tenant unchanged; on the old code they redden. The point "to dig" of the restore entry on the served index after a replayed erasure is answered.
+- Decided: ADR-0020, proposed: erasure empties every index version built from the erased content; it refines ADR-0009.
+- Next: an independent review of the change, then the author's decision on ADR-0020.
