@@ -12,7 +12,7 @@ const DIR = new URL("../../db/migrations/", import.meta.url).pathname;
 const REAL = readdirSync(DIR).filter((f) => f.endsWith(".sql")).map((name) => ({ name, text: readFileSync(DIR + name, "utf8") }));
 const ok = "create table rw.x (id uuid primary key);";
 
-test("migrations: a contracting statement is refused wherever it sits, in any spelling", () => {
+test("migrations: a contracting statement is refused wherever it sits, in each spelling listed here", () => {
   for (const sql of [
     "alter table if exists rw.repository drop column default_branch;",
     "alter table rw.repository drop default_branch;",
