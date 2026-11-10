@@ -19,6 +19,8 @@
 	<testcase name="the roles gesture takes temporary objects away from the service's roles, and says whether it could" classname="test"/>
 	<testcase name="catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order" classname="test"/>
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
+	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
+	<testcase name="a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
 	<testcase name="the charter: every script it names exists and can be run, and its shell scripts parse" classname="test"/>
@@ -169,6 +171,23 @@
 	<testcase name="a mission that has uploads is removed only knowingly; its uploads stay in the journal" classname="test"/>
 	<testcase name="a repository confirmed without consented content enters the index, declared and silent (guard on a witness finding)" classname="test"/>
 	<testcase name="the default branch is declared with the repository (main by default), validated, changeable (PADR-0021 point 8)" classname="test"/>
+	<testcase name="T24: the gestures after the backup are replayed in ULID order, every session is closed, the journal says so" classname="test"/>
+	<testcase name="T24: a gesture on something the restore lost is not replayed, and each tenant is replayed from its own log" classname="test"/>
+	<testcase name="T24: an access reset after the backup is replayed: the withdrawn passkey opens nothing, the tenant waits for its bootstrap" classname="test"/>
+	<testcase name="T24: a reset inside the backup's margin is replayed without withdrawing the founder who arrived after it" classname="test"/>
+	<testcase name="T24: a recovery redeemed after the backup is replayed: the passkeys it replaced open nothing, its link is used" classname="test"/>
+	<testcase name="T24: a bootstrap redeemed after the backup does not open the tenant a second time" classname="test"/>
+	<testcase name="T24: content erased after the backup is erased again: the uploads are out of the next assembly, which no longer fails" classname="test"/>
+	<testcase name="every kind the security log receives is replayed, or left with its reason (the class of defect 1)" classname="test"/>
+	<testcase name="the security log: an object that is listed and cannot be read, or is not an event, is refused with a code" classname="test"/>
+	<testcase name="restore-replay is refused whole when one tenant's log cannot be read: nothing is written, the refusal is noted" classname="test"/>
+	<testcase name="a tenant whose replay fails is rolled back whole and recorded; the next tenants are still replayed; the run is said incomplete" classname="test"/>
+	<testcase name="a recovery is opened for one stranded member, as open-recovery opens it; it never fails a tenant's replay" classname="test"/>
+	<testcase name="each tenant's note carries the head its own journal had before the loss, anchored by the system: never one head for all" classname="test"/>
+	<testcase name="without an anchor, or with one that is behind the restored journal, the head before the loss is said unknown, not invented" classname="test"/>
+	<testcase name="restore-replay's arguments: an anchor or a `since`, never a head for every tenant" classname="test"/>
+	<testcase name="the note says which entries are lost, by their seq, from the restored head to the tenant's head before the loss (runbook §3)" classname="test"/>
+	<testcase name="the range is open when the head before the loss was not anchored, and the same when the gesture runs again" classname="test"/>
 	<testcase name="operator-call.sh: the hoster's key and the operator's token reach the gateway, and neither is an argument of curl" classname="test"/>
 	<testcase name="container-deploy.sh: the hoster's key reaches the API on every call, and is never an argument of curl" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a secret in a curl header or user option, in a workflow or a script, and passes the tree" classname="test"/>
@@ -193,9 +212,9 @@
 	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 192 -->
+	<!-- tests 211 -->
 	<!-- suites 0 -->
-	<!-- pass 192 -->
+	<!-- pass 211 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

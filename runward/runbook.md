@@ -44,7 +44,7 @@ The whole sequence of a deploy's first gestures, rehearsed on a throwaway stack 
 - **Replication**: one instance; per-tenant advisory locks already serialise journal appends and publications if a second instance comes.
 - **Agent suspended awaiting approval**: no agent; an operator workflow waits for its environment approval, then expires (§15).
 - **The journal**: `verify-chains` (daily at the hoster, 03:53 Paris, through the gateway) checks every tenant's chain and writes its report to the operator's journal; `/api/health` says whether its last run completed (§10).
-- **A restore of the database** (PADR-0014 note, T24): restore the day's backup; then `scripts/operator-call.sh restore-replay '{"since":"<ULID of the backup's time>","headBefore":"<head before>"}'` (§8); it closes every session of every tenant, replays the access gestures from the object store in ULID order, writes "restore of …: entries lost between seq … and …" to each tenant's journal, and opens a recovery for a member left without a passkey when `--recovery-hash` is given. Drill it once before declaring the floor, on a throwaway instance, timed.
+- **A restore of the database** (PADR-0014 note, T24): while the database can still be read, `scripts/operator-call.sh restore-replay '{"anchor":true}'` writes the head of each tenant's journal to that tenant's security log in the object store; restore the day's backup; then `scripts/operator-call.sh restore-replay '{"since":"<ULID of the backup's time>"}'` (§8). It closes every session of every tenant, replays the gestures from the object store in ULID order, and writes to each tenant's journal an entry `restore-replayed` that says which entries are lost, by their seq: `lost.from` to `lost.to`, with the restored head and the head before the loss (`lost.to` is null when no anchor was written: the range is open, never guessed). The operator journal's note lists, per tenant: `memberless` (open its bootstrap again, `open-bootstrap` with `tenant`), `stranded` (members left without a passkey: `open-recovery`, or `recoveryHash` for the first one) and `failed`. A refusal `security-log-unreadable` wrote nothing; a tenant whose replay failed is rolled back whole, and the same gesture run again replays every tenant. Drill it on a throwaway stack, timed: §16.
 
 ## 4. Common incidents
 
@@ -102,7 +102,8 @@ All run inside the hoster's private network through the operator's gateway (ADR-
 | maintenance | `maintenance --on --until <iso> --reason <text>` / `maintenance --off` (during a maintenance, sign-in, the link options and the redemption of a link are refused, as is every browser write; open sessions still read) |
 | retention (daily, 03:23 Paris, trigger) | `retention` |
 | chain check (daily, 03:53 Paris, trigger) | `verify-chains` |
-| after a restore | `restore-replay --since <ulid>` |
+| before a restore, while the database can still be read | `restore-replay --anchor` |
+| after a restore | `restore-replay --since <ulid> [--recovery-hash <sha256>]` |
 
 ## 9. Secrets
 
@@ -301,6 +302,173 @@ One environment holds a run until a person approves it today: `production` in th
 - **What is asked**: `gh api repos/stranxik/runward-hosted-ops/actions/runs/<run id>/pending_deployments -q '.[] | {environment: .environment.name, id: .environment.id}'`; read the run's inputs (`gh run view <run id> -R stranxik/runward-hosted-ops`) before approving: a digest of a link, a tenant, a member.
 - **Approve** (the author's gesture, from the run's page, Review deployments, or): `gh api -X POST repos/stranxik/runward-hosted-ops/actions/runs/<run id>/pending_deployments -F 'environment_ids[]=<id>' -f state=approved -f comment='<why>'`; `state=rejected` refuses it.
 - **Verify**: the run goes on (`gh run watch <run id> -R stranxik/runward-hosted-ops`), and its log says the gesture's status and code (§8).
+
+## 16. A restore drill, on a throwaway stack
+
+What it proves: that after the database is replaced by a backup, `restore-replay` (§3, §8) puts the accesses back where the security log of the object store says they were. Three tenants are opened and used through the real service (passkey ceremonies verified by the real WebAuthn library, sessions, access gestures written to the object store), a backup is taken at an instant T, more access gestures happen after T, each tenant's head is anchored in the object store while the database can still be read, the database is dropped and restored from the backup, then the gesture runs through the operator's gateway and its effects are read: the sessions closed, the gestures after T replayed in ULID order (an access reset among them), the note in each tenant's journal with the range of the entries lost, the chains, the isolation. It is the drill §3 asks for before the floor is declared. Every token, key and identifier is drawn for the run, then thrown away. Each step ends with `lap <n>`, which prints how long the step took: note it with the step's verdict line.
+
+**Prerequisites**: a checkout of this repository at the commit to drill, `npm ci` done; Node.js 22, bash, curl, jq, openssl, and `psql`, `pg_dump`, `pg_restore` of PostgreSQL 17; a throwaway PostgreSQL 17 that you may destroy, reachable without TLS, trusting connections without a password, its address in `PG` (host:port); a throwaway S3 that you may destroy, its address in `S3`, **on `127.0.0.1` or `localhost`**: the service's only way out refuses plain http to any other host (`src/adapters/system/egress.js`). Where Docker runs, the two servers at the digests of `ci.yml`: `docker network create rw-drill-net`, `docker run -d --name rw-drill-pg --network rw-drill-net -e POSTGRES_HOST_AUTH_METHOD=trust postgres@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac`, `docker run -d --name rw-drill-s3 --network rw-drill-net chrislusf/seaweedfs@sha256:bb05d66d2963b1cc48073190781c3dd29e2c4c88a2ae2986bf58e38c86d89c6e server -s3 -dir=/data` (SeaweedFS checks no credential). If the steps themselves run in a container, start it in the S3's network namespace, so that `127.0.0.1` is the S3 and the PostgreSQL answers by its name: `docker run -d --name rw-drill-node --network container:rw-drill-s3 -v rw-drill-work:/work -w /work node:22 sleep infinity`, clone and `npm ci` inside it, then `PG=rw-drill-pg:5432` and `S3=http://127.0.0.1:8333`. In the `node:22` image, jq and the PostgreSQL 17 client are installed with `apt-get update && apt-get install -y jq postgresql-common && /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y && apt-get install -y postgresql-client-17`. Run every step from the repository's root, in one bash shell.
+
+**The drill's client** (`scripts/drill-client.mjs`): curl cannot answer a passkey ceremony, so this file stands for the browser and its authenticator. It keeps its keys and session cookies in `$R`, the run's throwaway directory, and prints `{"status":…,"body":…}` for each call.
+
+1. **The run's directory and its helpers**:
+   ```sh
+   R=$(mktemp -d); export R
+   LAP=$(node -p 'Date.now()'); START=$LAP
+   lap() { local n; n=$(node -p 'Date.now()'); echo "step $1: $((n - LAP)) ms"; LAP=$n; }
+   sql() { psql -X -q -At -v ON_ERROR_STOP=1 "postgres://postgres@$PG/${2:-runward_hosted}" -c "$1"; }
+   h() { node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' -- "$1"; }
+   d() { node scripts/drill-client.mjs "$@"; }
+   s() { d "$@" | jq -r '.status' | tr '\n' ' '; }
+   seclog() { node --input-type=module -e 'import { s3Objects } from "./src/adapters/objects/objects.js"; const e = process.env; const o = s3Objects({ endpoint: e.S3_ENDPOINT, region: e.S3_REGION, bucket: e.S3_BUCKET, accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY, fetch }); console.log((await o.securitySince(process.argv[1], process.argv[2] ?? "")).map((x) => x.event.what).join(" "))' "$@"; }
+   state() { sql "select t.title, (select count(*) from rw.passkey where tenant_id = t.id and removed_at is null), (select count(*) from rw.session where tenant_id = t.id and closed_at is null), (select max(seq) from rw.ledger where tenant_id = t.id) from rw.tenant t order by t.title"; }
+   heads() { sql "select t.title, l.seq, l.hash from rw.tenant t join rw.ledger l on l.tenant_id = t.id where l.seq = (select max(seq) from rw.ledger where tenant_id = t.id) order by t.title"; }
+   test -d "$R" && node --check scripts/drill-client.mjs && echo "client ok"; lap 1
+   ```
+   Verify: `client ok`, then `step 1: … ms`. `sql` is the drill's observer: the server's superuser, who reads across tenants; no gesture of the service or of the operator uses it. `state` prints, per tenant: its title, its live passkeys, its open sessions, the seq of its journal's head. `h` gives its argument to node after `--`: a link token is base64url and one in sixty-four begins with `-`, which node would read as an option of its own (the digest then comes out empty and the tenant is never opened).
+2. **The database, the three login roles, the bucket, this run's tokens and identifiers** (§13 steps 1 and 2; here the object store is real):
+   ```sh
+   until pg_isready -q -d "postgres://postgres@$PG/postgres" && curl -s -o /dev/null "$S3"; do sleep 1; done
+   sql "create database runward_hosted" postgres
+   sql "create role rw_owner login; create role rw_app login nobypassrls; create role rw_maint login nobypassrls" postgres
+   sql "grant create, connect on database runward_hosted to rw_owner; grant connect on database runward_hosted to rw_app, rw_maint" postgres
+   export NODE_ENV=development DATABASE_SSL=disable RW_DATABASE=runward_hosted RW_ORIGIN=http://localhost:8787
+   export S3_ENDPOINT="$S3" S3_REGION=us-east-1 S3_BUCKET="rw-drill-$(openssl rand -hex 3)" S3_ACCESS_KEY_ID=drill S3_SECRET_ACCESS_KEY="$(openssl rand -hex 16)"
+   node --input-type=module -e 'import { AwsClient } from "aws4fetch"; const e = process.env; const a = new AwsClient({ accessKeyId: e.S3_ACCESS_KEY_ID, secretAccessKey: e.S3_SECRET_ACCESS_KEY, service: "s3", region: e.S3_REGION }); console.log("bucket", (await a.fetch(`${e.S3_ENDPOINT}/${e.S3_BUCKET}`, { method: "PUT" })).status)'
+   T=$(openssl rand -hex 32); TH=$(h "$T")
+   W1=$(node -p 'crypto.randomUUID()'); W2=$(node -p 'crypto.randomUUID()'); W3=$(node -p 'crypto.randomUUID()')
+   link() { openssl rand -base64 32 | tr '+/' '-_' | tr -d '='; }
+   LA=$(link); LB=$(link); LC=$(link)
+   sql "select count(*) from pg_roles where rolname in ('rw_owner', 'rw_app', 'rw_maint')" postgres; echo ${#TH} ${#W1} ${#LA}; lap 2
+   ```
+   Verify: `bucket 200`, `3`, `64 36 43`. The first line waits for the two servers: a SeaweedFS just started refuses connections for twenty seconds or more, and a bucket that was not created makes it accept every write and return none (the service starts, the gestures pass, and `restore-replay` is refused `security-log-unreadable` at step 10, before it writes anything). On anything but `bucket 200`, stop here.
+3. **The operator's gateway, then the two first gestures of a deploy** (§13 steps 3 and 4): the gateway holds the bucket's key, which `restore-replay` writes the anchors and reads the security log with.
+   ```sh
+   env PORT=8090 RW_WITNESS_TENANTS="$W1,$W2" RW_OPERATOR_TOKEN_SHA256="$TH" \
+     RW_OPERATOR_URL_ADMIN="postgres://postgres@$PG/runward_hosted" RW_OPERATOR_URL_OWNER="postgres://rw_owner@$PG/runward_hosted" \
+     RW_OPERATOR_URL_MAINT="postgres://rw_maint@$PG/runward_hosted" RW_OPERATOR_URL_APP="postgres://rw_app@$PG/runward_hosted" \
+     node src/operator-gateway.js > "$R/gateway.log" 2>&1 & GW=$!
+   sleep 1; curl -s http://127.0.0.1:8090/health; echo
+   export SCW_SECRET_KEY=drill RW_OPERATOR_TOKEN="$T" RW_OPERATOR_URL=http://127.0.0.1:8090
+   scripts/operator-call.sh roles; scripts/operator-call.sh migrate; lap 3
+   ```
+   Verify: `{"ok":true}`, then `operator-call: roles answered HTTP 200 (gesture=roles ok=true exit=0)` and the same line for `migrate`.
+4. **The service, on PostgreSQL and on the object store**:
+   ```sh
+   serve() { env PORT=8787 RW_EXTRA_HOSTS=127.0.0.1 RW_COMMIT=drill DATABASE_URL="postgres://rw_app@$PG/runward_hosted" node src/main.js >> "$R/service.log" 2>&1 & SV=$!; sleep 1; }
+   serve; head -1 "$R/service.log" | jq -c '{event, detail: {store: .detail.store, objects: .detail.objects}}'
+   curl -s http://127.0.0.1:8787/api/health | jq -c '{ok, db, objectStore}'; lap 4
+   ```
+   Verify: `{"event":"start","detail":{"store":"postgres","objects":"s3"}}`, then `{"ok":true,"db":"ok","objectStore":"ok"}`.
+5. **Three tenants**, opened through the gateway: the two witnesses of the isolation suite (A, B) and a third (C). Each founder's link is drawn here; only its digest is passed.
+   ```sh
+   scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(h "$LA")\",\"tenant\":\"$W1\",\"witness\":true,\"title\":\"drill-a\"}"
+   scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(h "$LB")\",\"tenant\":\"$W2\",\"witness\":true,\"title\":\"drill-b\"}"
+   scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(h "$LC")\",\"tenant\":\"$W3\",\"title\":\"drill-c\"}"; lap 5
+   ```
+   Verify: three lines `operator-call: open-bootstrap answered HTTP 200 (gesture=open-bootstrap ok=true exit=0)`. On any other line, stop here: a tenant that was not opened makes every later step read two tenants.
+6. **Activity before T, through the service**. A: a founder with three passkeys (A1, A2, A3), two sessions (a1 opened by A1, a2 by A2), a repository declared with consent. B: a founder with two passkeys, one session, a repository. C: a founder with one passkey, one session.
+   ```sh
+   s open a1 "$LA" A1; s verify a1 A1 passkey-add; A2=$(d addkey a1 A2 | jq -r '.body.id'); s verify a1 A1 passkey-add; A3=$(d addkey a1 A3 | jq -r '.body.id')
+   s signin a2 A2; s verify a1 A1 declare-with-consent drill/alpha; RA=$(d call a1 POST /api/v0/repositories '{"name":"drill/alpha","consent":true}' | jq -r '.body.id'); echo
+   s open b1 "$LB" B1; s verify b1 B1 passkey-add; s addkey b1 B2; RB=$(d call b1 POST /api/v0/repositories '{"name":"drill/beta"}' | jq -r '.body.id'); s open c1 "$LC" C1; echo
+   echo ${#A2} ${#A3} ${#RA} ${#RB}; state
+   for W in "$W1" "$W2" "$W3"; do seclog "$W"; done; lap 6
+   ```
+   Verify: `200 200 200 200 200`, `200 200 200 200`, `36 36 36 36`; then the state `drill-a|3|2|7`, `drill-b|2|1|4`, `drill-c|1|1|2`; then what the object store holds for each tenant, in ULID order: `member-founded passkey-added passkey-added consent-given`, `member-founded passkey-added`, `member-founded`.
+7. **T: the backup**. `SINCE` is the ULID of T: the ten characters of its time, then sixteen zeros, so that every gesture written from T on sorts after it. T is taken before the dump starts (a gesture between T and the dump's snapshot is in both the backup and the replay, and replaying it changes nothing); the two seconds stand for the margin a real backup's hour is known with.
+   ```sh
+   sleep 1; T_MS=$(node -p 'Date.now()')
+   SINCE=$(node -e 'const B = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; let t = BigInt(process.argv[1]), s = ""; for (let i = 0; i < 10; i++) { s = B[Number(t % 32n)] + s; t /= 32n; } console.log(s + "0".repeat(16))' "$T_MS")
+   sleep 1; pg_dump -Fc -d "postgres://postgres@$PG/runward_hosted" -f "$R/backup.dump"
+   echo ${#SINCE}; pg_restore -l "$R/backup.dump" | grep -c 'TABLE DATA rw ledger'; lap 7
+   ```
+   Verify: `26`, `1`.
+8. **Activity after T**, which the restore will lose in the database and the object store will keep. A: A2 removed (its session a2 closes with it) then restored, A3 removed for good, the consent withdrawn, a fourth passkey added then removed, a third session opened. B: its repository removed, then its session signed out. C: its access reset by the operator (the founder and the passkey withdrawn).
+   ```sh
+   s verify a1 A1 passkey-remove "$A2"; s call a1 DELETE "/api/v0/passkeys/$A2"; s verify a1 A1; s call a1 POST "/api/v0/passkeys/$A2/restore"
+   s verify a1 A1 passkey-remove "$A3"; s call a1 DELETE "/api/v0/passkeys/$A3"; s verify a1 A1 consent-withdraw "$RA"; s call a1 DELETE "/api/v0/repositories/$RA/consent"
+   s verify a1 A1 passkey-add; A4=$(d addkey a1 A4 | jq -r '.body.id'); s verify a1 A1 passkey-remove "$A4"; s call a1 DELETE "/api/v0/passkeys/$A4"; s signin a3 A1; echo
+   s verify b1 B1; s call b1 DELETE "/api/v0/repositories/$RB"; s call b1 POST /api/v0/auth/logout; echo
+   scripts/operator-call.sh reset-access "{\"hash\":\"$(openssl rand -hex 32)\",\"tenant\":\"$W3\"}"
+   state; heads > "$R/heads-before.txt"
+   for W in "$W1" "$W2" "$W3"; do seclog "$W" "$SINCE"; done; lap 8
+   ```
+   Verify: `200 200 200 200 200 200 200 200 200 200 200 200`, `200 200 200`, `operator-call: reset-access answered HTTP 200 (gesture=reset-access ok=true exit=0)`; then the state before the loss `drill-a|2|2|14`, `drill-b|2|0|6`, `drill-c|0|0|3`; then what the object store holds after `SINCE`, in ULID order: `passkey-removed passkey-restored passkey-removed consent-withdrawn passkey-added passkey-removed`, `repository-removed`, `access-reset`.
+9. **The anchor, then the loss: the database is replaced by the backup**. The service is stopped first and stays stopped until step 14: a restore needs every connection closed, and between the restore and the replay a withdrawn passkey signs in again (maintenance refuses a session's writes, never a sign-in). While the database can still be read, `restore-replay` with `anchor` writes the head of each tenant's journal to that tenant's security log in the object store, which the restore does not touch (§3): the replay reads it back as the head before the loss. It appends nothing to a journal.
+   ```sh
+   kill "$SV"; wait "$SV"
+   scripts/operator-call.sh restore-replay '{"anchor":true}'
+   for W in "$W1" "$W2" "$W3"; do seclog "$W" "$SINCE" | tr ' ' '\n' | tail -1; done; heads | diff - "$R/heads-before.txt" && echo "heads unchanged"
+   sql "drop database runward_hosted with (force)" postgres
+   pg_restore --create -d "postgres://postgres@$PG/postgres" "$R/backup.dump"; echo "pg_restore exit $?"
+   state; sql "select 'A3 removed: ' || (removed_at is not null) from rw.passkey where id = '$A3'"; lap 9
+   ```
+   Verify: `operator-call: restore-replay answered HTTP 200 (gesture=restore-replay ok=true exit=0)`, three lines `journal-anchored` (the last object of each tenant's log) and `heads unchanged`; then `pg_restore exit 0`; the state of T is back, `drill-a|3|2|7`, `drill-b|2|1|4`, `drill-c|1|1|2`, and `A3 removed: false`: the restore alone has resurrected what was withdrawn after T.
+10. **`restore-replay`**, through the gateway (§3, §8). It takes the instant of the backup and no head: each tenant's head before the loss is the one anchored at step 9, read from that tenant's own log.
+    ```sh
+    scripts/operator-call.sh restore-replay "{\"since\":\"$SINCE\"}"; lap 10
+    ```
+    Verify: `operator-call: restore-replay answered HTTP 200 (gesture=restore-replay ok=true exit=0)`. On any other answer, read the reason (`grep '"event":"operator.gesture"' "$R/gateway.log" | tail -1 | jq -r '.error'`), leave the service stopped, and go to step 17: the drill has shown a restore that does not replay. A refusal `security-log-unreadable` wrote nothing to any tenant; a tenant whose replay failed is rolled back whole and named in the operator journal, the others are replayed, and the same gesture run again replays every tenant.
+11. **What the replay did**, read by the observer: no session left open; in each tenant's journal, one more entry, `restore-replayed`, with how many sessions it closed and how many gestures it replayed; the accesses as the object store said.
+    ```sh
+    sql "select count(*) from rw.session where closed_at is null"
+    sql "select t.title, l.seq, l.body->>'what', l.body->'detail'->>'closed', l.body->'detail'->>'replayed', jsonb_array_length(l.body->'detail'->'stranded') from rw.tenant t join rw.ledger l on l.tenant_id = t.id where l.seq = (select max(seq) from rw.ledger where tenant_id = t.id) order by t.title"
+    sql "select 'A2 removed: ' || (removed_at is not null) from rw.passkey where id = '$A2'"; sql "select 'A3 removed: ' || (removed_at is not null) from rw.passkey where id = '$A3'"
+    sql "select name, consent, removed_at is not null from rw.repository order by name"
+    sql "select what, jsonb_array_length(detail->'report'), detail->>'failed' from rw.operator_journal order by seq desc limit 1"
+    sql "select t.title, r->>'memberless', r->'stranded' from rw.operator_journal o cross join lateral jsonb_array_elements(o.detail->'report') r join rw.tenant t on t.id = (r->>'tenant')::uuid where o.seq = (select max(seq) from rw.operator_journal where what = 'restore-replayed') order by t.title"; lap 11
+    ```
+    Verify: `0`; `drill-a|8|restore-replayed|2|4|0`, `drill-b|5|restore-replayed|1|1|0`, `drill-c|3|restore-replayed|1|1|0` (the access reset is replayed); `A2 removed: false` and `A3 removed: true`; `drill/alpha|f|f` (the consent withdrawn again) and `drill/beta|f|t` (removed again); `restore-replayed|3|0` (the operator journal's note, one row per tenant, no failure); then what the operator reads to act: `drill-a|false|[]`, `drill-b|false|[]`, `drill-c|true|[]`: tenant C is left without a member, its bootstrap is opened again at step 15. A2 is the proof of the order: it was removed, then restored; replayed the other way round it would end removed. Of A's six gestures after `SINCE`, four are replayed: the fourth passkey, added after T, is not in the restored database, so neither its addition nor its removal applies.
+12. **The note in each tenant's journal, against what §3 says of it** ("restore of …: entries lost between seq … and …"). The drill computes the lost range itself, from the heads the observer noted at step 8, then prints what each note carries: its seq, the range, the seq of the restored head and of the head before the loss; then the note's fields; then whether each note carries the head of its own tenant.
+    ```sh
+    join -t'|' <(heads | cut -d'|' -f1,2) <(cut -d'|' -f1,2 "$R/heads-before.txt") | awk -F'|' '{ printf "%s: the note is seq %d; the entries %d to %d of before the loss are gone\n", $1, $2, $2, $3 }'
+    sql "select t.title, l.seq, l.body->'detail'->'lost'->>'from', l.body->'detail'->'lost'->>'to', l.body->'detail'->'lost'->>'count', l.body->'detail'->'headAfterRestore'->>'seq', l.body->'detail'->'headBefore'->>'seq' from rw.tenant t join rw.ledger l on l.tenant_id = t.id where l.body->>'what' = 'restore-replayed' order by t.title"
+    sql "select string_agg(k, ' ' order by k) from jsonb_object_keys((select body->'detail' from rw.ledger where body->>'what' = 'restore-replayed' limit 1)) k"
+    sql "select t.title, l.body->'detail'->'headBefore'->>'hash' from rw.tenant t join rw.ledger l on l.tenant_id = t.id where l.body->>'what' = 'restore-replayed' order by t.title" | diff - <(cut -d'|' -f1,3 "$R/heads-before.txt") && echo "each note carries the head of its own tenant"
+    sql "select count(distinct body->'detail'->'headBefore'->>'hash') from rw.ledger where body->>'what' = 'restore-replayed'"; lap 12
+    ```
+    Verify: `drill-a: the note is seq 8; the entries 8 to 14 of before the loss are gone`, `drill-b: the note is seq 5; the entries 5 to 6 of before the loss are gone`, `drill-c: the note is seq 3; the entries 3 to 3 of before the loss are gone`. Then what the notes carry, which must be the same ranges: `drill-a|8|8|14|7|7|14`, `drill-b|5|5|6|2|4|6`, `drill-c|3|3|3|1|2|3` (the note's seq, `lost.from`, `lost.to`, `lost.count`, the seq of the restored head, the seq of the head before the loss). Then the fields `closed headAfterRestore headBefore lost replayed since stranded`, then `each note carries the head of its own tenant` and `3` (three tenants, three heads). Without the anchor of step 9 the note says `headBefore` null and the range open (`lost.to` null): the head before the loss is said unknown, never taken on the operator's word.
+13. **The chains, after the replay** (§3):
+    ```sh
+    scripts/operator-call.sh verify-chains
+    sql "select detail->>'failed', (select string_agg((r->>'ok') || ' ' || (r->'head'->>'seq'), ', ' order by (r->'head'->>'seq')::int desc) from jsonb_array_elements(detail->'report') r) from rw.operator_journal where what = 'verify-chains' order by seq desc limit 1"; lap 13
+    ```
+    Verify: `operator-call: verify-chains answered HTTP 200 (gesture=verify-chains ok=true exit=0)`, then `0|true 8, true 5, true 3`: each chain holds from its first entry to the note.
+14. **The service again, and the accesses as a person meets them**: the sessions of before the loss are closed, whether the backup held them (a1) or not (a3); the passkey withdrawn after T opens nothing; the one removed then restored signs in; the journal shows the note; the consent and the removal are as they were left.
+    ```sh
+    serve
+    d call a1 GET /api/v0/session | jq -c '[.status, .body.refusal]'; d call a3 GET /api/v0/session | jq -c '[.status, .body.refusal]'
+    d signin x A3 | jq -c '[.status, .body.refusal]'; d signin x A4 | jq -c '[.status, .body.refusal]'
+    d signin a5 A2 | jq -c '[.status, .body.signedIn]'; d signin a4 A1 | jq -c '[.status, .body.signedIn]'
+    d call a4 GET /api/v0/journal | jq -c '.body.entries[] | select(.body.what == "restore-replayed") | {seq, what: .body.what, who: .body.who.id}'
+    d call a4 GET /api/v0/access | jq -c '.body.repositories[] | {name, consent}'
+    d signin b2 B1 | jq -c '[.status, .body.signedIn]'; d call b2 GET /api/v0/access | jq -c '.body.repositories[] | {name, state}'; lap 14
+    ```
+    Verify: `[401,"signed-out"]` twice, `[401,"passkey-unknown"]` twice, `[200,true]` twice, `{"seq":8,"what":"restore-replayed","who":"operateur"}`, `{"name":"drill/alpha","consent":false}`, `[200,true]`, `{"name":"drill/beta","state":"removed"}`.
+15. **Tenant C: an access reset after T**. The operator withdrew the founder and the passkey at step 8, and the object store holds `access-reset` after `SINCE`. What §3 and T24 promise is that the restore does not give that access back. The bootstrap the reset had opened is gone with the restore (the backup never held it): the operator opens one again, and the rightful founder arrives.
+    ```sh
+    d signin c2 C1 | jq -c '[.status, .body.refusal // .body.signedIn]'
+    c_state() { sql "select t.title, (select count(*) from rw.member where tenant_id = t.id and removed_at is null), (select count(*) from rw.passkey where tenant_id = t.id and removed_at is null) from rw.tenant t where t.title = 'drill-c'"; }
+    c_state
+    LC2=$(link); scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(h "$LC2")\",\"tenant\":\"$W3\"}"
+    s open c3 "$LC2" C2; echo; d signin c4 C1 | jq -c '[.status, .body.refusal // .body.signedIn]'; c_state; lap 15
+    ```
+    Verify: `[401,"passkey-unknown"]` and `drill-c|0|0`: the passkey the reset withdrew opens nothing, the tenant has no member. Then `operator-call: open-bootstrap answered HTTP 200 (gesture=open-bootstrap ok=true exit=0)`, `200`, `[401,"passkey-unknown"]` again and `drill-c|1|1`: the tenant is opened again by a new founder, the withdrawn passkey still opens nothing. A line `[200,true]` on the first or the fourth of these, or `drill-c|1|1` on the second, is the defect of 2026-11-10 (`restore-replay` did not replay `access-reset`): the floor is not declared on it.
+16. **The isolation, on the restored and replayed base** (§7, S4), and the health as the probe reads it:
+    ```sh
+    scripts/operator-call.sh isolation
+    curl -s http://127.0.0.1:8787/api/health | jq -c '{ok, db, objectStore, verifyChains: .dailyJobs["verify-chains"].ok}'; lap 16
+    ```
+    Verify: `operator-call: isolation answered HTTP 200 (gesture=isolation ok=true exit=0)`, then `{"ok":true,"db":"ok","objectStore":"ok","verifyChains":true}`.
+17. **Stop everything, and the total**:
+    ```sh
+    kill "$SV" "$GW"; wait "$SV" "$GW"; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/api/health
+    echo "total: $(( $(node -p 'Date.now()') - START )) ms"; rm -r "$R"; ls "$R" 2>/dev/null | wc -l
+    ```
+    Verify: `000`, `total: … ms`, `0`. Then drop the throwaway servers, their volumes and their network (`docker rm -f -v rw-drill-node rw-drill-s3 rw-drill-pg; docker volume rm rw-drill-work; docker network rm rw-drill-net`) and check that nothing is left: `docker ps -a --filter name=rw-drill -q | wc -l` and `docker volume ls -q --filter name=rw-drill | wc -l` both print `0`.
+
+**What the time means**: steps 9 and 10 are the restore itself (the base replaced, then the replay) on three small tenants; the hoster's own restore of a managed backup replaces `pg_restore` in production and is not timed here. **What the drill does not exercise**, and what does: an erasure of content after T (the object store has lost bytes the restored database still counts) is replayed in `test/pg/restore-replay.test.js` and `test/unit/restore-replay.test.js`; a recovery redeemed after T, a bootstrap redeemed after T, `--recovery-hash` for a member left without a passkey, a tenant whose replay fails and a security log that cannot be read are in `test/unit/restore-replay.test.js` (a recovery is usable 24 hours after it opens, which a drill does not wait for). The index of a tenant whose content was erased after T is republished by the service's next gesture or upload of that tenant, not by the replay.
 
 ## References
 

@@ -59,7 +59,7 @@ The trifecta does not apply to the service (no agent reads private data there or
 | T21 | repository transferred | repository_owner_id pinned; owner-changed | `test/unit/ingest.test.js` |
 | T22 | the upload token obtained by another step of the job | the send job alone holds id-token, with no third-party step | `scripts/check-workflows.mjs` |
 | T23 | regression by re-running an old green run | current = highest run_number; a re-run keeps its number | `test/unit/domain.test.js` |
-| T24 | a restore resurrects withdrawn accesses | security log doubled in the object store; restore-replay closes sessions and replays | `test/unit/identity.test.js` |
+| T24 | a restore resurrects withdrawn accesses | security log doubled in the object store; restore-replay closes every session and replays, in ULID order, every gesture that withdraws an access (a passkey or a repository removed, a consent withdrawn, a recovery cancelled or redeemed, a bootstrap redeemed, an access reset, content erased); a security log that cannot be read refuses the gesture whole. Residual: after an erasure is replayed, the served index stays the one before it until the tenant's next gesture or upload; objects written after the backup stay in the store without a row | `test/unit/restore-replay.test.js`, `test/pg/restore-replay.test.js` |
 | T25 | scope of the session cookie | __Host- prefix, no Domain | `test/unit/http.test.js` |
 | T26 | uploads filtered by the calling workflow | status line with the commit of the last accepted upload; the witness reader compares with main | `scripts/witness-reader.mjs` |
 | T27 | a passkey added by an agent driving the browser | added per gesture, announced in the other sessions, journaled and doubled | `test/unit/identity.test.js` |
