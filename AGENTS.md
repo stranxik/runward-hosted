@@ -29,7 +29,7 @@ These are rules, not advice. Each was learned in this mission.
 2. **Never edit an accepted ADR.** A changed decision is a new ADR that refines or supersedes it (`process-adr-and-journal`; ADR-0002 was rewritten in place once, and restored: ADR-0018).
 3. **Never create, change or destroy a paid resource** (`infra/scaleway/main.tf`) without the author's explicit approval of that resource; the budget is 20 EUR a month, the alert 15 EUR. `tofu plan` is free; `tofu apply` is not.
 4. **Never deploy by hand.** A deploy is a push to `main` through `deploy.yml`, after the ci run of that commit is green; a rollback is `rollback.yml` by digest (runbook §7).
-5. **Never print, write or log a secret value**: no token, password, key or connection URL with a password in a command line, a file, a log, a report, a commit or a screenshot. Secrets live in the author's keychain and in the GitHub environments `production` and `operateur`; a session reads them by name inside a command (runbook §9). The operator's token is never shown, even to the author.
+5. **Never print, write or log a secret value**: no token, password, key or connection URL with a password in a command line, a file, a log, a report, a commit or a screenshot. Secrets live in the author's keychain, in the GitHub environment `production` and in the containers' secret environment (with the encrypted OpenTofu state, outside any repository); the environment `operateur` of the private operator repository is planned and holds nothing on 2026-11-10; a session reads them by name inside a command (runbook §9). The operator's token is never shown, even to the author.
 6. **Never return what the operator's gestures produce outside the private network**: the gateway answers a status and a code, `scripts/operator-call.sh` prints its closed fields only; a result stays in the operator journal (T31).
 7. **Never weaken a guard to make it pass**: no test deleted or loosened, no rule switched off, no `--no-verify` without saying so in the commit, no report edited by hand. A red that is not understood is opened and explained, never called "expected".
 8. **Never show `machine-established`** or raise a CI-declared value: the hosted index says what a CI declared, as declared (PADR-0011 point 2).
@@ -44,7 +44,7 @@ Read anything in the repository and in the hoster's console; write code, tests a
 |---|---|
 | a structural choice (a port, a placement, a dependency, a data class, a guard) | the author, on an ADR the agent writes as proposed |
 | a paid resource, a release of `send.yml`, a key, a deploy switch (`RW_DEPLOY_ENABLED`, `RW_PROBE_ENABLED`) | the author |
-| an operator gesture (bootstrap, recovery, reset of access, maintenance, restore-replay) | the author, by approving the run of the environment `operateur` (runbook §15) |
+| an operator gesture (bootstrap, recovery, reset of access, maintenance, restore-replay) | the author, who runs it himself from his workstation through `scripts/operator-call.sh` (runbook §8); an agent session runs one only on his explicit instruction for that gesture. The approval of the environment `operateur` (runbook §15) is planned, not in force on 2026-11-10 |
 | which tenant's data is touched | never an agent: tenant data (exports, passkeys, sessions, the journal) is read through the product, under its own guards, never by hand |
 
 ## Pull requests and commits
