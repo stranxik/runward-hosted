@@ -4,14 +4,16 @@
 #   1. the gate and the tests are green for this exact commit (the ci workflow's run for github.sha);
 #   2. the image is built here from a clean checkout at github.sha and pushed; it is deployed BY DIGEST,
 #      first to the operator's gateway (ADR-0016), which then runs `roles` (rw_admin) and `migrate`
-#      (rw_owner) on the private database, and only then to the service: the schema is ready before the
-#      service switches;
+#      (rw_owner) on the private database, then `roles` again with grants: what rw_app and rw_maint may do
+#      on the migrated base is what db/schema.snapshot.txt says, no more, no fewer, or the deploy stops;
+#      only then to the service: the schema is ready before the service switches;
 #   3. the revision served, read from the hoster's API (not from /api/version), carries that digest (S5),
 #      and the container's environment was merged, not replaced (scripts/container-deploy.sh);
 #   4. /api/version says the same commit and image;
 #   5. smoke: health, version, sign-in options, the page, 421, the request budget; the 421 is the app's own
 #      (host-not-allowed), asked under the container's default hostname at the hoster, which the hoster
-#      routes to the service and the app does not serve (vars.RW_SERVICE_HOST; without it nothing is built);
+#      routes to the service and the app does not serve (vars.RW_SERVICE_HOST; without it nothing is built,
+#      nor when it is not the hostname the hoster reports for the service's container);
 #   6. the real send workflow of this commit sends to the witness tenant (job smoke-send);
 #   7. the isolation suite on the deployed base, through the gateway in the private network, under rw_app (S4);
 #   8. the registry keeps the 5 newest images and every digest still served or named for rollback;
@@ -65,10 +67,13 @@ jobs:
           [ "https://$RW_SERVICE_HOST" != "$SERVICE" ] || { echo "vars.RW_SERVICE_HOST is the service's own host: the app serves it, it would not be refused"; exit 1; }
       - name: the digests served before this deploy (the rollback targets)
         id: before
-        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}" }
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}", RW_SERVICE_HOST: "${{ vars.RW_SERVICE_HOST }}" }
         run: |
           api="https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers"
           svc=$(curl -sSf --max-time 30 -H @<(printf 'X-Auth-Token: %s\n' "$SCW_SECRET_KEY") "$api/$CONTAINER")
+          # vars.RW_SERVICE_HOST is this container's own hostname at the hoster, or nothing is built: the
+          # outputs below stay empty on a refusal, so the rollback job does not run
+          scripts/service-host-check.sh "$RW_SERVICE_HOST" <<<"$svc"
           op=$(curl -sSf --max-time 30 -H @<(printf 'X-Auth-Token: %s\n' "$SCW_SECRET_KEY") "$api/$OPERATOR")
           echo "previous=$(jq -r .registry_image <<<"$svc")" >> "$GITHUB_OUTPUT"
           echo "previous_commit=$(jq -r '.environment_variables.RW_COMMIT // ""' <<<"$svc")" >> "$GITHUB_OUTPUT"
@@ -85,11 +90,12 @@ jobs:
       - name: the operator's gateway serves the new digest (S5 on the gateway)
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
         run: scripts/container-deploy.sh "$OPERATOR" "$DIGEST" "${{ github.sha }}"
-      - name: roles (rw_admin), then migrate (rw_owner), through the gateway, before the service switches
+      - name: roles (rw_admin), migrate (rw_owner), then the grants of rw_app and rw_maint against the snapshot, through the gateway, before the service switches
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", RW_OPERATOR_TOKEN: "${{ secrets.RW_OPERATOR_TOKEN }}", RW_OPERATOR_URL: "${{ vars.RW_OPERATOR_URL }}" }
         run: |
           scripts/operator-call.sh roles
           scripts/operator-call.sh migrate
+          scripts/operator-call.sh roles '{"grants":true}'
       - name: the service serves the new digest (S5, read from the hoster, not from the service)
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
         run: scripts/container-deploy.sh "$CONTAINER" "$DIGEST" "${{ github.sha }}"

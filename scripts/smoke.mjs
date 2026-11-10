@@ -34,7 +34,9 @@ export const FOREIGN_HOST = "elsewhere.example";
 export function foreignHostFault(origin, { host = FOREIGN_HOST, ca, timeoutMs = 30_000 } = {}) {
   const u = new URL(origin);
   const secure = u.protocol === "https:";
-  if (host.toLowerCase() === u.host.toLowerCase() || host.toLowerCase() === u.hostname.toLowerCase()) return Promise.resolve(`the host to refuse, ${host}, is the origin's own`);
+  // as names are compared: without case, without the root's trailing dot (review of 2026-11-10, C31)
+  const same = (a, b) => a.toLowerCase().replace(/\.(?=$|:\d+$)/, "") === b.toLowerCase().replace(/\.(?=$|:\d+$)/, "");
+  if (same(host, u.host) || same(host, u.hostname)) return Promise.resolve(`the host to refuse, ${host}, is the origin's own`);
   return new Promise((res) => {
     // the server name is the origin's, whatever Host says; an IP address is never a server name (RFC 6066):
     // the empty string sends none and leaves the certificate checked against the address itself

@@ -310,8 +310,20 @@ resource "scaleway_rdb_user" "rw_maint" {
 # the provider documents that apply as reapplying the preset "to all objects (existing and new)", which
 # would put the hoster's hand on rights that db/grants.sql and the isolation suite own. `ignore_changes`
 # leaves them alone. What it costs: a later change of the level of these two users (in the hoster's
-# console, or of `permission` in this file) no longer shows in a plan; their rights are checked where they
-# are decided, by `roles` (no BYPASSRLS) and by the isolation suite of each deploy, under rw_app.
+# console, or of `permission` in this file) no longer shows in a plan. What is checked instead, at each
+# deploy, through the operator's gateway, the deploy stopping before the service switches:
+#   - `roles` (rw_admin), before `migrate`: the two roles exist, log in, are no superuser, create no role
+#     or database, do not bypass row level security, and may CONNECT;
+#   - `roles` with grants (rw_admin), after `migrate`: what the two roles may do IN EFFECT (their own
+#     grants, PUBLIC's, a membership's) on every table of the schemas rw and rw_meta, USAGE and CREATE on
+#     those two schemas, CONNECT and CREATE on the database, is exactly the grant lines of
+#     db/schema.snapshot.txt, no more, no fewer (scripts/roles.mjs; test/pg/isolation.test.js plants each
+#     kind of drift);
+#   - `isolation` (rw_app), after the smoke: no row crosses between the two witness tenants.
+# What is NOT checked: their rights on the schema public and on any other schema (the service has nothing
+# there; the hoster's preset applies there), on functions and on sequences, and TEMPORARY on the database
+# (read and said by `roles`, not refused: it depends on what the hoster lets its administrator revoke).
+# Whether the hoster's preset reaches the tables of the schema rw at all has not been observed.
 # rw_owner keeps no such rule: it owns what the migrations create, its level stays "all", and a plan
 # that shows it otherwise is a signal to read.
 resource "scaleway_rdb_privilege" "rw_owner" {

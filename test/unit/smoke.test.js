@@ -99,6 +99,9 @@ test("the host to refuse is never the origin's own", async () => {
   seen.length = 0;
   assert.match(await foreignHostFault(origin, { host: "localhost", ca }), /is the origin's own/);
   assert.match(await foreignHostFault(origin, { host: `LOCALHOST:${hoster.address().port}`, ca }), /is the origin's own/);
+  // the root's trailing dot names the same host (review of 2026-11-10, C31, run S4: it was sent and passed)
+  assert.match(await foreignHostFault(origin, { host: "localhost.", ca }), /is the origin's own/);
+  assert.match(await foreignHostFault(origin, { host: `Localhost.:${hoster.address().port}`, ca }), /is the origin's own/);
   assert.deepEqual(seen, [], "nothing was asked");
 });
 
@@ -186,6 +189,80 @@ test("the guard: a workflow that runs the smoke gives it vars.RW_SERVICE_HOST an
     const late = planted(deploy.replace(step, "").replace("      - name: the operator's gateway serves the new digest", `${step}      - name: the operator's gateway serves the new digest`));
     assert.equal(late.status, 1);
     assert.match(late.stderr, /deploy\.yml: the refusal of an empty vars\.RW_SERVICE_HOST comes after a step that holds a secret/);
+    // C30 (review of 2026-11-10): the rule read the text's order, not the jobs', and did not see a refusal
+    // that cannot fire. Each planted workflow below passed the guard at 22a983b.
+    const refused = (text, said, what) => { const r = planted(text); assert.equal(r.status, 1, `${what}: ${r.stdout}`); assert.match(r.stderr, said, what); };
+    // N9: the refusal moved into a job nothing needs, placed before `deploy` in the text
+    const orphan = `  refuse:\n    runs-on: ubuntu-24.04\n    steps:\n${step}\n`;
+    assert.ok(deploy.includes("  deploy:\n    needs: verdict\n"));
+    refused(deploy.replace(step, "").replace("  deploy:\n    needs: verdict\n", `${orphan}  deploy:\n    needs: verdict\n`),
+      /deploy\.yml: the job deploy holds a secret and neither refuses an empty vars\.RW_SERVICE_HOST first nor needs a job that does/, "N9");
+    // the same job, needed by deploy: the refusal runs first, by the jobs' order
+    const neededJob = planted(deploy.replace(step, "").replace("  deploy:\n    needs: verdict\n", `${orphan}  deploy:\n    needs: [verdict, refuse]\n`));
+    assert.equal(neededJob.status, 0, neededJob.stderr);
+    // N4 and N5: a refusal that may be skipped, or that does not stop the job
+    const head = step.split("\n")[0];
+    refused(deploy.replace(step, step.replace(head, `${head}\n        if: \${{ false }}`)), /deploy\.yml: the step that refuses an empty vars\.RW_SERVICE_HOST carries if: or continue-on-error:/, "N4");
+    refused(deploy.replace(step, step.replace(head, `${head}\n        continue-on-error: true`)), /deploy\.yml: the step that refuses an empty vars\.RW_SERVICE_HOST carries if: or continue-on-error:/, "N5");
+    refused(deploy.replace("  deploy:\n    needs: verdict\n", "  deploy:\n    needs: verdict\n    continue-on-error: true\n"), /deploy\.yml: the job deploy holds a secret and neither refuses/, "the refusing job itself may fail and go on");
+    // N8: the smoke through an npm script, without the host; by the script's name, then by what it runs
+    const smokeStep = `${env} "$SERVICE" "\${{ github.sha }}"`;
+    assert.ok(deploy.includes(smokeStep));
+    refused(deploy.replace(smokeStep, '        run: npm run smoke -- "$SERVICE"'), /deploy\.yml: a step runs scripts\/smoke\.mjs without RW_SERVICE_HOST/, "N8");
+    const pkg = join(tmp, "package.json");
+    writeFileSync(pkg, JSON.stringify({ scripts: { "verify:served": "node scripts/smoke.mjs", "verify:image": "node scripts/image-smoke.mjs" } }));
+    const viaScript = (name) => { writeFileSync(join(wf, "deploy.yml"), deploy.replace(smokeStep, `        run: npm run ${name} -- "$SERVICE"`)); return check({ RW_WORKFLOWS_DIR: wf, RW_SCRIPTS_DIR: sh, RW_PACKAGE_JSON: pkg }); };
+    assert.match(viaScript("verify:served").stderr, /deploy\.yml: a step runs scripts\/smoke\.mjs without RW_SERVICE_HOST/, "N8, the script named otherwise");
+    assert.equal(viaScript("verify:image").status, 0, "the image's own smoke, over plain http, is another script");
+    // N10: a secret in the workflow-level env, which every step holds, the refusal included
+    assert.ok(deploy.includes("env:\n  REGION: fr-par\n"));
+    refused(deploy.replace("env:\n  REGION: fr-par\n", 'env:\n  SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}"\n  REGION: fr-par\n'), /deploy\.yml: a secret in the workflow-level env/, "N10");
+    refused(deploy.replace("    environment: production\n    permissions: { contents: read }\n    outputs:", '    environment: production\n    env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}" }\n    permissions: { contents: read }\n    outputs:'),
+      /deploy\.yml: the job deploy holds a secret in its own env, before its refusal/, "a secret in the refusing job's env");
+    // C28 and C31: the two comparisons of deploy.yml cannot be dropped, weakened or moved
+    const grants = "          scripts/operator-call.sh roles '{\"grants\":true}'\n";
+    assert.ok(deploy.includes(`          scripts/operator-call.sh migrate\n${grants}`));
+    refused(deploy.replace(grants, ""), /deploy\.yml: no step compares the grants of rw_app and rw_maint with the snapshot right after migrate/, "the grants' comparison removed");
+    refused(deploy.replace(`          scripts/operator-call.sh migrate\n${grants}`, `${grants}          scripts/operator-call.sh migrate\n`), /deploy\.yml: no step compares the grants/, "the grants compared before migrate");
+    const hostCheck = '          scripts/service-host-check.sh "$RW_SERVICE_HOST" <<<"$svc"\n';
+    assert.ok(deploy.includes(hostCheck));
+    refused(deploy.replace(hostCheck, ""), /deploy\.yml: no step compares vars\.RW_SERVICE_HOST with the hostname the hoster reports/, "the host's comparison removed");
+    const firstOutput = '          echo "previous=$(jq -r .registry_image <<<"$svc")" >> "$GITHUB_OUTPUT"\n';
+    assert.ok(deploy.includes(firstOutput));
+    refused(deploy.replace(hostCheck, "").replace(firstOutput, `${firstOutput}${hostCheck}`), /deploy\.yml: the comparison of vars\.RW_SERVICE_HOST with the hoster's hostname comes after the step wrote its outputs/, "the host compared after the rollback targets were written");
     assert.equal(planted(deploy).status, 0, "the workflow as committed passes in the copy");
   } finally { rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// C31 (review of 2026-11-10): vars.RW_SERVICE_HOST was compared with the origin only. deploy.yml now gives
+// the container the hoster returned to scripts/service-host-check.sh, run here for real (bash, jq).
+test("service-host-check.sh: only the hostname the hoster reports for the service's container passes; anything unreadable is a refusal", () => {
+  const HOST = "rwdefault0a1b2c3d-rw.functions.hoster.test";
+  const run = (want, stdin) => spawnSync("bash", [join(ROOT, "scripts/service-host-check.sh"), ...(want === null ? [] : [want])], { input: stdin, encoding: "utf8", env: { PATH: process.env.PATH } });
+  const container = (o) => JSON.stringify({ id: "11111111-2222-4333-8444-555555555555", registry_image: "x", ...o });
+  for (const tool of ["bash", "jq"]) assert.equal(spawnSync(tool, ["--version"]).status, 0, `${tool} is required by scripts/service-host-check.sh and by this test`);
+  for (const [want, reported] of [[HOST, HOST], [HOST.toUpperCase(), HOST], [`${HOST}.`, HOST], [HOST, `${HOST}.`], [HOST, HOST.replace("rwdefault", "RWdefault")]]) {
+    const r = run(want, container({ domain_name: reported }));
+    assert.equal(r.status, 0, `${want} against ${reported}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, /^service-host: RW_SERVICE_HOST is the service's container's own hostname at the hoster\n$/);
+  }
+  const refusals = [
+    ["another routed host", "other0a1b2c3d-rw.functions.hoster.test", container({ domain_name: HOST }), /is not the hostname the hoster reports/],
+    ["a prefix of it", HOST.slice(0, -1), container({ domain_name: HOST }), /is not the hostname the hoster reports/],
+    ["two trailing dots", `${HOST}..`, container({ domain_name: HOST }), /is not the hostname the hoster reports/],
+    ["a scheme", `https://${HOST}`, container({ domain_name: HOST }), /is not the hostname the hoster reports/],
+    ["the variable empty", "", container({ domain_name: HOST }), /RW_SERVICE_HOST is empty/],
+    ["no argument", null, container({ domain_name: HOST }), /RW_SERVICE_HOST is empty/],
+    ["an answer without the field", HOST, container({}), /names no hostname \(domain_name\)/],
+    ["the field empty", HOST, container({ domain_name: "" }), /names no hostname/],
+    ["the field not a string", HOST, container({ domain_name: [HOST] }), /names no hostname/],
+    ["the field null", HOST, container({ domain_name: null }), /names no hostname/],
+    ["an answer that is not JSON", HOST, "<html>502</html>", /names no hostname/],
+    ["an empty answer", HOST, "", /names no hostname/],
+  ];
+  for (const [what, want, stdin, said] of refusals) {
+    const r = run(want, stdin);
+    assert.equal(r.status, 1, `${what}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stdout, said, what);
+  }
 });
