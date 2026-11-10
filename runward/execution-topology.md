@@ -50,11 +50,14 @@ One level per class of data, whatever port it crosses; a port that several class
 
 | Rule | Status | Evidence |
 |---|---|---|
-| topology-port-placement-mapped | proposed:applied | file:infra/scaleway/main.tf#scaleway_container_trigger; file:src/main.js#compose; file:src/operator-gateway.js#createGateway; adr:0013; adr:0016 — every port of the architecture note, the operator's entry included, has its row in the map above |
-| topology-sovereignty-by-data-class | proposed:applied | adr:0013; adr:0009; adr:0016; file:runward/execution-topology.md#"Protection level by data class" |
-| topology-trace-export-decision | proposed:applied | file:src/adapters/system/log.js#jsonLog; test:reports/junit.xml::a log line's free fields are bounded and scrubbed: no credential, address, path, identifier or second line in detail and error; adr:0013 (no third-party telemetry: the lines stay in the hoster's Cockpit, fr-par, 7 days; the log never carries a body, a token, a name or a path; the operator's gestures answer a status and a code) |
-| topology-usage-registry-present | proposed:applied | file:runward/execution-topology.md#"Usage registry" — seven deployments: the service, the send workflow, the witness reader, the operator's gateway, the deploy chain, the author's workstation for the operator's gestures, and the private operator repository, planned and empty (reviewed 2026-11-10) |
+| topology-port-placement-mapped | applied | file:infra/scaleway/main.tf#scaleway_container_trigger; file:src/main.js#compose; file:src/operator-gateway.js#createGateway; adr:0013; adr:0016 — every port of the architecture note, the operator's entry included, has its row in the map above |
+| topology-sovereignty-by-data-class | applied | adr:0013; adr:0009; adr:0016; file:runward/execution-topology.md#"Protection level by data class" |
+| topology-trace-export-decision | applied | file:src/adapters/system/log.js#jsonLog; test:reports/junit.xml::a log line's free fields are bounded and scrubbed: no credential, address, path, identifier or second line in detail and error; adr:0013 (no third-party telemetry: the lines stay in the hoster's Cockpit, fr-par, 7 days; the log never carries a body, a token, a name or a path; the operator's gestures answer a status and a code) |
+| topology-usage-registry-present | applied | file:runward/execution-topology.md#"Usage registry" — seven deployments: the service, the send workflow, the witness reader, the operator's gateway, the deploy chain, the author's workstation for the operator's gestures, and the private operator repository, planned and empty (reviewed 2026-11-10) |
 
 ## Cross-references
 
 `runward/architecture.md`, `infra/`, ADR-0008, ADR-0013, ADR-0016; `governance/threat-model.md` (T30 to T33).
+
+### Ratification
+- 2026-11-10 · rows: topology-port-placement-mapped, topology-sovereignty-by-data-class, topology-trace-export-decision, topology-usage-registry-present · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: topology-port-placement-mapped@9390eb23559e372e, topology-sovereignty-by-data-class@618439f3176fee80, topology-trace-export-decision@974d89e7e0cdd32e, topology-usage-registry-present@e2dc16c1c07eb7cf · mode: agent

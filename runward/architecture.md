@@ -44,12 +44,12 @@ Port contracts: `runward/contracts/index-assembler.md` (IndexAssembler) and `run
 
 | Rule | Status | Evidence |
 |---|---|---|
-| contracts-governance | proposed:applied | test:reports/junit.xml::the API contract served is the committed one: same routes, same refusals, same digest; test:reports/junit.xml::planted control: one more route, or a route opened to the public, changes the digest; file:runward/contracts/api-contract.json; adr:0003 |
-| hexa-adapter-pattern | proposed:applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; file:reports/eslint.json#src/adapters/objects/objects.js |
-| hexa-architecture | proposed:applied | file:reports/eslint.json#src/domain/workload.js; file:reports/eslint.json#src/main.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; adr:0001 |
-| hexa-typescript-native | proposed:n/a | the service calls no model: there is no model SDK or chain framework to keep light; JavaScript ES modules without a framework (adr:0001) |
-| process-adr-and-journal | proposed:applied | adr:0002; adr:0016; file:runward/JOURNAL.md; file:runward/adr/ADR-0018-runward-fleet-re-pinned-at-main-5a9cdf0-where-pr-496-merged-refines-adr-0002.md#Refines — an accepted record is never edited: ADR-0002, rewritten in place on 2026-11-10, is restored as accepted, and the re-pin is a new record that refines it (ADR-0018, proposed) |
-| security-mcp-server-pinning | proposed:n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
+| contracts-governance | applied | test:reports/junit.xml::the API contract served is the committed one: same routes, same refusals, same digest; test:reports/junit.xml::planted control: one more route, or a route opened to the public, changes the digest; file:runward/contracts/api-contract.json; adr:0003 |
+| hexa-adapter-pattern | applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; file:reports/eslint.json#src/adapters/objects/objects.js |
+| hexa-architecture | applied | file:reports/eslint.json#src/domain/workload.js; file:reports/eslint.json#src/main.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; adr:0001 |
+| hexa-typescript-native | n/a | the service calls no model: there is no model SDK or chain framework to keep light; JavaScript ES modules without a framework (adr:0001) |
+| process-adr-and-journal | applied | adr:0002; adr:0016; file:runward/JOURNAL.md; file:runward/adr/ADR-0018-runward-fleet-re-pinned-at-main-5a9cdf0-where-pr-496-merged-refines-adr-0002.md#Refines — an accepted record is never edited: ADR-0002, rewritten in place on 2026-11-10, is restored as accepted, and the re-pin is a new record that refines it (ADR-0018, proposed) |
+| security-mcp-server-pinning | n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
 
 ## 5. What stays open
 
@@ -85,3 +85,6 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | The in-memory store as reference adapter | ADR-0015 |
 | The operator's gateway to the private database | ADR-0016 |
 | No load test before the preview; the bounds are tested | ADR-0017 |
+
+### Ratification
+- 2026-11-10 · rows: contracts-governance, hexa-adapter-pattern, hexa-architecture, hexa-typescript-native, process-adr-and-journal, security-mcp-server-pinning · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: contracts-governance@3819c661f85728cf, hexa-adapter-pattern@b76e0f90c6a7b5b3, hexa-architecture@611e39392ab4085f, hexa-typescript-native@c33865aec11fb9dd, process-adr-and-journal@6d0c6b5a4da8f56b, security-mcp-server-pinning@2e6d819f82f30657 · mode: agent
