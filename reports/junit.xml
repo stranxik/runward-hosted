@@ -150,6 +150,9 @@
 	<testcase name="C14: once 10,000 keys of forty prefixes filled the table, a key of another prefix is bounded by its prefix, and a valid call from an unseen address is still served" classname="test"/>
 	<testcase name="C14: past the table of prefixes a call is served untracked, said once a window and counted for 130 minutes" classname="test"/>
 	<testcase name="C14, through the routes: untracked calls are a log line without an address, a count in /api/health, and an alert of the probe" classname="test"/>
+	<testcase name="C34: the count of untracked calls ends with the process, so the probe's verdict asks for the issue at once (exit 3), and for that reason only" classname="test"/>
+	<testcase name="C34: probe.yml opens the issue on the first failed probe when the verdict says at once, and keeps two failures in a row for the rest" classname="test"/>
+	<testcase name="C35: the refusals on a prefix's allowance are counted, and what they cost inside one /48 is 496 requests a minute" classname="test"/>
 	<testcase name="the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error" classname="test"/>
 	<testcase name="the hexagon's allowed arrows pass, and the tree as it is lints clean" classname="test"/>
 	<testcase name="the security scan refuses a read of the environment outside the composition roots, and eval" classname="test"/>
@@ -166,6 +169,9 @@
 	<testcase name="C13: no `execute` passes inside a body, and a trigger's clause passes only in a create trigger statement (the four reproductions that dropped a table)" classname="test"/>
 	<testcase name="C13: a table moved to another schema is refused, a rename in effect" classname="test"/>
 	<testcase name="migrations: the one file exempt from the dynamic-statement rule is exempt by the sha256 of its bytes, and only as committed" classname="test"/>
+	<testcase name="C30: a comment glued to a keyword inside a body, a comment read as a trigger's event, and a U&amp;&amp;quot;...&amp;quot; column are refused (the ten reproductions)" classname="test"/>
+	<testcase name="C30: the spellings next to the ten: a comment the other reading hides, a nested body, a name glued to its keyword, uescape, code handed to `do` or `as` inside a body" classname="test"/>
+	<testcase name="C30: ordinary expansion still passes: a body with comments, a trigger on truncate, on conflict in a body, a U&amp;&amp;quot;...&amp;quot; name that changes no type" classname="test"/>
 	<testcase name="the object store is ok only when an object written to the bucket reads back: a bucket that does not exist, though it accepts writes, is down" classname="test"/>
 	<testcase name="the health check costs the store at most one write and one read per period, whatever the traffic; a failure is checked again sooner" classname="test"/>
 	<testcase name="/api/health answers 503 with objectStore down when the bucket does not read back" classname="test"/>
@@ -235,6 +241,8 @@
 	<testcase name="C19: with a `since` that precedes an earlier restore's note, an anchored loss is still read from the restored head, not from that note" classname="test"/>
 	<testcase name="C17: `restore-replay --anchor` is refused restore-not-replayed when a restore is waiting for its replay; nothing is anchored, and the replay still says what was lost" classname="test"/>
 	<testcase name="C17: `restore-replay --anchor` is refused whole when a tenant's security log cannot be read: it cannot tell whether a restore is waiting" classname="test"/>
+	<testcase name="C36: the replay of an earlier restore, back with the backup, does not count for the restore that is waiting: `--anchor` is still refused" classname="test"/>
+	<testcase name="C37: `--anchor` reads each log from its newest object back to its latest anchor, and a journal that cannot be read is retried, then noted" classname="test"/>
 	<testcase name="operator-call.sh: the hoster's key and the operator's token reach the gateway, and neither is an argument of curl" classname="test"/>
 	<testcase name="container-deploy.sh: the hoster's key reaches the API on every call, and is never an argument of curl" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a secret in a curl header or user option, in a workflow or a script, and passes the tree" classname="test"/>
@@ -279,9 +287,10 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 278 -->
+	<testcase name="C31 to C33: a call's `with:` and send.yml's `runner` input are read from closed lists; a workflow of another repository, a foreign line break and a continued label are refused" classname="test"/>
+	<!-- tests 287 -->
 	<!-- suites 0 -->
-	<!-- pass 278 -->
+	<!-- pass 287 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
