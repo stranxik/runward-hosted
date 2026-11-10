@@ -5,7 +5,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { contracting, planMigrations, statements } from "../../scripts/migrate.mjs";
+import { contracting, planMigrations, statements, DYNAMIC_READ } from "../../scripts/migrate.mjs";
 
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const DIR = new URL("../../db/migrations/", import.meta.url).pathname;
@@ -145,4 +145,55 @@ test("migrations: a gap, a duplicate number, a bad name, a reordering, a vanishe
   assert.throws(() => planMigrations([f("0001_a.sql", `${ok} `)], new Map([["0001_a.sql", sha(ok)]])), /changed after it was applied/);
   assert.throws(() => planMigrations([f("0001_a.sql"), f("0002_b.sql", "alter table if exists rw.x drop column y;")], new Map([["0001_a.sql", sha(ok)]])), /contracts the schema/);
   assert.deepEqual(planMigrations([f("0001_a.sql"), f("0002_b.sql")], new Map([["0001_a.sql", sha(ok)]])).map((x) => x.name), ["0002_b.sql"]);
+});
+
+// Code review of 2026-11-10, C13: the guard reads the text, so a contraction assembled at run time inside
+// a dollar-quoted body passed (`contracting() = null` on the first statement below). And, found while
+// closing it: a body given as a quoted string was emptied by the lexer like any literal, so a plain drop
+// inside `do '...'` passed too. What builds or hides a statement is refused as such.
+test("migrations: a statement built at run time, and code given as a quoted string, are refused; a trigger's execute function and the execute privilege are not", () => {
+  for (const sql of [
+    "do $$ begin execute 'dr' || 'op table public.victim'; end $$;",
+    "do $do$ declare q text := 'dr' || 'op table rw.ledger'; begin EXECUTE q; end $do$;",
+    "create function rw.f(q text) returns void language plpgsql as $$ begin execute q; end $$;",
+    "create function rw.f(q text) returns setof int language plpgsql as $$ begin return query execute q; end $$;",
+    "do $$ begin execute format('%s table %I', 'dr' || 'op', 'ledger'); end $$;",
+    // a variable named like the trigger's keyword does not pass for a trigger's clause
+    "do $$ declare function text := 'dr' || 'op table rw.ledger'; begin execute function; end $$;",
+    "do $$ begin execute function || ' table rw.ledger'; end $$;",
+    "prepare p as select 1; execute p;",
+  ]) assert.match(contracting(sql) ?? "", /^dynamic statement: /, `not refused: ${sql}`);
+  for (const sql of [
+    "do 'begin drop table public.victim; end';",
+    "do language plpgsql 'begin drop table public.victim; end';",
+    "do E'begin drop table public.victim; end';",
+    "do/* */'begin drop table public.victim; end' language plpgsql;",
+    "create function rw.f() returns void language plpgsql as 'begin drop table rw.ledger; end';",
+    "create function rw.f() returns void as\n  'begin truncate rw.ledger; end' language plpgsql;",
+    "create function rw.f() returns void language plpgsql as e'begin drop table rw.ledger; end';",
+    "create function rw.f() returns void language plpgsql as U&'begin drop table rw.ledger; end';",
+  ]) assert.match(contracting(sql) ?? "", /^code in a quoted string: /, `not refused: ${sql}`);
+  // the control: what the server does not build at run time still passes
+  for (const sql of [
+    "create trigger t before insert on rw.x for each row execute function rw.f();",
+    "create trigger t before insert on rw.x for each row execute procedure rw.f();",
+    "grant execute on function rw.f() to rw_app;",
+    "revoke execute on all functions in schema rw from public;",
+    "do $$ begin perform 1; end $$;",
+    "do language plpgsql $x$ begin perform 1; end $x$;",
+    "create function rw.f() returns int language sql as $$ select 1 $$;",
+    "create view rw.v as select '' as empty, cast('' as text) as t;",
+    "create table rw.execute_log (id int); comment on table rw.execute_log is 'execute';",
+  ]) assert.equal(contracting(sql), null, sql);
+  assert.throws(() => planMigrations([{ name: "0001_a.sql", text: "do $$ begin execute 'dr' || 'op table public.victim'; end $$;" }], new Map()), /0001_a\.sql could contract the schema \(dynamic statement: /);
+});
+
+test("migrations: the one file exempt from the dynamic-statement rule is exempt by the sha256 of its bytes, and only as committed", () => {
+  const floor = REAL.find((f) => f.name === "0001_floor.sql");
+  assert.match(floor.text, /\bexecute format\(/, "the control: 0001 builds statements at run time");
+  assert.equal(contracting(floor.text), null, "as committed, it was read and is exempt");
+  assert.match(contracting(`${floor.text}\n`), /^dynamic statement: /, "one byte more, and it is judged like any other file");
+  // the exemption covers the dynamic statements only, never a contraction
+  assert.deepEqual([...DYNAMIC_READ], [sha(floor.text)], "one exemption, and it is a committed file's");
+  for (const f of REAL.filter((x) => x !== floor)) assert.equal(DYNAMIC_READ.has(sha(f.text)), false);
 });

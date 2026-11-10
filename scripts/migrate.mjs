@@ -3,6 +3,15 @@
 // Usage: MIGRATE_URL=postgres://rw_owner@host/db node scripts/migrate.mjs
 // Expansion only (PADR-0015 point 3): a migration that drops, renames, truncates or changes a type is
 // refused before it runs, and the files form a closed sequence (no gap, no reordering).
+// The guard is lexical: it reads the text of a migration, never what that text does once it runs. So what
+// builds a statement at run time is refused as such, since a contraction assembled there is not in the
+// text (code review of 2026-11-10, C13: `do $$ begin execute 'dr' || 'op table x'; end $$` passed):
+// `execute` of a text, anywhere, and a body of code given as a quoted string (`do '...'`, `as '...'`),
+// which this lexer empties like any literal; a body is dollar-quoted, where it is read whole. One file is
+// exempt, by the sha256 of its bytes (DYNAMIC_READ below): it was read by a person, and it was applied
+// before this rule. What stays out of the guard's reach, said here and not claimed anywhere: a call to a
+// function that already exists and runs a text it is given or builds (an earlier migration's, an
+// extension's), and db/grants.sql, which is not a migration and is not read by this guard.
 // Each file runs once, in a transaction, and is recorded with its sha256 in rw_meta.migration; a file
 // whose content changed after it ran stops everything.
 // TLS as the service: verify-full by default, the instance's authority in DATABASE_CA or DATABASE_CA_FILE.
@@ -111,16 +120,34 @@ const CONTRACTING = [
   ["type change", /\balter\s+(?:column\s+)?(?:"[^"]+"|[A-Za-z_\u0080-￿][\w$\u0080-￿]*)\s+(?:set\s+data\s+)?type\b/i],
 ];
 
+// What runs a statement the text does not hold, anywhere in a statement (inside a function body too).
+//   `execute` of a text: every `execute` but a trigger's `execute function f(` / `execute procedure f(`
+//   and the privilege (`grant execute on`); a prepared statement run by its name is refused with it.
+//   Code as a quoted string: a DO whose code is not dollar-quoted, and `as '...'`, a function's body (the
+//   lexer has emptied the literal: what is refused is the place it stands in).
+const DYNAMIC = [
+  ["dynamic statement", /\bexecute\b(?!\s+(?:function|procedure)\s+[^\s(;]+\s*\()(?!\s+on\b)/i],
+  ["code in a quoted string", /^do\b(?!(?:\s+language\s+[A-Za-z_]\w*)?\s*\$\$)|\bas\s*(?:[A-Za-z]&?)?''/i],
+];
+// The files whose dynamic statements were read by a person, by the sha256 of their bytes: a byte changed,
+// and the file is judged like any other.
+//   0001_floor.sql: one DO loop that enables and forces row level security and creates the tenant policy
+//   on thirteen tables named in a fixed array, through format('%I').
+export const DYNAMIC_READ = new Set(["161187ed2712ef61c92e6b492e714d282864ba5d860ff7dca2725f174d9acc51"]);
+
 /** The first contracting statement of a migration, as "<kind>: <statement>", or null. A file that names
  * a setting that changes how the server reads a string (standard_conforming_strings, backslash_quote) is
  * refused whole, wherever the name sits, a literal included: the lexer above could no longer read the file
- * as the server does, so it does not try. So is a file with a spelling the lexer calls ambiguous. */
+ * as the server does, so it does not try. So is a file with a spelling the lexer calls ambiguous. A
+ * statement that runs a text built at run time, or code given as a quoted string, is refused as one that
+ * could contract (DYNAMIC), in every file but those of DYNAMIC_READ. */
 export function contracting(sql) {
   const reading = /standard_conforming_strings|backslash_quote/i.exec(sql);
   if (reading) return `string reading: the file names ${reading[0].toLowerCase()}`;
   const read = lex(sql);
   if (read.ambiguous) return `spelling: ${read.ambiguous}`;
-  for (const st of read.statements) for (const [kind, re] of CONTRACTING) if (re.test(st)) return `${kind}: ${st.replace(/\s+/g, " ").slice(0, 120)}`;
+  const kinds = DYNAMIC_READ.has(sha(sql)) ? CONTRACTING : [...CONTRACTING, ...DYNAMIC];
+  for (const st of read.statements) for (const [kind, re] of kinds) if (re.test(st)) return `${kind}: ${st.replace(/\s+/g, " ").slice(0, 120)}`;
   return null;
 }
 
@@ -142,7 +169,7 @@ export function planMigrations(files, applied) {
     if (applied.has(f.name)) { if (applied.get(f.name) !== sha(f.text)) throw new Error(`${f.name} changed after it was applied`); return; }
     if (k + 1 < lastApplied) throw new Error(`${f.name} is new and numbered before an applied migration: a reordering, refused`);
     const why = contracting(f.text);
-    if (why) throw new Error(`${f.name} contracts the schema (${why}): refused, migrations are expansion only`);
+    if (why) throw new Error(`${f.name} ${/^(dynamic statement|code in a quoted string)/.test(why) ? "could contract" : "contracts"} the schema (${why}): refused, migrations are expansion only`);
     plan.push(f);
   });
   return plan;
