@@ -37,6 +37,17 @@
 // more prefixes than it holds in one window) is a call served untracked, and that state is no longer
 // silent: the limiter says so once a window (onUntracked, a log line without an address), and keeps the
 // counts of the last OVERFLOW_HISTORY_MINUTES for /api/health, where the hourly probe alerts on them.
+// Those counts are this process's memory and end with it (code review of 2026-11-10 on 144211b, C34): the
+// service scales to zero and a deploy replaces the instance, and the next instance starts at zero. So the
+// probe opens its issue on the first probe that reads an untracked call, without waiting for a second
+// one; a flood whose instance is gone before the next hourly probe is seen by the log line only.
+// What the prefix level costs (same review, C35): the keys of one prefix that have no place share one
+// allowance, so they can be refused for each other's calls (scope `prefix`). Inside one IPv6 /48: 256
+// calls, each from its own /64, take the prefix's share of the table, then the allowance is spent by 240
+// failed cookies (480 machine calls) from further /64s: 496 requests a minute (736), and every /64 of that
+// /48 that is not one of the 256 is refused until the window turns. Inside one IPv4 /24, which never
+// holds more than its share, only once the whole table is full: 10,000 calls from elsewhere, then 240 or
+// 480. Those refusals are counted (`refusedByPrefix`), next to the two other counts.
 export const RATE_LIMITS = {
   writes: { perAddress: 30, global: 600 },
   reads: { perAddress: 120, global: 3000 },
@@ -94,8 +105,10 @@ export function prefixKey(key) {
   return "(not an address)";
 }
 
-/** How long a limiter remembers that calls were counted with their prefix or served untracked: two probes
- *  an hour apart both see it, and two failed probes in a row open the issue (probe.yml). */
+/** How long a limiter remembers that calls were counted with their prefix, refused for it or served
+ *  untracked: longer than two hourly probes, as long as the process lives. The count ends with the
+ *  instance (scale to zero, a deploy), so the probe does not wait for a second reading of it (probe.yml,
+ *  scripts/probe-verdict.mjs: an untracked call opens the issue on the first probe that reads it). */
 export const OVERFLOW_HISTORY_MINUTES = 130;
 
 export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
@@ -134,23 +147,23 @@ export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresse
  *  dead cookies sent at once all passed before any was counted).
  *  The table holds `maxAddresses` keys a window, at most `maxPerPrefix` of them from one prefix. A key
  *  without a place is counted with its prefix (`counted: "prefix"`, `tracked: false`), in the same way, on
- *  `perPrefix`; past `maxPrefixes` prefixes it is served and not counted (`counted: "none"`), its failure
+ *  `perPrefix`, and a refusal on that allowance is counted (`refusedByPrefix`); past `maxPrefixes` prefixes it is served and not counted (`counted: "none"`), its failure
  *  counting for the instance only, and `onUntracked` is called once a window (C11, C14, above). */
 export function failureLimiter({ perAddress, global, everyCall = false, windowMs = 60_000, maxAddresses = 10_000, maxPerPrefix = 256, perPrefix = perAddress * 8, maxPrefixes = maxAddresses, onUntracked = () => {}, now = () => Date.now() }) {
   let window = -1, calls = new Map(), fails = new Map(), totalFails = 0;
   let held = new Map(); // prefix → how many keys of the table are its own
   let pCalls = new Map(), pFails = new Map(); // prefix → the calls and the failures of its keys without a place
-  let aggregated = 0, untracked = 0;
+  let aggregated = 0, untracked = 0, refusedByPrefix = 0;
   const flying = new Map(); let totalFlying = 0; // entered, not settled yet: they outlive a window
-  const history = new Map(); // window → [counted with a prefix, untracked], the last OVERFLOW_HISTORY_MINUTES
+  const history = new Map(); // window → [counted with a prefix, untracked, refused for a prefix], the last OVERFLOW_HISTORY_MINUTES
   const keep = Math.ceil((OVERFLOW_HISTORY_MINUTES * 60_000) / windowMs);
   const roll = () => {
     const t = now();
     const w = Math.floor(t / windowMs);
     if (w !== window) {
-      if (aggregated || untracked) history.set(window, [aggregated, untracked]);
+      if (aggregated || untracked || refusedByPrefix) history.set(window, [aggregated, untracked, refusedByPrefix]);
       for (const k of history.keys()) if (k <= w - keep) history.delete(k);
-      window = w; calls = new Map(); fails = new Map(); held = new Map(); pCalls = new Map(); pFails = new Map(); totalFails = 0; aggregated = 0; untracked = 0;
+      window = w; calls = new Map(); fails = new Map(); held = new Map(); pCalls = new Map(); pFails = new Map(); totalFails = 0; aggregated = 0; untracked = 0; refusedByPrefix = 0;
     }
     return Math.max(1, Math.ceil(((w + 1) * windowMs - t) / 1000));
   };
@@ -177,7 +190,7 @@ export function failureLimiter({ perAddress, global, everyCall = false, windowMs
       if (where === "prefix") {
         // the keys of this prefix that have no place, as one caller with a larger allowance. The instance's
         // budget is not asked here: nothing says this key failed, only that keys of its prefix did
-        if ((everyCall ? pCalls.get(prefix) ?? 0 : (pFails.get(prefix) ?? 0) + (flying.get(prefix) ?? 0)) >= perPrefix) return { ok: false, scope: "prefix", retryAfter };
+        if ((everyCall ? pCalls.get(prefix) ?? 0 : (pFails.get(prefix) ?? 0) + (flying.get(prefix) ?? 0)) >= perPrefix) { refusedByPrefix++; return { ok: false, scope: "prefix", retryAfter }; }
         aggregated++;
         pCalls.set(prefix, (pCalls.get(prefix) ?? 0) + 1);
         takeOff(prefix);
@@ -226,12 +239,13 @@ export function failureLimiter({ perAddress, global, everyCall = false, windowMs
     untracked: () => { roll(); return untracked; },
     /** The calls of this window counted with their prefix. */
     aggregated: () => { roll(); return aggregated; },
-    /** The same two counts over the last OVERFLOW_HISTORY_MINUTES, this window included: what /api/health says. */
+    /** The same two counts, and the calls refused on a prefix's allowance, over the last
+     *  OVERFLOW_HISTORY_MINUTES, this window included: what /api/health says. Lost with the process. */
     overflow() {
       roll();
-      let a = aggregated, u = untracked;
-      for (const [x, y] of history.values()) { a += x; u += y; }
-      return { countedByPrefix: a, untracked: u };
+      let a = aggregated, u = untracked, r = refusedByPrefix;
+      for (const [x, y, z] of history.values()) { a += x; u += y; r += z; }
+      return { countedByPrefix: a, untracked: u, refusedByPrefix: r };
     },
   };
 }
