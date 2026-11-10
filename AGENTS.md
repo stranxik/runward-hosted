@@ -11,13 +11,13 @@ A hosted fleet view of runward: each declared repository's CI runs runward and s
 | What | Command | Where it runs |
 |---|---|---|
 | The gate | `npx -y runward@0.46.0 check --strict` | anywhere; CI runs the same version, integrity checked (`ci.yml`, job `runward`) |
-| Unit, application, HTTP | `npm test` | CI; on the author's Mac, on the NAS: `~/.claude/skills/nas/scripts/verifier-sur-nas.sh . 'npm test'` |
-| PostgreSQL (isolation, catalog, planted controls, snapshot) | `PG_ADMIN_URL=postgres://postgres@<throwaway server>/postgres npm run test:pg` | CI; the NAS with a throwaway PostgreSQL 17 at the digest of `ci.yml` |
+| Unit, application, HTTP | `npm test` | CI; from the author's Mac, on the NAS: `scripts/on-nas.sh 'npm test'`; on a Linux host with Docker: `scripts/reference-env.sh 'npm test'` (it brings jq, which the image `node:22` does not carry and three test files need) |
+| PostgreSQL (isolation, catalog, planted controls, snapshot) | `npm run test:pg`, with `PG_ADMIN_URL` naming a superuser of a throwaway server | CI; from the author's Mac, on the NAS: `scripts/on-nas.sh 'npm run test:pg'`; on a Linux host with Docker: `scripts/reference-env.sh 'npm run test:pg'`. Both start a throwaway PostgreSQL 17 at the digest of `ci.yml`, set `PG_ADMIN_URL` for the command, and remove the server and its volume when it ends |
 | The hexagon, the security scan, the format | `npm run lint` | anywhere (the pre-commit hook runs it on what is staged) |
-| The committed reports describe the tree | `npm run test:reports` (check), `npm run test:reports:write` (rewrite, in the reference environment only: Linux, Node.js 22, PostgreSQL, jq) | CI checks; the NAS rewrites |
+| The committed reports describe the tree | `npm run test:reports` (check), `npm run test:reports:write` (rewrite, in the reference environment only: Linux, Node.js 22, PostgreSQL, jq) | CI checks; the NAS rewrites and brings them back: `scripts/on-nas.sh -r 'npm run test:reports:write'`, then `scripts/on-nas.sh 'npm run test:reports'` |
 | The workflows' guards | `node scripts/check-workflows.mjs` | anywhere |
 | runward-fleet is the code at its pinned commit | `node scripts/verify-runward-fleet.mjs` | CI (online), `--offline` anywhere |
-| The behavioural proof of the floor | `npm test && PG_ADMIN_URL=… npm run test:pg` (runward/floor.md §2) | as above |
+| The behavioural proof of the floor | `npm test && npm run test:pg` (runward/floor.md §2) | as above: `scripts/on-nas.sh 'npm test && npm run test:pg'` |
 
 A claim of "done" names the command that proved it and its result. A change that touches what a manifest row cites regenerates `reports/` in the reference environment, and `npm run test:reports` says so.
 
@@ -34,7 +34,7 @@ These are rules, not advice. Each was learned in this mission.
 7. **Never weaken a guard to make it pass**: no test deleted or loosened, no rule switched off, no `--no-verify` without saying so in the commit, no report edited by hand. A red that is not understood is opened and explained, never called "expected".
 8. **Never show `machine-established`** or raise a CI-declared value: the hosted index says what a CI declared, as declared (PADR-0011 point 2).
 9. **Never name a third party** (client, employer, candidate) in this public repository; the public text is in English.
-10. **Never run a full suite on the author's Mac** (8 GB): suites run in CI or on the NAS (`verifier-sur-nas.sh`); the Mac keeps targeted tests.
+10. **Never run a full suite on the author's Mac** (8 GB): suites run in CI or on the NAS (`scripts/on-nas.sh`, which sends the tree with the author's `~/.claude/skills/nas/scripts/verifier-sur-nas.sh` and runs the command in `scripts/reference-env.sh`); the Mac keeps targeted tests.
 
 ## What an agent may do alone
 
