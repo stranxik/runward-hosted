@@ -1,13 +1,20 @@
 // The shell's static files, built once at start: names that carry their digest, cached immutable; the
-// page itself no-store. views.js and the fonts are read from the pinned runward-fleet package, never
-// copied into this repository (PADR-0011 point 4); the fleet stylesheet is the <style> of its
-// template.html with its :root token blocks removed, so web/tokens.css is the only source of values.
+// page itself no-store. views.js is read from the pinned runward-fleet package, never copied into this
+// repository (PADR-0011 point 4); the fleet stylesheet is the <style> of its template.html with its :root
+// token blocks removed, so web/couche-runward-app.css (the app's layer, ADR "app layer") is the only source
+// of values. The app's fonts (Geist, Geist Mono, SIL OFL 1.1) are served from web/fonts/, by a closed list:
+// nothing else in that folder, and nothing outside it, is ever served.
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const WEB = new URL("../../web/", import.meta.url).pathname;
+/** The files of web/fonts/ the app serves, and only these (closed list: no folder is listed at run time). */
+export const FONTS = Object.freeze([
+  ["Geist-Regular.woff2", "font/woff2"], ["Geist-Medium.woff2", "font/woff2"], ["Geist-SemiBold.woff2", "font/woff2"],
+  ["GeistMono-Regular.woff2", "font/woff2"], ["GeistMono-Medium.woff2", "font/woff2"], ["OFL.txt", "text/plain; charset=utf-8"],
+]);
 
 /** The selector without the comments before it (a loop, not a nested quantifier: no backtracking). */
 function leadingCommentsOff(selector) {
@@ -53,16 +60,13 @@ export function buildAssets({ pin, commit }) {
   const views = readFileSync(join(pin.dir, "ui", "views.js"));
   const viewsPath = add(`views-${pin.version}`, "js", views, "text/javascript; charset=utf-8");
   const famille = add("famille", "css", readFileSync(join(WEB, "famille.css")), "text/css; charset=utf-8");
-  const tokens = add("tokens", "css", readFileSync(join(WEB, "tokens.css")), "text/css; charset=utf-8");
+  const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), "text/css; charset=utf-8");
   const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), "text/css; charset=utf-8");
   const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), "text/css; charset=utf-8");
   const appJs = add("app", "js", Buffer.from(readFileSync(join(WEB, "app.js"), "utf8").replace('"__VIEWS__"', JSON.stringify(viewsPath))), "text/javascript; charset=utf-8");
-  for (const f of readdirSync(join(pin.dir, "ui", "fonts"))) {
-    if (!f.endsWith(".woff2")) continue;
-    files.set(`/assets/fonts/${f}`, { bytes: readFileSync(join(pin.dir, "ui", "fonts", f)), type: "font/woff2", immutable: false });
-  }
+  for (const [f, type] of FONTS) files.set(`/assets/fonts/${f}`, { bytes: readFileSync(join(WEB, "fonts", f)), type, immutable: false });
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
-    .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__TOKENS_CSS__", tokens).replace("__FLEET_CSS__", fleet)
+    .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
     .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
   return { files, page, viewsSha256: sha(views), viewsPath };
 }
