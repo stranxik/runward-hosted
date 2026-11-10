@@ -3,6 +3,7 @@
 //   tenants/<uuid>/sha256/<digest>        the bytes received, addressed by content, written once
 //   tenants/<uuid>/security/<ulid>.json   the security log, written before the database commits
 //   tenants/<uuid>/archives/<uuid>.tar    a prepared export, kept 24 hours
+//   health/witness                        one fixed object without data, written then read back by ping()
 // Two adapters: a generic S3 client (aws4fetch: SigV4 on fetch, no hoster SDK) and an in-memory one.
 import { AwsClient } from "aws4fetch";
 import { createHash } from "node:crypto";
@@ -55,8 +56,21 @@ export function memoryObjects() {
   }), { _map: m });
 }
 
+// ping(): the store is "ok" when an object written to the bucket is read back, byte for byte (finding of
+// the restore drill, 2026-11-10: the ping was a HEAD on the bucket, taken for ok below 500; on a store whose
+// bucket did not exist, writes were answered 200 and nothing could be read back, so the security log
+// "written before the commit" was accepted and lost while /api/health said objectStore ok). One fixed key,
+// a constant body without data; /api/health is public, so the verdict is kept PING_TTL_MS (a failure
+// PING_RETRY_MS) and one check runs at a time: at most two calls to the store per period, whatever the traffic.
+export const WITNESS_KEY = "health/witness";
+const WITNESS = Buffer.from("runward-hosted: the health witness, written then read back; it holds no data\n");
+export const PING_TTL_MS = 30_000;
+export const PING_RETRY_MS = 5_000;
+
 /** S3 path-style on any compatible endpoint. `fetch` is the egress-bound fetch (system/egress.js). */
-export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch }) {
+export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch, now = () => Date.now() }) {
+  let last = null; // { ok, at }
+  let checking = null;
   const aws = new AwsClient({ accessKeyId, secretAccessKey, service: "s3", region });
   const base = `${endpoint.replace(/\/$/, "")}/${bucket}`;
   const call = async (method, key, body, type, query = "") => {
@@ -80,6 +94,15 @@ export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessK
       } while (token);
       return out;
     },
-    async ping() { const r = await call("HEAD", ""); return r.status < 500; },
+    async ping() {
+      if (last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
+      checking ??= (async () => {
+        const put = await call("PUT", WITNESS_KEY, WITNESS, "text/plain");
+        if (!put.ok) return false;
+        const got = await call("GET", WITNESS_KEY);
+        return got.ok && Buffer.from(await got.arrayBuffer()).equals(WITNESS);
+      })().then((ok) => ok, () => false).then((ok) => { last = { ok, at: now() }; checking = null; return ok; });
+      return checking;
+    },
   });
 }
