@@ -285,8 +285,48 @@ test("the daily jobs' last outcome is read by the service (rw_app) through rw.da
   assert.equal((await h.store.tx(null, (tx) => tx.dailyJobs())).retention.ok, true, "the latest run is the one read");
 });
 
+// Review finding of 2026-11-10 (code review C1, blocking): rw.daily_jobs() named the type jsonb without its
+// schema under `search_path = rw, pg_catalog`. PostgreSQL searches pg_temp first for a type unless the path
+// names it, so a session as rw_app planted pg_temp.jsonb, a domain whose check calls its own function, and
+// that function ran as rw_resolve, which reads tenants, sessions, passkeys and links across tenants.
+test("a security definer function resolves no name in the caller's temporary schema: a planted pg_temp.jsonb never runs as rw_resolve", async () => {
+  // the worst case: the service's role may create temporary objects in this database
+  await adminDb.unsafe(`grant temporary on database ${DB} to rw_app`);
+  // the last note of each job carries no report, so the function's body evaluates its typed constant (the
+  // `else '[]'::jsonb` of its case): the place where a shadowed type would run
+  const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+  try { for (const job of ["retention", "verify-chains"]) await maint.tx(null, (tx) => tx.operatorNote(job, { failed: 0 })); } finally { await maint.close(); }
+  const notices = [];
+  const sql = postgres(urlAs("rw_app"), { max: 1, onnotice: (n) => notices.push(n.message) });
+  try {
+    await sql.unsafe("create function pg_temp.spy(pg_catalog.jsonb) returns boolean language plpgsql as $$ begin raise notice 'spy runs as % (session %)', current_user, session_user; return true; end $$");
+    await sql.unsafe("create domain pg_temp.jsonb as pg_catalog.jsonb check (pg_temp.spy(value))");
+    // control: the plant is live. In the caller's own statement the temporary type is found first, and its
+    // check runs, as the caller
+    await sql.unsafe("select '{}'::jsonb as j");
+    assert.deepEqual(notices, ["spy runs as rw_app (session rw_app)"], "the planted type shadows jsonb for its own session");
+    notices.length = 0;
+    const [{ j }] = await sql.unsafe("select rw.daily_jobs() as j");
+    assert.deepEqual([j.retention.ok, j["verify-chains"].ok], [true, true], "the function answered, from the two notes without a report");
+    assert.deepEqual(notices, [], "the planted type ran inside rw.daily_jobs()");
+    // the other functions the service may call, with the plant in place
+    await sql.unsafe("select rw.maintenance(), rw.name_taken('github', 'nobody/none'), rw.count_refused('planted', 1)");
+    await sql.unsafe("select * from rw.resolve_session('none'), rw.resolve_link('none'), rw.resolve_credential('none')");
+    assert.deepEqual(notices, []);
+  } finally {
+    await sql.end();
+    await adminDb.unsafe(`revoke temporary on database ${DB} from rw_app`);
+  }
+});
+
+test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
+  const rows = await adminDb`select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`;
+  assert.equal(rows.length, 15);
+  for (const r of rows) assert.deepEqual(r.proconfig, ["search_path=pg_catalog, rw, pg_temp"], r.proname);
+});
+
 // The schema the migrations build, committed (checklist-day-zero-project: schema drift): tables, columns,
-// constraints, indexes, policies, functions, triggers and grants of rw and rw_meta. A migration that
+// constraints, indexes, policies, functions (with their settings), triggers and grants of rw and rw_meta. A migration that
 // changes any of them changes db/schema.snapshot.txt in the same diff (UPDATE_SCHEMA_SNAPSHOT=1 writes it).
 const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
 test("the schema the migrations build is the committed snapshot (no drift)", async () => {
@@ -296,7 +336,7 @@ test("the schema the migrations build is the committed snapshot (no drift)", asy
     union all select format('constraint %s %s %s', conrelid::regclass, conname, pg_get_constraintdef(c.oid)) from pg_constraint c join pg_namespace n on n.oid = c.connamespace where n.nspname in ('rw', 'rw_meta')
     union all select format('index %s', indexdef) from pg_indexes where schemaname in ('rw', 'rw_meta')
     union all select format('policy %s.%s %s %s to=%s using=%s check=%s', schemaname, tablename, policyname, cmd, roles, coalesce(qual, ''), coalesce(with_check, '')) from pg_policies where schemaname in ('rw', 'rw_meta')
-    union all select format('function %s.%s(%s) definer=%s owner=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
+    union all select format('function %s.%s(%s) definer=%s owner=%s config=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner), coalesce(array_to_string(p.proconfig, '; '), '')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
     union all select format('trigger %s', pg_get_triggerdef(t.oid)) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where not t.tgisinternal and n.nspname in ('rw', 'rw_meta')
     union all select format('grant %s.%s %s %s', table_schema, table_name, grantee, privilege_type) from information_schema.role_table_grants where table_schema in ('rw', 'rw_meta') and grantee like 'rw\\_%'
   `)).map((r) => r.l).sort();
