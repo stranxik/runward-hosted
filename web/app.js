@@ -844,7 +844,10 @@ function shell(signedIn, route, sub, v) {
 
 // ------------------------------------------------------------- router
 const parts = () => { const h = location.hash.replace(/^#\/?/, ""); const p = h.split("/"); return { h, route: p[0], sub: p.slice(1).join("/") }; };
-const PROTECTED = new Set(["arrivee", "declarer", "envois", "acces", "vue", ...ROUTES]);
+// The views of runward-fleet this app shows. The decision reading (`decision`, runward's ADR-0125) came with
+// the pin of ADR-0021 and is not a screen of this app yet: its route answers like any unknown one.
+const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");
+const PROTECTED = new Set(["arrivee", "declarer", "envois", "acces", "vue", ...FLEET_ROUTES]);
 function resolve() {
   const { route, sub } = parts();
   if (route === "entree") return viewEntree(sub);
@@ -856,7 +859,7 @@ function resolve() {
   if (route === "acces") return viewAcces(sub);
   if (route === "panne") return viewPanne(sub);
   if (route === "legal") return sub ? null : viewLegal();
-  if (route === "" || route === "vue" || ROUTES.includes(route)) return viewFleet(route, sub ? decodeURIComponent(sub) : "");
+  if (route === "" || route === "vue" || FLEET_ROUTES.includes(route)) return viewFleet(route, sub ? decodeURIComponent(sub) : "");
   return null;
 }
 
@@ -872,11 +875,11 @@ async function show() {
     location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : route === "" ? "#/entree" : "#/entree/connexion");
     return;
   }
-  if (S.session && !S.session.arrivalDone && (route === "" || route === "vue" || ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
+  if (S.session && !S.session.arrivalDone && (route === "" || route === "vue" || FLEET_ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
   // the sidebar lists the missions from the index once this page has read it; a screen opened cold
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
-  const key = route === "" || route === "vue" || ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
+  const key = route === "" || route === "vue" || FLEET_ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
   if (S.session && key && loadedFor !== key) {
     loadedFor = key;
     paint(loadingView(""));

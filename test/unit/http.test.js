@@ -152,6 +152,25 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
 
+test("the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app", async () => {
+  const views = await import("runward-fleet/views");
+  const build = await import("runward-fleet");
+  for (const name of ["decide", "renderDecision", "renderView", "renderNav", "ROUTES"]) assert.ok(name in views, `runward-fleet/views exports ${name}`);
+  assert.equal(typeof views.decide, "function");
+  assert.equal(typeof views.renderDecision, "function");
+  assert.ok(build.VERDICT_STATES.includes("not-available"));
+  assert.ok(Array.isArray(build.ENDORSEMENTS));
+  assert.ok(views.ROUTES.includes("decision"), "the pinned views route the decision reading");
+  const html = await (await call("GET", "/")).text();
+  const js = await (await call("GET", /src="(\/assets\/app\.[0-9a-f]{16}\.js)"/.exec(html)[1])).text();
+  assert.ok(js.includes('const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");'), "the shell leaves the decision route out");
+  assert.equal(/(?<!FLEET_)ROUTES\.includes\(|\.\.\.ROUTES\b/.test(js), false, "the router reads FLEET_ROUTES, never the views' own list");
+  const lock = JSON.parse((await import("node:fs")).readFileSync(new URL("../../vendor/runward-fleet.lock.json", import.meta.url), "utf8"));
+  const v = await (await call("GET", "/api/version")).json();
+  assert.equal(v.views.runwardFleetCommit, lock.commit);
+  assert.equal(v.views.runwardFleetArchiveSha256, lock.tarballSha256);
+});
+
 test("the served views say « niveau non atteint » and \"level not met\" for level-not-met, from the pinned package (author's rule)", async () => {
   const html = await (await call("GET", "/")).text();
   const views = /href="(\/assets\/views-0\.46\.0\.[0-9a-f]{16}\.js)"/.exec(html)[1];
