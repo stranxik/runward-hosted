@@ -51,6 +51,7 @@ The whole sequence of a deploy's first gestures, rehearsed on a throwaway stack 
 | Symptom | Error type | Diagnosis | Action |
 |---|---|---|---|
 | the send job says "not sent: service unavailable" | transient | `/api/health`, the probe issue | re-run the job; the upload is idempotent per run, attempt, mission and kind |
+| the send job says "not sent: this runner has no Node.js 22" | configuration | the caller passed a `runner` of its own, and that machine has no `node` on its PATH, or one older than 22 (the send job installs none) | the caller installs Node.js 22 or later on the runner, then re-runs the job |
 | an upload "not accepted" with a code | validation | the code, message and action in the job summary and in Envois | follow the action named |
 | an index not published (quarantine) | business | the journal entry names the field | fix the export or wait for the runward-fleet update |
 | the probe opened "service unavailable" | unavailable | the hoster console, the container logs by request id | redeploy the last green digest (below) |

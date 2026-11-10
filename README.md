@@ -36,7 +36,11 @@ labels for a repository whose CI runs on its own runner:
           runner: '["self-hosted","nas"]'
 
 - The runner needs bash 4, curl, openssl, base64 and sha256sum (GNU coreutils), and must reach
-  registry.npmjs.org and the service. Node.js 22 is installed by the workflow.
+  registry.npmjs.org and the service.
+- It also needs Node.js 22 or later on its PATH. The check job installs its own; the send job installs
+  nothing, because it runs no third-party step next to the upload's token, and uses the runner's. On a
+  runner without one, the send job reports "not sent: this runner has no Node.js 22" in the run's summary:
+  the run keeps runward's verdict, and fails only with `send-strict`.
 - On a runner GitHub does not host, the machine is yours: whatever an earlier job of the repository left
   on it runs in the send job too. Use it only for a private repository, on a runner whose jobs start clean.
 - The upload's token then says `runner_environment: self-hosted`. The service refuses that claim today
