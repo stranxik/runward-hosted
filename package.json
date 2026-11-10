@@ -11,6 +11,7 @@
   "main": "src/main.js",
   "scripts": {
     "start": "node src/main.js",
+    "prepare": "git rev-parse --is-inside-work-tree >/dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "test": "node --test --test-reporter=spec \"test/unit/**/*.test.js\"",
     "test:pg": "node --test --test-concurrency=1 --test-reporter=spec \"test/pg/**/*.test.js\"",
     "lint": "eslint src && eslint -c eslint.security.config.js src && node scripts/format-check.mjs",

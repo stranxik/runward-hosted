@@ -1,0 +1,4 @@
+#!/bin/sh
+# The repository's pre-commit hook, wired by `npm install` (package.json `prepare`: git config core.hooksPath .githooks).
+# What it runs, and why the runward gate is not among it: scripts/pre-commit.mjs.
+exec node scripts/pre-commit.mjs
