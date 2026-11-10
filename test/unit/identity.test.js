@@ -195,3 +195,30 @@ test("a passkey added is announced in the OTHER sessions, never in the one that 
   assert.equal((await h.app.identity.sessionView(await h.app.identity.sessionFrom(f.token))).addedElsewhere.length, 0);
   assert.equal((await h.app.identity.sessionView(await h.app.identity.sessionFrom(other.token))).addedElsewhere.length, 1);
 });
+
+// Finding of the restore drill, 2026-11-10: maintenance refused the writes of a session only. A sign-in is
+// a public route, so between a restore and its replay a passkey removed after the backup signed in again.
+test("under maintenance no one signs in and no link is opened; the open sessions keep reading; it all comes back when maintenance ends", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const t = tok();
+  await h.app.operator.openBootstrap({ hash: sha(Buffer.from(t)) });
+  // before: the ceremony's two steps work
+  const o = await h.app.identity.signInOptions();
+  assert.ok((await h.app.identity.signIn({ challengeId: o.challengeId, response: { id: "cred-2", challenge: o.options.challenge } })).token);
+  const pending = await h.app.identity.signInOptions();
+  const pendingLink = await h.app.identity.linkOptions({ token: t });
+
+  await h.app.operator.maintenance({ on: true, reason: "restore" });
+  assert.equal(await refusal(h.app.identity.signInOptions()), "maintenance");
+  // a ceremony begun before the maintenance does not end during it, and its challenge is not spent
+  assert.equal(await refusal(h.app.identity.signIn({ challengeId: pending.challengeId, response: { id: "cred-2", challenge: pending.options.challenge } })), "maintenance");
+  assert.equal(await refusal(h.app.identity.linkOptions({ token: t })), "maintenance");
+  assert.equal(await refusal(h.app.identity.redeemLink({ token: t, challengeId: pendingLink.challengeId, response: { id: "new-1", challenge: pendingLink.options.challenge } })), "maintenance");
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-live", "a link can still be looked at; nothing is consumed");
+  assert.ok(await h.app.identity.sessionFrom(f.token), "an open session keeps reading");
+
+  await h.app.operator.maintenance({ on: false });
+  assert.ok((await h.app.identity.signIn({ challengeId: pending.challengeId, response: { id: "cred-2", challenge: pending.options.challenge } })).token, "the ceremony ends once maintenance is over");
+  assert.ok((await h.app.identity.redeemLink({ token: t, challengeId: pendingLink.challengeId, response: { id: "new-1", challenge: pendingLink.options.challenge } })).token);
+});

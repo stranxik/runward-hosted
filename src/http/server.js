@@ -247,8 +247,11 @@ export function createHttp({ app, config, assets, version, health, log, clock })
         return fail("signed-out");
       }
 
-      // ---- maintenance: writes answer 503 (the upload use case says so itself)
-      if (write && r.w === "session") {
+      // ---- maintenance: every write from a browser answers 503, the public ones included: a sign-in and a
+      //      link's opening write a session (finding of the restore drill, 2026-11-10: only the writes of a
+      //      session were refused, so a passkey removed after the backup signed in again before the
+      //      replay). The upload use case says so itself, and so do the sign-in and link use cases.
+      if (write && (r.w === "session" || r.w === "public")) {
         const m = await health.maintenance();
         if (m) return fail("maintenance", { retryAfter: 600 });
       }

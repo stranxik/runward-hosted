@@ -40,8 +40,17 @@ export function identityCases(ctx) {
     return { token, session: s };
   }
 
+  /** Under announced maintenance no one signs in and no link is opened (finding of the restore drill,
+   *  2026-11-10: maintenance refused the writes of a session only, so between a restore and its replay a
+   *  passkey removed after the backup signed in again, and a link used after it could be used again). The
+   *  sessions already open keep reading. */
+  async function refuseInMaintenance() {
+    if (await store.tx(null, (tx) => tx.maintenance())) throw new Refusal("maintenance", { retryAfter: 600 });
+  }
+
   // ---------------------------------------------------------------- sign-in
   async function signInOptions() {
+    await refuseInMaintenance();
     const options = await authn.authenticationOptions({});
     const id = store.newId();
     await store.tx(null, (tx) => tx.putChallenge({ id, challenge: options.challenge, purpose: "signin" }));
@@ -56,6 +65,7 @@ export function identityCases(ctx) {
   }
 
   async function signIn({ challengeId, response, ua, requestId }) {
+    await refuseInMaintenance();
     const c = await take(challengeId, "signin");
     const credId = typeof response?.id === "string" ? response.id : null;
     const r = credId ? await store.tx(null, (tx) => tx.resolveCredential(credId)) : null;
@@ -136,6 +146,7 @@ export function identityCases(ctx) {
   }
 
   async function linkOptions({ token, session }) {
+    await refuseInMaintenance();
     const link = await resolveLink(token);
     const state = linkState(link, now(), { signedInTenant: session?.tenantId ?? null });
     if (state !== "link-live") throw new Refusal(state);
@@ -147,6 +158,7 @@ export function identityCases(ctx) {
   }
 
   async function redeemLink({ token, challengeId, response, ua, requestId }) {
+    await refuseInMaintenance();
     const c = await take(challengeId, "link");
     const link0 = await resolveLink(token);
     if (!link0 || link0.id !== c.linkId) throw new Refusal("link-invalid");
