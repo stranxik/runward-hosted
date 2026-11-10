@@ -61,8 +61,8 @@ jobs:
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}" }
         run: |
           api="https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers"
-          svc=$(curl -sSf --max-time 30 -H "X-Auth-Token: $SCW_SECRET_KEY" "$api/$CONTAINER")
-          op=$(curl -sSf --max-time 30 -H "X-Auth-Token: $SCW_SECRET_KEY" "$api/$OPERATOR")
+          svc=$(curl -sSf --max-time 30 -H @<(printf 'X-Auth-Token: %s\n' "$SCW_SECRET_KEY") "$api/$CONTAINER")
+          op=$(curl -sSf --max-time 30 -H @<(printf 'X-Auth-Token: %s\n' "$SCW_SECRET_KEY") "$api/$OPERATOR")
           echo "previous=$(jq -r .registry_image <<<"$svc")" >> "$GITHUB_OUTPUT"
           echo "previous_commit=$(jq -r '.environment_variables.RW_COMMIT // ""' <<<"$svc")" >> "$GITHUB_OUTPUT"
           echo "previous_operator=$(jq -r .registry_image <<<"$op")" >> "$GITHUB_OUTPUT"
