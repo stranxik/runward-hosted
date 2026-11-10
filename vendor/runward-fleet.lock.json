@@ -4,15 +4,15 @@
   "repository": "https://github.com/stranxik/runward",
   "path": "packages/runward-fleet",
   "ref": "main",
-  "commit": "5a9cdf08a76977f9b671662f562e98d332ccc95e",
-  "tarball": "vendor/runward-fleet-0.46.0-5a9cdf08.tgz",
-  "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
-  "integrity": "sha512-TLCWar27gKb/POKM2wmxIvr3p61EQh6xe32IzS7h7YvKhk59bhpJLLvgXffgLcLyyKfzyhAiohPYWqXC4AH1aQ==",
+  "commit": "d05b59742bf10f6bfe803a0caaa9a289cd272ab0",
+  "tarball": "vendor/runward-fleet-0.46.0-d05b5974.tgz",
+  "tarballSha256": "fff950650d3ac666cc6b43cc731936fbda1f99fc76d9e02c44977691a4aa2337",
+  "integrity": "sha512-1N2Y/BIW3wgFsjX//N2k4W9f+6m9T+oetM5tSSXnS1sw0ulSxZ1eziGEb4mG09LdOkk1nRCxejyHJdFgX0SsQw==",
   "how": "npm pack of packages/runward-fleet at commit; scripts/verify-runward-fleet.mjs proves each file of the tarball is the file at that commit",
   "previous": {
-    "commit": "2ab48025a1afba94dfdf9f6d2e052bf2f00b5753",
-    "ref": "integration/2026-11-06-c",
+    "commit": "5a9cdf08a76977f9b671662f562e98d332ccc95e",
+    "ref": "main",
     "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
-    "why": "PR #496 of runward merged into main at 5a9cdf08; packages/runward-fleet is identical at both commits (git diff empty), and npm pack at 5a9cdf08 gives the same tarball, sha256 and integrity unchanged: every index built by the previous pin replays to the same bytes"
+    "why": "PR #499 of runward merged into main at d05b5974: the decision reading (decide and renderDecision in runward-fleet/views, ADR-0125 of runward). src/build.js, src/rules.js, src/site.js, ui/template.html, ui/views.js and the README changed; the version stays 0.46.0, so the version no longer names one archive. Measured (ADR-0021): from the same fleet.json and exports the two pins give different index bytes, every field of the old index unchanged and fields added; an index the previous pin built replays to its bytes only with the archive 99e941a5, packed at 5a9cdf08, and scripts/replay-export.mjs names it other-archive instead of rebuilding it"
   }
 }
