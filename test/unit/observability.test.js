@@ -37,6 +37,35 @@ test("a log line keeps only the fields of its schema: no body, no token, no secr
   assert.ok(lines[0].endsWith("\n") && lines.length === 1, "one JSON line per event");
 });
 
+// Review finding of 2026-11-10: `detail` and `error` were written as given, whatever a caller put in them.
+test("a log line's free fields are bounded and scrubbed: no credential, address, path, identifier or second line in detail and error", () => {
+  const lines = [];
+  const log = jsonLog({ write: (s) => lines.push(s), clock: { now: () => 0 } });
+  const planted = {
+    url: ["postgres://rw_app:", "pw-9", "@10.0.0.4/db"].join(""), // assembled at run time: no literal credential in the tree
+    bearer: ["Bearer eyJhbGciOiJSUzI1NiJ9", "eyJzdWIiOiJ4In0", "c2ln"].join("."),
+    email: ["someone", "example.org"].join("@"),
+    path: "/home/someone/secret/file.txt",
+    id: "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70",
+  };
+  const text = `failed for ${planted.id} at ${planted.path} by ${planted.email}\nwith ${planted.bearer} on ${planted.url}`;
+  log.error("x", { error: `${text} ${"z".repeat(5000)}`, detail: { reason: text, token: "tok-1", nested: { deeper: { deepest: { gone: 1 } } }, list: Array.from({ length: 50 }, (_, i) => i), password: "p" } });
+  assert.equal(lines.length, 1);
+  const line = JSON.parse(lines[0]);
+  for (const v of [...Object.values(planted), "pw-9", "tok-1"]) assert.equal(lines[0].includes(v), false, `${v} reached the log`);
+  assert.ok(line.error.length <= 300 && !line.error.includes("\n"), "error: one line, bounded");
+  assert.match(line.error, /\[id\] at \[path\] by \[email\] with Bearer \[redacted\] on postgres:\/\/\[redacted\]/);
+  assert.deepEqual(Object.keys(line.detail).sort(), ["list", "nested", "reason"], "a key that names a credential is dropped");
+  assert.equal(line.detail.list.length, 20);
+  assert.equal(line.detail.nested.deeper.deepest, "[nested]");
+  log.info("y", { detail: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`k${i}`, "v".repeat(300)])) });
+  assert.equal(JSON.parse(lines[1]).detail, "[detail too large: cut]");
+  // the service's own lines still read as they did
+  const start = { origin: "https://app.runward.dev", egress: ["token.actions.githubusercontent.com"], sendWorkflow: 1 };
+  log.info("start", { detail: start });
+  assert.deepEqual(JSON.parse(lines[2]).detail, start);
+});
+
 test("the error rate: answers at 500 or more over five minutes, shown by /api/health", async () => {
   const clock = manualClock(Date.parse("2026-11-08T12:00:00Z"));
   const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
