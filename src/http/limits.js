@@ -54,9 +54,13 @@ export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresse
 /** A budget of failures. `enter(address)` refuses an address that spent its own budget, or, once the
  *  instance's budget of failures is spent, an address that has failed in this window; otherwise it returns
  *  `settle(failed)`, to call once with what the call turned out to be. `everyCall`: the address's budget
- *  counts each of its calls (the machine routes); without it, its failures only (the session cookies). */
+ *  counts each of its calls (the machine routes); without it, its failures only (the session cookies),
+ *  and the calls that entered and are not settled yet count as failures until they are (review finding of
+ *  2026-11-10: the budget was looked at, the session awaited, the failure counted after, so a burst of
+ *  dead cookies sent at once all passed before any was counted). */
 export function failureLimiter({ perAddress, global, everyCall = false, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
   let window = -1, calls = new Map(), fails = new Map(), totalFails = 0;
+  const flying = new Map(); let totalFlying = 0; // entered, not settled yet: they outlive a window
   const roll = () => {
     const t = now();
     const w = Math.floor(t / windowMs);
@@ -69,12 +73,16 @@ export function failureLimiter({ perAddress, global, everyCall = false, windowMs
       const retryAfter = roll();
       const key = keyOf(address);
       const failed = fails.get(key) ?? 0;
-      if ((everyCall ? calls.get(key) ?? 0 : failed) >= perAddress) return { ok: false, scope: "address", retryAfter };
-      if (totalFails >= global && failed > 0) return { ok: false, scope: "global", retryAfter };
+      if ((everyCall ? calls.get(key) ?? 0 : failed + (flying.get(key) ?? 0)) >= perAddress) return { ok: false, scope: "address", retryAfter };
+      if (totalFails + totalFlying >= global && failed > 0) return { ok: false, scope: "global", retryAfter };
       calls.set(key, (calls.get(key) ?? 0) + 1);
+      if (!everyCall) { flying.set(key, (flying.get(key) ?? 0) + 1); totalFlying++; }
+      let settled = false;
       return {
         ok: true,
         settle(didFail) {
+          if (settled) return; settled = true;
+          if (!everyCall) { const n = flying.get(key) - 1; if (n > 0) flying.set(key, n); else flying.delete(key); totalFlying--; }
           if (!didFail) return;
           roll();
           const k = keyOf(address);

@@ -236,8 +236,10 @@ export function createHttp({ app, config, assets, version, health, log, clock })
         const hash = createHash("sha256").update(token).digest("hex");
         const entry = validCookies.has(hash) ? null : limiters.signedOut.enter(address);
         if (entry && refused(entry)) return;
-        session = await app.identity.sessionFrom(token);
-        if (session) validCookies.add(hash);
+        // the entry holds a place in its address's budget while the session is read, and gives it back
+        // unless the cookie resolved to nothing
+        try { session = await app.identity.sessionFrom(token); } catch (e) { entry?.settle(false); throw e; }
+        if (session) { entry?.settle(false); validCookies.add(hash); }
         else { validCookies.drop(hash); const e = entry ?? limiters.signedOut.enter(address); if (e.ok) e.settle(true); }
       }
       if (r.w === "session" && !session) {

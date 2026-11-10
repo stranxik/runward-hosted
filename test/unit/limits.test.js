@@ -208,3 +208,25 @@ test("a session closed a moment ago is refused at once, though its cookie was se
   assert.equal((await as(f.token)).status, 401, "the session is read on every request");
   assert.equal((await as(f.token)).status, 429, "and the dead cookie is counted like any other");
 });
+
+// Review finding of 2026-11-10 (code review C7): the signedOut budget was looked at, the session awaited,
+// and the failure counted after, so dead cookies sent at once all passed before any was counted (66 reads
+// of the database for a budget of 30). Each lookup now holds a place in its address's budget while it runs.
+test("a burst of dead cookies sent at once from one address reads the database no more than its budget allows", async () => {
+  const s = await serve({ trustProxy: true, signedOut: { perAddress: 30, global: 600 } });
+  const f = await founder({ app: s.c.app, store: s.c.store }, { passkeys: 1 });
+  // a store that takes 20 ms to answer, as a database does
+  const tx = s.c.store.tx;
+  s.c.store.tx = async (...a) => { await new Promise((r) => setTimeout(r, 20)); return tx(...a); };
+  const as = (ip, cookie) => s.get("/api/v0/session", { "x-forwarded-for": ip, cookie: `__Host-rw_session=${cookie}` });
+  const before = s.work.tx;
+  const statuses = await Promise.all(Array.from({ length: 200 }, (_, i) => as("198.51.100.1", `dead-${i}`).then((r) => r.status)));
+  const count = (x) => statuses.filter((v) => v === x).length;
+  assert.deepEqual({ 401: count(401), 429: count(429) }, { 401: 30, 429: 170 });
+  assert.equal(s.work.tx - before, 30, "one read of the database for each of the 30, none for the others");
+  // control: a place held by a lookup is given back when the session is valid, so a signed-in burst is not refused
+  const valid = await Promise.all(Array.from({ length: 60 }, () => as("198.51.100.2", f.token).then((r) => r.status)));
+  assert.equal(valid.filter((v) => v === 200).length >= 30, true, "the first lookups of a valid cookie all resolve");
+  const again = await Promise.all(Array.from({ length: 60 }, () => as("198.51.100.2", f.token).then((r) => r.status)));
+  assert.deepEqual([...new Set(again)], [200], "and once it has resolved, the cookie is not asked at all");
+});
