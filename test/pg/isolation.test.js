@@ -142,7 +142,7 @@ test("catalog: forced RLS on every tenant table, rw_app without bypass, no USING
   const views = await adminDb`select viewname from pg_views where schemaname = 'rw'`;
   assert.deepEqual([...views], [], "no view (a view without security_invoker would bypass RLS)");
   const defs = (await adminDb`select p.proname, pg_get_userbyid(p.proowner) as owner from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`).map((r) => `${r.proname}:${r.owner}`);
-  assert.deepEqual(defs, ["count_refused", "maintenance", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "tenant_ids", "use_jti"].map((f) => `${f}:rw_resolve`));
+  assert.deepEqual(defs, ["count_refused", "daily_jobs", "maintenance", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "tenant_ids", "use_jti"].map((f) => `${f}:rw_resolve`));
   const owners = await adminDb`select distinct tableowner from pg_tables where schemaname = 'rw'`;
   assert.deepEqual(owners.map((r) => r.tableowner), ["rw_owner"], "the service owns nothing");
 });
@@ -248,6 +248,41 @@ test("two instances on one PostgreSQL share every state: a session, a challenge,
     assert.equal(first.status, 201);
     assert.equal((await send(h2, {}, { mission: "mission-a", auth: `Bearer ${t}` })).refusal, "token-replayed", "a token used on one instance is refused on the other");
   } finally { await other.close(); }
+});
+
+// ADR-0017: every statement has a deadline, each bound with a test (review finding of 2026-11-10: this one
+// had none). Read on a connection the store itself opened; the control, a bare connection to the same
+// server, reads the server's default, so the check tells the two apart.
+test("every statement has a deadline: the store's connections read statement_timeout 10s, a bare connection the server's 0 (control)", async () => {
+  const [{ statement_timeout: store }] = await h.store.sql`show statement_timeout`;
+  assert.equal(store, "10s");
+  const bare = postgres(urlAs("rw_app"), { max: 1, onnotice: () => {} });
+  try {
+    const [{ statement_timeout: plain }] = await bare`show statement_timeout`;
+    assert.equal(plain, "0", "without the store's setting, a statement has no deadline");
+  } finally { await bare.end(); }
+});
+
+// Review finding of 2026-11-10: a failed daily job was noted in the operator journal, which rw_app cannot
+// read and nothing else read. rw.daily_jobs() gives the service the last outcome of each job, nothing more.
+test("the daily jobs' last outcome is read by the service (rw_app) through rw.daily_jobs(), without a tenant, an error or a head", async () => {
+  const note = async (what, detail) => {
+    const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+    try { await maint.tx(null, (tx) => tx.operatorNote(what, detail)); } finally { await maint.close(); }
+  };
+  await note("retention", { report: [{ tenant: A.tenant, failed: true, error: `planted failure in ${B.tenant}`, attempts: 3 }], failed: 1 });
+  await note("verify-chains", { report: [{ tenant: A.tenant, ok: false, head: "f".repeat(64), at: 3, why: "hash" }], failed: 0 });
+  const j = await h.store.tx(null, (tx) => tx.dailyJobs());
+  assert.deepEqual(Object.keys(j).sort(), ["retention", "verify-chains"]);
+  assert.deepEqual([j.retention.ok, j["verify-chains"].ok], [false, false], "a failed tenant and a broken chain are both a run that did not complete");
+  assert.ok(Number.isFinite(j.retention.at));
+  const sql = postgres(urlAs("rw_app"), { max: 1, onnotice: () => {} });
+  try {
+    const [{ t }] = await sql`select rw.daily_jobs()::text as t`;
+    for (const s of [A.tenant, B.tenant, "f".repeat(64), "planted"]) assert.equal(t.includes(s), false, `${s} reached the service`);
+  } finally { await sql.end(); }
+  await note("retention", { report: [{ tenant: A.tenant, erased: 0, archives: 0, expired: 0, attempts: 1 }], failed: 0 });
+  assert.equal((await h.store.tx(null, (tx) => tx.dailyJobs())).retention.ok, true, "the latest run is the one read");
 });
 
 // The schema the migrations build, committed (checklist-day-zero-project: schema drift): tables, columns,

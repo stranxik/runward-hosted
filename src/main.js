@@ -21,6 +21,7 @@ import { readFileSync } from "node:fs";
 
 const LOCK = new URL("../vendor/runward-fleet.lock.json", import.meta.url).pathname;
 const SHA40 = /^[0-9a-f]{40}$/;
+const DAILY_JOBS = ["retention", "verify-chains"];
 
 /** An origin: http or https, a lower-case host, an optional port, nothing else (parsed, not matched). */
 const isOrigin = (o) => { try { const u = new URL(o); return (u.protocol === "https:" || u.protocol === "http:") && u.origin === o && /^[a-z0-9.-]+$/.test(u.hostname); } catch { return false; } };
@@ -88,9 +89,18 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   };
   const health = {
     async maintenance() { try { return await store.tx(null, (tx) => tx.maintenance()); } catch { return null; } },
+    // the last run of each daily job and whether it completed (review finding of 2026-11-10: a failure was
+    // noted in the operator journal and read by nothing); a job that never ran says null; the hourly probe
+    // alerts on ok false and on a last run older than a day (scripts/probe-verdict.mjs)
+    async dailyJobs() {
+      try {
+        const j = await store.tx(null, (tx) => tx.dailyJobs());
+        return Object.fromEntries(DAILY_JOBS.map((k) => [k, j[k] ? { lastRun: new Date(j[k].at).toISOString(), ok: j[k].ok } : { lastRun: null, ok: null }]));
+      } catch { return null; }
+    },
     async body() {
       const [db, obj] = await Promise.all([store.ping().then(() => "ok", () => "down"), objects.ping().then((x) => (x ? "ok" : "down"), () => "down")]);
-      return { status: db === "ok" && obj === "ok" ? 200 : 503, body: { ok: db === "ok" && obj === "ok", store: store.kind, objects: objects.kind, db, objectStore: obj, maintenance: db === "ok" ? await this.maintenance() : null } };
+      return { status: db === "ok" && obj === "ok" ? 200 : 503, body: { ok: db === "ok" && obj === "ok", store: store.kind, objects: objects.kind, db, objectStore: obj, maintenance: db === "ok" ? await this.maintenance() : null, dailyJobs: db === "ok" ? await this.dailyJobs() : null } };
     },
   };
   const http = createHttp({ app, config, assets, version, health, log, clock });

@@ -1,10 +1,19 @@
 // The daily jobs (async-job-guardrails; review finding of 2026-11-08: the operator note was written on
 // success only, a failure went to stderr, and one tenant's error stopped the next ones). Each tenant is
-// isolated, retried a bounded number of times, and every outcome reaches the operator journal.
-import { test } from "node:test";
+// isolated, retried a bounded number of times, and every outcome reaches the operator journal; the last
+// outcome of each job is read by /api/health and alerted on by the hourly probe (review finding of
+// 2026-11-10: the journal was read by nothing).
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
-import { harness, founder, pinnedRepository, send, gesture } from "../helpers.js";
+import { harness, founder, pinnedRepository, send, gesture, fakeAuthn, SEND_SHA } from "../helpers.js";
 import { DAY } from "../../src/domain/identity.js";
+import { readConfig, compose } from "../../src/main.js";
+import { memoryObjects } from "../../src/adapters/objects/objects.js";
+import { silentLog } from "../../src/adapters/system/log.js";
+import { probeVerdict } from "../../scripts/probe-verdict.mjs";
+
+const servers = [];
+after(() => Promise.all(servers.map((s) => new Promise((r) => s.close(r)))));
 
 /** A harness whose store fails, on purpose, for the transactions `fails(tenant, n)` selects. */
 function failing(fails) {
@@ -84,4 +93,44 @@ test("the operator's run of a daily job ends non-zero when a tenant failed or a 
   // what a run prints is its status, never its result (the result is in the operator journal)
   assert.deepEqual(gestureStatus("verify-chains", [{ tenant: "a", ok: false, head: "h", why: "hash" }]), { gesture: "verify-chains", ok: false });
   assert.deepEqual(gestureStatus("open-bootstrap", { tenant: "t", link: "l", expiresAt: "x" }), { gesture: "open-bootstrap", ok: true });
+});
+
+test("a daily job that did not complete is read by /api/health, without a tenant, and raises the hourly probe's alert until a run completes", async () => {
+  let bad = null;
+  const { h } = failing((t) => t !== null && t === bad);
+  const a = await founder(h, { prefix: "a" });
+  // the service over the same store as the operator's runs
+  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
+  const c = compose(config, { clock: h.clock, log: silentLog, store: h.store, objects: memoryObjects(), authn: fakeAuthn(), verifier: { async verify() { throw new Error("no upload here"); } } });
+  await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
+  servers.push(c.http.server);
+  const health = async () => (await fetch(`http://127.0.0.1:${c.http.server.address().port}/api/health`)).json();
+  const verdict = async () => probeVerdict({ healthStatus: 200, health: await health(), version: { commit: "c0ffee" }, now: h.clock.now() });
+
+  assert.deepEqual((await health()).dailyJobs, { retention: { lastRun: null, ok: null }, "verify-chains": { lastRun: null, ok: null } }, "no run yet: nothing to say");
+  assert.equal((await verdict()).ok, true);
+
+  bad = a.tenant;
+  await h.app.operator.retention();
+  const body = await health();
+  assert.deepEqual(body.dailyJobs.retention, { lastRun: new Date(h.clock.now()).toISOString(), ok: false });
+  assert.equal(JSON.stringify(body).includes(a.tenant), false, "the public health names no tenant");
+  assert.match((await verdict()).reasons.join(), /the daily job retention did not complete/);
+
+  bad = null;
+  await h.app.operator.retention();
+  assert.equal((await health()).dailyJobs.retention.ok, true, "the next run completes");
+  assert.equal((await verdict()).ok, true, "the alert clears with it");
+
+  // a broken chain is a run that did not complete either, though no tenant failed
+  h.store._state.ledger = h.store._state.ledger.map((e, i) => (i === 0 ? { ...e, body: { ...e.body, what: "tampered" } } : e));
+  await h.app.operator.verifyChains();
+  assert.equal((await health()).dailyJobs["verify-chains"].ok, false);
+  assert.match((await verdict()).reasons.join(), /the daily job verify-chains did not complete/);
+
+  // a job that stopped running: no run for more than a day
+  h.store._state.ledger = [];
+  await h.app.operator.verifyChains();
+  h.clock.advance(27 * 3600 * 1000);
+  assert.match((await verdict()).reasons.join(), /the daily job retention has not run since/);
 });

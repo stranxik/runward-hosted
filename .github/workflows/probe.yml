@@ -1,6 +1,7 @@
 # The hourly probe (PADR-0018 points 1 and 9): public, no secret, no tenant data. It reads /api/health and
-# /api/version, and raises the error-rate alert (more than 5 % of answers at 500 or more over five minutes,
-# scripts/probe-verdict.mjs); after two failures in a row it opens (or updates) an issue "service unavailable", and
+# /api/version, and raises the error-rate alert (more than 5 % of answers at 500 or more over five minutes)
+# and the daily jobs' alert (a run that did not complete, or no run for more than a day), both judged by
+# scripts/probe-verdict.mjs; after two failures in a row it opens (or updates) an issue "service unavailable", and
 # closes it when the service answers again. It also watches the certificate (14 days) and its own
 # disabling by GitHub after 60 days without activity (a warning issue at 45). Off until the service is
 # deployed: set the repository variable RW_PROBE_ENABLED to true.
@@ -20,7 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with: { persist-credentials: false }
       - id: read
-        name: read /api/health and /api/version, judge them (availability and error rate)
+        name: read /api/health and /api/version, judge them (availability, error rate, daily jobs)
         run: |
           set +e
           h=$(curl -s -o "$RUNNER_TEMP/health.json" -w '%{http_code}' --max-time 30 "$SERVICE/api/health")
@@ -40,7 +41,7 @@ jobs:
           if [ "$OK" = "yes" ]; then
             [ -n "$open" ] && gh issue close -R "$REPO" "$open" -c "The service answers again ($(date -u +%FT%TZ))."
           else
-            if [ -n "$open" ]; then gh issue comment -R "$REPO" "$open" -b "Still unavailable at $(date -u +%FT%TZ)."
+            if [ -n "$open" ]; then gh issue comment -R "$REPO" "$open" -b "Still failing at $(date -u +%FT%TZ): $VERDICT."
             elif [ "$prev" = "failure" ]; then gh issue create -R "$REPO" --label probe -t "service unavailable or erring" -b "Two probes in a row failed: $VERDICT ($(date -u +%FT%TZ))."; fi
           fi
           if [ "${DAYS:-0}" -lt 14 ]; then gh issue create -R "$REPO" --label probe -t "certificate expires in ${DAYS} days" -b "Renew the certificate of app.runward.dev." || true; fi

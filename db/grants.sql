@@ -13,7 +13,7 @@ begin
     'resolve_repository(text,text,text)', 'name_taken(text,text)', 'resolve_credential(text)', 'resolve_session(text)',
     'resolve_link(text)', 'put_challenge(uuid,text,text,uuid,uuid,text,text)', 'take_challenge(uuid)',
     'use_jti(text,timestamptz)', 'take_rate(text,bigint,text,integer)', 'count_refused(text,bigint)',
-    'tenant_ids()', 'operator_note(text,jsonb)', 'maintenance()', 'set_maintenance(jsonb)'] loop
+    'tenant_ids()', 'operator_note(text,jsonb)', 'maintenance()', 'set_maintenance(jsonb)', 'daily_jobs()'] loop
     execute format('alter function rw.%s owner to rw_resolve', f);
     execute format('revoke all on function rw.%s from public', f);
   end loop;
@@ -29,7 +29,7 @@ grant select, update on rw.service_state to rw_resolve;
 grant execute on function rw.resolve_repository(text,text,text), rw.name_taken(text,text), rw.resolve_credential(text),
   rw.resolve_session(text), rw.resolve_link(text), rw.put_challenge(uuid,text,text,uuid,uuid,text,text),
   rw.take_challenge(uuid), rw.use_jti(text,timestamptz), rw.take_rate(text,bigint,text,integer),
-  rw.count_refused(text,bigint), rw.maintenance(), rw.rw_tenant() to rw_app;
+  rw.count_refused(text,bigint), rw.maintenance(), rw.rw_tenant(), rw.daily_jobs() to rw_app;
 grant select, update on rw.tenant to rw_app;
 grant select, insert, update on rw.member, rw.passkey, rw.session, rw.forge_repository, rw.repository, rw.mission,
   rw.upload, rw.blob, rw.fleet_index, rw.reader, rw.archive to rw_app;
