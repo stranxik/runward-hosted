@@ -253,3 +253,85 @@ test("migrations: the one file exempt from the dynamic-statement rule is exempt 
   assert.deepEqual([...DYNAMIC_READ], [sha(floor.text)], "one exemption, and it is a committed file's");
   for (const f of REAL.filter((x) => x !== floor)) assert.equal(DYNAMIC_READ.has(sha(f.text)), false);
 });
+
+// Code review of 2026-11-10 (the second one, on 144211b), C30: ten statements passed the guard and
+// contracted the schema on PostgreSQL 17.11. Inside a dollar-quoted body a comment was kept raw, so
+// `drop/**/table` had no white space for a rule to match; a line comment that ended with `before` passed a
+// `truncate` for a trigger's event; and a column written U&"c" kept its `U&` and passed the type rule.
+test("C30: a comment glued to a keyword inside a body, a comment read as a trigger's event, and a U&\"...\" column are refused (the ten reproductions)", () => {
+  const fn = (body, lang = "sql") => `create function public.f() returns void language ${lang} as $$ ${body} $$; select public.f();`;
+  for (const [sql, kind] of [
+    ["do $$ begin drop/**/table public.victim; end $$;", "drop"],
+    ["do $$ begin drop--\n table public.victim; end $$;", "drop"],
+    ["do $$ begin alter table public.victim drop/**/column c; end $$;", "drop"],
+    [fn("drop/**/table public.victim"), "drop"],
+    ["do $$ begin\n -- the rows we no longer think of\n truncate public.victim;\nend $$;", "truncate"],
+    [fn("begin\n -- what was there before\n truncate public.victim;\nend", "plpgsql"), "truncate"],
+    ["do $$ begin alter table public.victim set/**/schema attic; end $$;", "set schema"],
+    ["do $$ begin alter table public.victim alter column c/**/type integer using 0; end $$;", "type change"],
+    ["alter table public.victim alter U&\"c\" type integer using 0;", "type change"],
+    ["alter table public.victim alter column U&\"\\0063\" set data type integer using 0;", "type change"],
+  ]) {
+    assert.match(contracting(sql) ?? "", new RegExp(`^${kind}: `), `not refused as ${kind}: ${sql}`);
+    assert.throws(() => planMigrations([{ name: "0001_a.sql", text: sql }], new Map()), /0001_a\.sql contracts the schema/, sql);
+  }
+});
+
+// The same class, found while fixing C30: each of these passed the three fixes above taken alone.
+test("C30: the spellings next to the ten: a comment the other reading hides, a nested body, a name glued to its keyword, uescape, code handed to `do` or `as` inside a body", () => {
+  for (const [sql, kind] of [
+    // a literal that holds `--` hides the rest of the line from the reading that ignores literals
+    ["do $$ begin perform '--'; alter table public.victim set/**/schema attic; end $$;", "set schema"],
+    // a text in a literal of a body is refused as it was when spelled with a space (the safe side)
+    ["do $$ begin perform set_config('rw.note', 'alter table public.victim set/**/schema attic', true); end $$;", "set schema"],
+    // a body in a body
+    ["do $$ begin create function public.g() returns void language sql as $g$ select '--'; alter table public.victim set/**/schema attic $g$; end $$;", "set schema"],
+    ["do $$ begin create function public.g() returns void language sql as $g$ alter table public.victim alter c/**/type integer $g$; end $$;", "type change"],
+    ["do $a$ begin create function public.g() returns void language sql as $b$ select 1 -- before\n truncate public.victim $b$; end $a$;", "truncate"],
+    // a quoted name needs no white space around it
+    ["alter table public.victim drop\"c\";", "drop"],
+    ["alter table public.victim alter\"c\"type integer using 0;", "type change"],
+    ["alter table public.victim alter column\"c\"set data type integer;", "type change"],
+    ["alter table public.victim alter U&\"c\"type integer;", "type change"],
+    // the escape character named after the name, a comment in between
+    ["alter table public.victim alter U&\"!0063\" uescape '!' type integer using 0;", "type change"],
+    ["alter table public.victim alter column U&\"!0063\"/* */UESCAPE/* */'!' set data type integer;", "type change"],
+    // a truncate is an event only in the own text of a create trigger
+    ["create trigger t after insert on rw.x for each row when ($$ before truncate $$ <> '') execute function rw.f();", "truncate"],
+    ["create function rw.f() returns trigger language plpgsql as $$ begin /* fired before truncate */ return null; end $$;", "truncate"],
+    ["select 1 -- or\n; truncate rw.x;", "truncate"],
+  ]) assert.match(contracting(sql) ?? "", new RegExp(`^${kind}: `), `not refused as ${kind}: ${sql}`);
+  // a body that hands a text to `do` or to `create function ... as`: the escape string spells the drop
+  for (const sql of [
+    "do $$ begin do E'begin dr\\157p table public.victim; end'; end $$;",
+    "do $$ begin do language plpgsql E'begin dr\\157p table public.victim; end'; end $$;",
+    "do $$ begin create function public.g() returns void language sql as E'dr\\157p table public.victim'; perform public.g(); end $$;",
+    "do $a$ begin do $b$ begin null; end $b$; end $a$;",
+  ]) {
+    assert.match(contracting(sql) ?? "", /^code run from inside a body: /, `not refused: ${sql}`);
+    assert.throws(() => planMigrations([{ name: "0001_a.sql", text: sql }], new Map()), /0001_a\.sql could contract the schema/, sql);
+  }
+  // a spelling the lexer will not claim to read is refused in a body as it is outside
+  assert.match(contracting("do $$ begin perform 1$a$ x $a$; end $$;") ?? "", /^spelling: /);
+});
+
+test("C30: ordinary expansion still passes: a body with comments, a trigger on truncate, on conflict in a body, a U&\"...\" name that changes no type", () => {
+  for (const sql of [
+    "create function rw.f() returns trigger language plpgsql as $$\n-- sets the dates\nbegin /* nothing else */ new.at := now(); return new; end $$;",
+    "create function rw.f() returns void language sql as $$ insert into rw.x (id) values (1) on conflict do nothing $$;",
+    "create function rw.f() returns void language sql as $$ insert into rw.x (id) values (1) on conflict (id) do update set id = excluded.id $$;",
+    "create function rw.f() returns int language sql as $$ select cast('1' as int) as n $$;",
+    "create trigger t before truncate on rw.ledger for each statement execute function rw.f();",
+    "create or replace trigger t before insert or truncate on rw.ledger for each statement execute function rw.f();",
+    "create constraint trigger t after insert on rw.x deferrable for each row execute function rw.f();",
+    "alter table rw.x add column U&\"c\" text;",
+    "alter table rw.x add column \"type\" text, add column kind text;",
+    "alter table rw.x alter column b drop not null, alter column b drop default;",
+    "create table rw.y (id uuid primary key, dropped_at timestamptz, renamed boolean, truncated int);",
+    "create index y_i on rw.y (id); grant select on rw.y to rw_app;",
+    "create type rw.kind as enum ('a', 'b');",
+    "create view rw.v as select id from rw.y;",
+  ]) assert.equal(contracting(sql), null, sql);
+  for (const f of REAL) assert.equal(contracting(f.text), null, f.name);
+  assert.ok(REAL.length >= 5, "the committed migrations, the five of this review included");
+});
