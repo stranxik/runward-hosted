@@ -68,3 +68,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 
 - Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
 - Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.
+
+## 2026-11-10 - ADR-0019 accepted
+
+- Done: the author accepted ADR-0019 in chat, in answer to a list that named it; ADR-0014 is marked superseded by it, and the architecture note's row says so.
+- Decided: ADR-0019, the app's own design layer, accepted.
+- Next: nothing on this boundary until its reevaluation on 2026-11-19.
