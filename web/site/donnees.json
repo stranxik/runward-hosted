@@ -1,0 +1,39 @@
+{
+  "_lisez_moi": "LE SEUL ENDROIT des données montrées par la vue publique et le relevé. Chaque application vient d'une exécution réelle de runward sur son dépôt public (dépôt, commit, date). Le 17, quand les envois vers l'app sont en service, ce fichier se régénère depuis l'app ; les pages ne changent pas. etat : clean | gaps | level-not-met | not-observed | not-available (lexique d'ADR-0125). refus : une entrée par refus, { piece_fr, piece_en, genre (clé du lexique), ou, ligne }.",
+  "version": "0.46.0",
+  "calcule": {
+    "fr": "10 nov. à 21:31",
+    "en": "10 Nov, 21:31",
+    "long_fr": "10 novembre 2026",
+    "long_en": "10 November 2026"
+  },
+  "commande": "npx --yes runward@0.46.0 check --strict --json --path <copie du dépôt>",
+  "applications": [
+    {
+      "nom": "runward-hosted",
+      "depot": "stranxik/runward-hosted",
+      "commit": "c94995d5e35e6f84185dc0e504d182369e8501f8",
+      "etat": "clean",
+      "refus": [],
+      "validation_fr": "46 points validés par un agent relecteur",
+      "validation_en": "46 items endorsed by a reviewing agent"
+    },
+    {
+      "nom": "runward-demo-renaming",
+      "depot": "stranxik/runward-demo-renaming",
+      "commit": "5a4c9e984782cefbb835268dbd64c8d572f1f144",
+      "etat": "clean",
+      "refus": [],
+      "validation_fr": "36 points sans validation enregistrée",
+      "validation_en": "36 items with no endorsement recorded"
+    }
+  ],
+  "scene": {
+    "depot": "stranxik/runward-demo-renaming",
+    "commit_changement": "97fce96d901d0d07cad8a230950d391b223736af",
+    "commit_principal": "5a4c9e984782cefbb835268dbd64c8d572f1f144",
+    "execution": "15",
+    "controle_fr": "10 nov. à 15:52",
+    "controle_en": "10 Nov, 15:52"
+  }
+}

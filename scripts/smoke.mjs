@@ -78,9 +78,12 @@ async function main([origin, commit], env) {
     const h = await j("/api/health"); must(h.r.status === 200 && h.b?.ok === true, `health ${h.r.status} ${JSON.stringify(h.b)}`);
     const v = await j("/api/version"); must(!commit || v.b?.commit === commit, `version serves ${v.b?.commit}, not ${commit}`);
     must(/^[0-9a-f]{64}$/.test(v.b?.apiContract ?? ""), "version has no API contract digest");
-    const page = await fetch(`${origin}/`); const html = await page.text();
-    must(page.status === 200 && /runward hébergé/.test(html), "the page");
-    must(/frame-ancestors 'none'/.test(page.headers.get("content-security-policy") ?? ""), "CSP frame-ancestors");
+    // the public site at / and the shell at /app (ADR-0022), each with the app's policy
+    const site = await fetch(`${origin}/`); const siteHtml = await site.text();
+    must(site.status === 200 && /<html lang="fr" data-page="index"/.test(siteHtml), "the public site at /");
+    const page = await fetch(`${origin}/app`); const html = await page.text();
+    must(page.status === 200 && /runward hébergé/.test(html), "the page of the app at /app");
+    for (const r of [site, page]) must(/frame-ancestors 'none'/.test(r.headers.get("content-security-policy") ?? ""), `CSP frame-ancestors on ${new URL(r.url).pathname}`);
     const o = await j("/api/v0/auth/options", { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
     must(o.r.status === 200 && o.b?.options?.challenge, "sign-in options");
     const x = await j("/api/v0/exports", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

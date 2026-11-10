@@ -1,0 +1,104 @@
+<!-- ======================================================= 2. La scène vraie, rejouée -->
+<section class="sec recit" id="scene">
+  <div class="wrap">
+    <div class="tete rv-s">
+      <p class="kick" t>La scène, sur un dépôt public ||| The scene, on a public repository</p>
+      <h2 t>Les tests disent que le code marche, pas qu’il est livrable. ||| Tests say the code works. They do not say it is shippable.</h2>
+      <p class="lede" t>Un changement de nom honnête, fait par un agent. Suivez-le jusqu’au moment où quelqu’un doit dire go. ||| One honest rename, made by an agent. Follow it to the moment someone has to say go.</p>
+    </div>
+
+    <div class="story">
+      <div class="steps">
+        <div class="step" data-step="1"><div class="corps"><span class="k">01</span>
+          <h3 t>Un agent change un nom dans le code. ||| An agent changes a name in the code.</h3>
+          <p t>Dans une application, un agent renomme <code>guardFields</code> en <code>applyFieldGuards</code>, partout où le code le connaît. Un changement propre, comme il s’en fait chaque jour. ||| In one application, an agent renames <code>guardFields</code> to <code>applyFieldGuards</code>, everywhere the code knows it. A clean change, the kind made every day.</p>
+          <ul class="preuves"><li t>2 fichiers modifiés ||| 2 files changed</li><li t>Le commit nomme la session de l’agent ||| The commit names the agent’s session</li></ul></div></div>
+        <div class="step" data-step="2"><div class="corps"><span class="k">02</span>
+          <h3 t>Les tests restent réussis. ||| The tests still pass.</h3>
+          <p t>Les 14 tests passent, avant comme après. Le code marche. Rien, ici, n’alerte celui qui doit dire go. ||| All 14 tests pass, before and after. The code works. Nothing here warns the person who has to say go.</p>
+          <ul class="preuves"><li><i class="coche" aria-hidden="true"></i><span t>14 tests réussis ||| 14 tests passed</span></li></ul></div></div>
+        <div class="step" data-step="3"><div class="corps"><span class="k">03</span>
+          <h3 t>Le contrôle refuse, et dit pourquoi. ||| The check refuses, and says why.</h3>
+          <p t>L’équipe a écrit ce qu’elle exige avant la production, et ce qui le prouve. Deux de ces preuves citent encore l’ancien nom&nbsp;: l’une dans les mesures de la première version, l’autre dans le dossier de sécurité. Le contrôle les refuse et nomme les deux lignes. ||| The team wrote down what it requires before production, and what proves it. Two of those pieces of evidence still cite the old name: one in the first-version measurements, one in the security assessment. The check refuses them and names the two lines.</p>
+          <ul class="preuves"><li><i class="f gaps" aria-hidden="true"></i><span t>2 preuves refusées ||| 2 pieces of evidence refused</span></li><li t>floor.md, ligne 22 ||| floor.md, line 22</li><li t>threat-model.md, ligne 50 ||| threat-model.md, line 50</li></ul></div></div>
+        <div class="step" data-step="4"><div class="corps"><span class="k">04</span>
+          <h3 t>Deux lignes, et rien ne bloque. ||| Two lines, and nothing is blocking.</h3>
+          <p t>La réparation tient en deux lignes&nbsp;: le dossier cite le nouveau nom. Le contrôle n’a pas demandé de revenir en arrière. Il a demandé que le dossier décrive le code, et il a dit quelles lignes ne le faisaient plus. ||| The repair is two lines: the record cites the new name. The check never asked for a rollback. It asked for the record to match the code, and it said which lines no longer did.</p>
+          <ul class="preuves"><li t>2 lignes ||| 2 lines</li><li><i class="f clean" aria-hidden="true"></i><span t>Rien ne bloque, selon les exigences de l’équipe ||| Nothing is blocking, according to the team’s requirements</span></li></ul></div></div>
+      </div>
+
+      <div class="screen-stick">
+        <!-- écran 1 : le changement de nom, tel qu'il est dans le commit -->
+        <div class="st" data-k="1"><div class="stage"><div class="scr"><div class="scr-bar" t>Le changement ||| The change</div><div class="scr-body"><div class="ab" data-seq="700,1500,900,800" data-hold="3600">
+          <div class="commit w1">refactor: rename guardFields to applyFieldGuards, everywhere the code knows<small t>0ea7a60 · le message du commit nomme la session de l’agent ||| 0ea7a60 · the commit message names the agent’s session</small></div>
+          <div class="fich">
+            <div class="fich-n"><span>code/src/core/domain/guard.ts</span><span class="pm">+1 −1</span></div>
+            <div class="dl moins"><i>−</i><span>export function guardFields(</span></div>
+            <div class="dl plus"><i>+</i><span>export function <span class="tg"><b class="gh">applyFieldGuards</b><span><b class="ty" data-at="2" data-v="70">applyFieldGuards</b><span class="caret"></span></span></span>(</span></div>
+          </div>
+          <div class="fich w3">
+            <div class="fich-n"><span>code/src/core/application/triage-request.usecase.ts</span><span class="pm">+2 −2</span></div>
+            <div class="dl moins"><i>−</i><span>const guarded = guardFields(proposal, input.body, registry);</span></div>
+            <div class="dl plus"><i>+</i><span>const guarded = <b>applyFieldGuards</b>(proposal, input.body, registry);</span></div>
+          </div>
+          <p class="e-pied w4" t>2 fichiers modifiés. Le comportement ne change pas. ||| 2 files changed. The behaviour is unchanged.</p>
+        </div></div></div></div></div>
+
+        <!-- écran 2 : la chaîne de livraison de l'équipe, les deux lignes côte à côte -->
+        <div class="st" data-k="2"><div class="stage"><div class="scr"><div class="scr-bar" t>La chaîne de livraison de l’équipe ||| The team’s delivery chain</div><div class="scr-body"><div class="ab" data-seq="1700,800,1400,900" data-hold="3800">
+          <div class="e-tete"><b>runward-demo-renaming</b><span class="mono">commit 97fce96</span></div>
+          <div class="chaine">
+            <div class="job">
+              <div><b>Tests</b><small t>14 tests ||| 14 tests</small></div>
+              <div class="swap sw2 res"><span class="avant att" aria-hidden="true" t>en cours ||| running</span><span class="apres"><i class="coche"></i><b t>Réussis ||| Passed</b></span></div>
+              <div class="bas pts14" aria-hidden="true"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i><i style="--i:12"></i><i style="--i:13"></i></div>
+            </div>
+            <div class="job">
+              <div><b t>Contrôle avant mise en production ||| Check before production</b><small>runward 0.46.0</small></div>
+              <div class="swap sw4 res"><span class="avant att" aria-hidden="true" t>en cours ||| running</span><span class="apres"><i class="f gaps pouls p4"></i><b t>Refusée par le contrôle ||| Refused by the check</b></span></div>
+              <div class="bas tbar" aria-hidden="true"><i></i></div>
+            </div>
+          </div>
+          <p class="e-pied w4" t>Les tests ne regardent pas le dossier de l’équipe. ||| The tests do not look at the team’s record.</p>
+        </div></div></div></div></div>
+
+        <!-- écran 3 : la fiche de l'app, ce que le contrôle refuse -->
+        <div class="st" data-k="3"><div class="stage"><div class="scr"><div class="scr-bar" t>Lecture du contrôle ||| Reading of the check</div><div class="scr-body"><div class="ab" data-seq="900,1000,1000,1100" data-hold="4200">
+          <p class="nom">runward-demo-renaming</p>
+          <div class="mot-e xl"><span><i class="f gaps lg pouls p1"></i><b t>Refusée par le contrôle ||| Refused by the check</b></span></div>
+          <div class="date-e" t>branche du changement · commit {{scene.commit_changement7}} · contrôle du {{scene.controle_fr}} ||| branch of the change · commit {{scene.commit_changement7}} · check of {{scene.controle_en}}</div>
+          <p class="panneau-t" t>Le contrôle refuse cette version, pour les raisons qui suivent. ||| The check refuses this version, for the reasons that follow.</p>
+          <div class="ecart w2"><b t>Mesures de la première version&nbsp;: une preuve citée est refusée par le contrôle. ||| First-version measurements: a cited piece of evidence is refused by the check.</b><span class="mono">runward/floor.md · <span t>ligne 22 ||| line 22</span></span></div>
+          <div class="ecart w3"><b t>Dossier de sécurité&nbsp;: une preuve citée est refusée par le contrôle. ||| Security assessment: a cited piece of evidence is refused by the check.</b><span class="mono">runward/governance/threat-model.md · <span t>ligne 50 ||| line 50</span></span></div>
+          <p class="donnee w4"><span class="donnee-t" t>Détail du contrôle, tel quel (le même pour les 2) ||| Detail of the check, as written (the same for both)</span>typed pointer file:code/src/core/domain/guard.ts#guardFields — symbol "guardFields" not found in the file (moved or renamed? update the pointer)</p>
+        </div></div></div></div></div>
+
+        <!-- écran 4 : la réparation, deux lignes du dossier, puis le contrôle repasse -->
+        <div class="st" data-k="4"><div class="stage"><div class="scr"><div class="scr-bar" t>Le dossier de l’équipe ||| The team’s record</div><div class="scr-body"><div class="ab" data-seq="1500,1500,1300,1000" data-hold="4200">
+          <div class="fich" style="margin-top:0">
+            <div class="fich-n"><span>runward/floor.md</span><span class="pm" t>ligne 22 ||| line 22</span></div>
+            <div class="dl moins"><i>−</i><span>file:code/src/core/domain/guard.ts#guardFields</span></div>
+            <div class="dl plus"><i>+</i><span>file:code/src/core/domain/guard.ts#<span class="tg"><b class="gh">applyFieldGuards</b><span><b class="ty" data-at="1" data-v="60">applyFieldGuards</b><span class="caret"></span></span></span></span></div>
+          </div>
+          <div class="fich">
+            <div class="fich-n"><span>runward/governance/threat-model.md</span><span class="pm" t>ligne 50 ||| line 50</span></div>
+            <div class="dl moins"><i>−</i><span>file:code/src/core/domain/guard.ts#guardFields</span></div>
+            <div class="dl plus"><i>+</i><span>file:code/src/core/domain/guard.ts#<span class="tg"><b class="gh">applyFieldGuards</b><span><b class="ty" data-at="2" data-v="60">applyFieldGuards</b></span></span></span></div>
+          </div>
+          <div class="verif-fin">
+            <div class="tbar" aria-hidden="true"><i></i></div>
+            <p class="nom">runward-demo-renaming</p>
+            <div class="swap sw4 mot-e m">
+              <div class="avant" aria-hidden="true"><i class="f gaps"></i><b t>Refusée par le contrôle ||| Refused by the check</b></div>
+              <div class="apres"><i class="f clean"></i><b t>Rien ne bloque ||| Nothing is blocking</b></div>
+            </div>
+            <div class="swap sw4 date-e" style="margin-bottom:0">
+              <div class="avant" aria-hidden="true" t>contrôle du {{scene.controle_fr}} ||| check of {{scene.controle_en}}</div>
+              <div class="apres" t>selon les exigences de l’équipe · branche de la réparation · commit 0b56196 ||| according to the team’s requirements · branch of the repair · commit 0b56196</div>
+            </div>
+          </div>
+        </div></div></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -19,6 +19,9 @@ import "./views/theme.js";
 
 // ------------------------------------------------------------- boot: a link in the fragment, never in the address
 (async function boot() {
+  // the shell's own path: the public site at / sends an address of the app here (web/site/aiguillage.js, ADR-0022);
+  // the address is written back to /#/..., the one the app has always had
+  if (location.pathname === "/app") history.replaceState(null, "", `/${location.hash || "#/"}`);
   if (location.pathname === "/lien") {
     const m = /^#t=([A-Za-z0-9_-]+)$/.exec(location.hash);
     S.link = m ? m[1] : null;

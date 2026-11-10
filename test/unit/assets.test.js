@@ -1,6 +1,6 @@
-// The shell's files as the service serves them, on a real socket: every slot of the page is filled, every
-// file the page names is served with its media type, the app's layer and fonts included (web/fonts/, by a
-// closed list), and a path off the list is answered 404, the fonts the app used to take from the pinned
+// The shell's files as the service serves them, on a real socket (the shell's page is served at /app since the
+// public site took /, ADR-0022): every slot of the page is filled, every file the page names is served with its
+// media type, the app's layer and fonts included (web/fonts/, by a closed list), and a path off the list is answered 404, the fonts the app used to take from the pinned
 // fleet package included. The shell's scripts are modules (web/app.js and web/views/), served by a closed
 // list under one folder named by the digest of them all. The content security policy is unchanged: fonts and styles from this origin only.
 import { test, before, after } from "node:test";
@@ -37,7 +37,7 @@ test("planted control: an unfilled slot of the page is seen", () => {
 });
 
 test("every slot of the page is filled, and every file it names is served with its media type", async () => {
-  const html = await (await get("/")).text();
+  const html = await (await get("/app")).text();
   assert.deepEqual(unfilled(html), []);
   const named = [...html.matchAll(/(?:href|src)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
   assert.equal(named.length, 6, "famille, the layer, the fleet stylesheet, app.css, views.js, app.js");
@@ -51,7 +51,7 @@ test("every slot of the page is filled, and every file it names is served with i
 });
 
 test("the app's layer is served byte for byte, and the old tokens file is gone", async () => {
-  const html = await (await get("/")).text();
+  const html = await (await get("/app")).text();
   const p = /href="(\/assets\/couche-runward-app\.[0-9a-f]{16}\.css)"/.exec(html)[1];
   const r = await get(p);
   assert.match(r.headers.get("cache-control"), /immutable/);
@@ -80,14 +80,14 @@ test("a path off the list is answered 404: another file name, the fonts of the f
 });
 
 test("the content security policy is unchanged: fonts and stylesheets from this origin only, nothing inline", async () => {
-  const csp = (await get("/")).headers.get("content-security-policy");
+  const csp = (await get("/app")).headers.get("content-security-policy");
   assert.match(csp, /(^|; )font-src 'self'(;|$)/);
   assert.match(csp, /(^|; )style-src-elem 'self'(;|$)/);
   assert.equal(/data:|unsafe-inline/.test(/font-src[^;]*/.exec(csp)[0] + /style-src-elem[^;]*/.exec(csp)[0]), false);
 });
 
 test("the shell's modules are served by a closed list under one folder named by their digest, immutable, the slot of the pinned views filled", async () => {
-  const html = await (await get("/")).text();
+  const html = await (await get("/app")).text();
   const entry = /<script type="module" src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"><\/script>/.exec(html);
   assert.ok(entry, "the page loads the entry from the modules' folder");
   const views = /<link rel="modulepreload" href="(\/assets\/views-[^"]+\.js)">/.exec(html)[1];
@@ -106,7 +106,7 @@ test("the shell's modules are served by a closed list under one folder named by 
 });
 
 test("a module off the list is answered 404: another name, the folder itself, another digest, the source folder", async () => {
-  const html = await (await get("/")).text();
+  const html = await (await get("/app")).text();
   const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
   for (const p of [`${folder}views/planted.js`, `${folder}views/`, folder, `${folder}views/acces/`, `${folder}index.html`, `${folder}app.css`, `${folder}views/base.js.map`,
     "/assets/app.0000000000000000/app.js", "/assets/app.js", "/assets/views/base.js", "/web/app.js", "/web/views/base.js", "/views/base.js", `${folder}views%2Fbase.js`]) {

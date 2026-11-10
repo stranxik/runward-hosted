@@ -141,7 +141,7 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
 });
 
 test("the served assets: immutable names, views.js byte for byte the pinned one", async () => {
-  const html = await (await call("GET", "/")).text();
+  const html = await (await call("GET", "/app")).text();
   const views = /href="(\/assets\/views-0\.46\.0\.[0-9a-f]{16}\.js)"/.exec(html)[1];
   const r = await call("GET", views);
   assert.match(r.headers.get("cache-control"), /immutable/);
@@ -164,7 +164,7 @@ test("the pin of ADR-0021: the decision reading is importable from the pinned pa
   assert.ok(build.VERDICT_STATES.includes("not-available"));
   assert.ok(Array.isArray(build.ENDORSEMENTS));
   assert.ok(views.ROUTES.includes("decision"), "the pinned views route the decision reading");
-  const html = await (await call("GET", "/")).text();
+  const html = await (await call("GET", "/app")).text();
   // the shell is modules (lot L0): the router is web/views/router.js, the address reader is in web/views/base.js
   const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
   const { MODULES } = await import("../../src/http/assets.js");
@@ -215,7 +215,7 @@ test("/api/version names the archive that is installed: the digest of the tarbal
 });
 
 test("the served views say « niveau non atteint » and \"level not met\" for level-not-met, from the pinned package (author's rule)", async () => {
-  const html = await (await call("GET", "/")).text();
+  const html = await (await call("GET", "/app")).text();
   const views = /href="(\/assets\/views-0\.46\.0\.[0-9a-f]{16}\.js)"/.exec(html)[1];
   const js = await (await call("GET", views)).text();
   assert.ok(js.includes('"level-not-met": "niveau non atteint"'));

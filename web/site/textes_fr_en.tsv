@@ -1,0 +1,324 @@
+runward, accueil	runward, home
+Pages du site	Site pages
+Langue	Language
+Changer de thème, clair ou sombre	Switch theme, light or dark
+Dépôt de runward-hosted	Repository of runward-hosted
+Dépôt de runward-demo-renaming	Repository of runward-demo-renaming
+Pied de page	Footer
+Fermer	Close
+Aller au contenu	Skip to content
+Pourquoi	Why
+Comment ça marche	How it works
+Pour qui	Who it is for
+Formats et référentiels	Formats and frameworks
+Données et sécurité	Data and security
+Se connecter	Sign in
+Demander un essai sur une application	Ask for a trial on an application
+Vos équipes livrent avec des agents IA. Vous répondez de ce qui part en production.	Your teams ship with AI agents. You answer for what goes to production.
+Avant le go : ce qui bloque, et pourquoi.	Before the go: what blocks, and why.
+Une phrase par application. Et de quoi le vérifier vous-même.	One sentence per application. And what you need to check it yourself.
+Voir la scène, rejouée	Watch the scene, replayed
+Les faits de cette page sont publics : un dépôt, une exécution, et la commande pour les relancer.	The facts on this page are public: a repository, a run, and the command to replay them.
+Tests : réussis	Tests: passed
+dans la chaîne de livraison de l’équipe	in the team’s delivery chain
+Lecture du contrôle	Reading of the check
+runward-demo-renaming, sur la branche du changement : Refusée par le contrôle. Exécution publique n° 15.	runward-demo-renaming, on the branch of the change: Refused by the check. Public run no. 15.
+Rien ne bloque	Nothing is blocking
+Refusée par le contrôle	Refused by the check
+branche principale · commit 5a4c9e9	main branch · commit 5a4c9e9
+branche du changement · commit 97fce96 · contrôle du 10 nov. à 15:52	branch of the change · commit 97fce96 · check of 10 Nov, 15:52
+Le contrôle refuse cette version, pour les raisons qui suivent.	The check refuses this version, for the reasons that follow.
+Mesures de la première version : une preuve citée est refusée par le contrôle.	First-version measurements: a cited piece of evidence is refused by the check.
+ligne 22	line 22
+Dossier de sécurité : une preuve citée est refusée par le contrôle.	Security assessment: a cited piece of evidence is refused by the check.
+ligne 50	line 50
+La scène, sur un dépôt public	The scene, on a public repository
+Les tests disent que le code marche, pas qu’il est livrable.	Tests say the code works. They do not say it is shippable.
+Un changement de nom honnête, fait par un agent. Suivez-le jusqu’au moment où quelqu’un doit dire go.	One honest rename, made by an agent. Follow it to the moment someone has to say go.
+Un agent change un nom dans le code.	An agent changes a name in the code.
+Dans une application, un agent renomme guardFields en applyFieldGuards, partout où le code le connaît. Un changement propre, comme il s’en fait chaque jour.	In one application, an agent renames guardFields to applyFieldGuards, everywhere the code knows it. A clean change, the kind made every day.
+2 fichiers modifiés	2 files changed
+Le commit nomme la session de l’agent	The commit names the agent’s session
+Les tests restent réussis.	The tests still pass.
+Les 14 tests passent, avant comme après. Le code marche. Rien, ici, n’alerte celui qui doit dire go.	All 14 tests pass, before and after. The code works. Nothing here warns the person who has to say go.
+14 tests réussis	14 tests passed
+Le contrôle refuse, et dit pourquoi.	The check refuses, and says why.
+L’équipe a écrit ce qu’elle exige avant la production, et ce qui le prouve. Deux de ces preuves citent encore l’ancien nom : l’une dans les mesures de la première version, l’autre dans le dossier de sécurité. Le contrôle les refuse et nomme les deux lignes.	The team wrote down what it requires before production, and what proves it. Two of those pieces of evidence still cite the old name: one in the first-version measurements, one in the security assessment. The check refuses them and names the two lines.
+2 preuves refusées	2 pieces of evidence refused
+floor.md, ligne 22	floor.md, line 22
+threat-model.md, ligne 50	threat-model.md, line 50
+Deux lignes, et rien ne bloque.	Two lines, and nothing is blocking.
+La réparation tient en deux lignes : le dossier cite le nouveau nom. Le contrôle n’a pas demandé de revenir en arrière. Il a demandé que le dossier décrive le code, et il a dit quelles lignes ne le faisaient plus.	The repair is two lines: the record cites the new name. The check never asked for a rollback. It asked for the record to match the code, and it said which lines no longer did.
+2 lignes	2 lines
+Rien ne bloque, selon les exigences de l’équipe	Nothing is blocking, according to the team’s requirements
+Le changement	The change
+0ea7a60 · le message du commit nomme la session de l’agent	0ea7a60 · the commit message names the agent’s session
+2 fichiers modifiés. Le comportement ne change pas.	2 files changed. The behaviour is unchanged.
+La chaîne de livraison de l’équipe	The team’s delivery chain
+14 tests	14 tests
+en cours	running
+Réussis	Passed
+Contrôle avant mise en production	Check before production
+Les tests ne regardent pas le dossier de l’équipe.	The tests do not look at the team’s record.
+Détail du contrôle, tel quel (le même pour les 2)	Detail of the check, as written (the same for both)
+Le dossier de l’équipe	The team’s record
+contrôle du 10 nov. à 15:52	check of 10 Nov, 15:52
+selon les exigences de l’équipe · branche de la réparation · commit 0b56196	according to the team’s requirements · branch of the repair · commit 0b56196
+Le portefeuille public	The public portfolio
+Des applications publiques de runward, une phrase chacune.	runward’s own public applications, one sentence each.
+Chaque ligne vient d’une exécution de runward sur un dépôt public : son dépôt, son commit, sa date. Ce que le contrôle refuse arrive en haut.	Each line comes from a run of runward on a public repository: its repository, its commit, its date. What the check refuses comes first.
+selon les exigences de l’équipe	according to the team’s requirements
+Le contrôle n’a relevé aucune pièce manquante et ne refuse rien. La décision reste la vôtre.	The check found no missing document and refuses nothing. The decision stays yours.
+46 points validés par un agent relecteur	46 items endorsed by a reviewing agent
+Dépôt	Repository
+36 points sans validation enregistrée	36 items with no endorsement recorded
+Calculé le 10 nov. à 21:31 sur le dépôt public, au dernier commit de la branche principale, avec runward 0.46.0.	Computed on 10 Nov, 21:31 on the public repository, at the latest commit of the main branch, with runward 0.46.0.
+Pour aller plus loin	To go further
+Ce que vous n’avez plus à découvrir après le go.	What you no longer find out after the go.
+Un contrôle chez l’équipe, une phrase pour vous.	A check with the team, one sentence for you.
+Quatre lecteurs, la même réponse.	Four readers, the same answer.
+Des pièces que vos outils savent lire.	Pieces your tools can read.
+Ce qui reste chez vous, ce qui remonte.	What stays with you, what is sent.
+Un essai	A trial
+Essayez sur une de vos applications.	Try it on one of your applications.
+Une équipe, une application, et vous lisez ce qui bloque votre go, sans lire de code.	One team, one application, and you read what blocks your go, without reading code.
+Qui	Who
+Une équipe, et une de ses applications.	One team, and one of its applications.
+Ce qu’elle écrit	What it writes
+Ce qu’elle exige avant la production, une fois, dans un dossier rangé avec le code.	What it requires before production, once, in a record kept with the code.
+Ce qu’elle installe	What it installs
+Le contrôle, dans sa chaîne de livraison. Rien d’autre : ni agent, ni accès à son code de notre part.	The check, in its delivery chain. Nothing else: no agent, and no access to its code on our side.
+Ce que vous lisez	What you read
+À chaque livraison, ce que le contrôle refuse, et pourquoi.	At every delivery, what the check refuses, and why.
+Sur notre stand, les 18 et 19 novembre	At our stand, 18 and 19 November
+Mentions légales	Legal notice
+Contact	Contact
+Dites-nous qui vous êtes. Votre messagerie s’ouvre avec le courriel prêt à envoyer.	Tell us who you are. Your mail application opens with the message ready to send.
+Nom (obligatoire)	Name (required)
+Organisation	Organisation
+Rôle	Role
+Message	Message
+Préparer le courriel	Prepare the email
+Écrire directement	Write directly
+Ce formulaire ouvre votre messagerie avec le courriel prêt : c’est vous qui l’envoyez. Le service ne stocke rien.	This form opens your mail application with the email ready: you send it. The service stores nothing.
+Vos équipes livrent plus vite avec des agents. Voici ce que runward vous évite, et sur quoi il s’appuie pour le dire.	Your teams ship faster with agents. Here is what runward spares you, and what it rests on to say so.
+Ce que vous évitez	What you avoid
+Un go donné sur un dossier qui ne décrit plus le code.	A go given on a record that no longer describes the code.
+À la place	Instead
+À chaque livraison, le contrôle vérifie que les preuves exigées par l’équipe existent, et décrivent encore ce qui a été livré. Sinon il refuse, et nomme les lignes.	At every delivery, the check verifies that the evidence the team requires exists, and still describes what was delivered. If not, it refuses, and names the lines.
+Un écart que les tests ne regardent pas, découvert en production.	A gap the tests do not look at, found in production.
+Les tests disent que le code marche. Le contrôle lit ce qu’ils ne lisent pas : le dossier de sécurité, les décisions écrites, les preuves que l’équipe s’est données.	Tests say the code works. The check reads what they do not: the security assessment, the written decisions, the evidence the team set for itself.
+Le temps de comité passé à demander « c’est vraiment fini ? »	Committee time spent asking “is it really done?”
+Avant de se réunir, le comité voit ce qui est calculé, application par application. Une phrase chacune, et sa date.	Before it meets, the committee sees what is computed, application by application. One sentence each, and its date.
+Voir le portefeuille public	See the public portfolio
+Un audit qui reconstitue tout à la main.	An audit that rebuilds everything by hand.
+Pour chaque changement, vous avez la décision écrite par l’équipe, des preuves qui se résolvent et un verdict rejouable. Votre audit les examine, et relance le contrôle sur sa propre machine.	For each change, you have the decision written by the team, evidence that resolves and a replayable verdict. Your audit examines them, and runs the check again on its own machine.
+Usages concrets	Concrete uses
+Une décision que personne ne retrouve.	A decision nobody can find again.
+Les décisions structurantes sont écrites, datées et rangées avec le code. Chaque point du dossier dit s’il a une validation enregistrée ; sinon, l’écran l’affiche tel quel.	The structuring decisions are written, dated and kept with the code. Every point of the record says whether it has a recorded validation; if not, the screen shows it as such.
+Ce que mesurent les enquêtes	What the surveys measure
+La question se pose partout.	The question is asked everywhere.
+Trois enquêtes publiques, chacune avec sa source et sa date. Aucune ne parle de runward : elles disent où en sont ceux qui livrent avec l’IA.	Three public surveys, each with its source and date. None is about runward: they say where those who ship with AI stand.
+des DSI disent que leur entreprise a tiré de l’IA une valeur significative ou transformationnelle.	of CIOs say their enterprise has realized significant or transformational value from AI.
+, communiqué du 19 octobre 2026 ; 2 002 DSI et dirigeants technologiques interrogés, de mai à juillet 2026.	, press release of 19 October 2026; 2,002 CIOs and technology executives surveyed, May to July 2026.
+des répondants font peu ou pas confiance au code généré par l’IA.	of respondents report little or no trust in AI-generated code.
+, billet du 23 septembre 2025 ; près de 5 000 répondants.	, post of 23 September 2025; nearly 5,000 respondents.
+Le rapport décrit l’IA comme un	The report describes AI as an
+amplificateur	amplifier
+: elle grossit les forces des organisations solides, et les défauts des autres.	: it magnifies the strengths of high-performing organisations, and the dysfunctions of struggling ones.
+disent ne pas pouvoir distinguer de façon fiable, dans leur propre code, ce que l’IA a écrit.	say they cannot reliably distinguish, in their own codebase, what AI wrote.
+, enquête The Harris Poll, publiée le 23 juin 2026 ; 1 528 répondants.	, survey by The Harris Poll, published on 23 June 2026; 1,528 respondents.
+D’où vient l’information : l’application, le contrôle dans la chaîne de l’équipe, le contrôle reçu, cette lecture.	Where the information comes from: the application, the check in the team’s chain, the check received, this reading.
+Un contrôle chez l’équipe. Une phrase pour vous.	A check with the team. One sentence for you.
+Trois temps : le contrôle tourne dans la chaîne de livraison de l’équipe, l’app le lit en langage courant, et n’importe qui peut le relancer.	Three steps: the check runs in the team’s delivery chain, the app reads it in plain language, and anyone can run it again.
+Le contrôle, chez l’équipe	The check, with the team
+La lecture en langage courant	The plain-language reading
+Vérifier par vous-même	Check it yourself
+D’où vient l’information	Where the information comes from
+Le contrôle tourne chez l’équipe.Le code ne sort jamais.	The check runs with the team.The code never leaves.
+Le compte rendu du contrôle remonte, avec votre accord, application par application. Il cite des chemins de fichiers, les noms que votre dossier mentionne dans le code, et le nom de ceux qui ont validé.	The check’s report is sent, with your agreement, application by application. It cites file paths, the names your record mentions in the code, and the names of those who endorsed.
+Chez l’équipe	With the team
+Dans l’app	In the app
+chez l’équipe	with the team
+L’application	The application
+Son code reste chez l’équipe.	Its code stays with the team.
+Le contrôle	The check
+Dans la chaîne de livraison de l’équipe.	In the team’s delivery chain.
+dans l’app	in the app
+Contrôle reçu	Check received
+Daté à la réception.	Dated on receipt.
+Cette lecture	This reading
+Une phrase par application.	One sentence per application.
+Le contrôle tourne dans la chaîne de livraison de l’équipe, quelle qu’elle soit. L’écran partagé se branche aujourd’hui sur GitHub.	The check runs in the team’s delivery chain, whichever it is. The shared screen connects to GitHub today.
+Du détail du contrôle à une phrase.	From the check’s detail to one sentence.
+La phrase vient d’un dictionnaire fermé : un genre d’écart, une pièce du dossier. Le détail du contrôle reste affiché dessous, tel quel.	The sentence comes from a closed dictionary: a kind of gap, a document of the record. The check’s detail stays below, as written.
+Ce que le contrôle écrit	What the check writes
+Dossier de sécurité :	Security assessment:
+une preuve citée est refusée par le contrôle.	a cited piece of evidence is refused by the check.
+Cinq états, une forme et un mot chacun. Jamais la couleur seule.	Five states, one shape and one word each. Never colour alone.
+Niveau exigé non atteint	Required level not met
+Aucun contrôle reçu	No check received
+Contenu non partagé	Content not shared
+Sans nous croire sur parole	Without taking our word for it
+Ce n’est pas notre écran qui le dit. Le même contrôle, relancé chez vous sur le même commit, rend la même application, la même version, le même état et les mêmes écarts.	It is not our screen saying so. The same check, run again on your side on the same commit, gives the same application, the same version, the same state and the same gaps.
+Le contrôle tourne dans la chaîne de livraison de l’équipe.	The check runs in the team’s delivery chain.
+Le moteur est sous licence MIT : n’importe qui peut le lire et le relancer.	The engine is under the MIT licence: anyone can read it and run it again.
+Votre audit refait le calcul sur sa propre machine, sans passer par l’équipe ni par nous. Il lui faut un accès en lecture au code.	Your audit redoes the calculation on its own machine, without going through the team or through us. It needs read access to the code.
+Chez vous	On your side
+Node.js 22.12 ou plus récent	Node.js 22.12 or newer
+Même application	Same application
+Même version	Same version
+Même état	Same state
+Mêmes écarts	Same gaps
+2 points à corriger	2 points to fix
+Exécution publique	Public run
+n° 15	no. 15
+Chacun arrive avec sa question. L’écran est le même pour tous : c’est ce qui évite d’en débattre.	Each comes with their own question. The screen is the same for all: that is what spares the debate.
+DSI	CIO
+Transformation	Transformation
+Audit et risque	Audit and risk
+Équipes qui livrent	Teams that ship
+« Est-ce que je peux dire go ? »	“Can I say go?”
+Une phrase par application, avant la réunion. Ce que le contrôle refuse arrive en haut, avec sa date. La décision reste la vôtre.	One sentence per application, before the meeting. What the check refuses comes first, with its date. The decision stays yours.
+Dossier de sécurité : une preuve citée est refusée par le contrôle.	Security assessment: a cited piece of evidence is refused by the check.
+« Notre façon de livrer tient-elle, quand les agents accélèrent ? »	“Does our way of delivering hold, when agents speed things up?”
+Votre Definition of Done, recontrôlée à chaque livraison, sans intervention. L’équipe écrit une fois ce qu’elle exige avant la production ; le contrôle le relit à chaque livraison.	Your Definition of Done, rechecked at every delivery, with no intervention. The team writes once what it requires before production; the check reads it again at every delivery.
+« Montrez-le-moi. »	“Show me.”
+Le même contrôle, relancé sur votre machine, rend la même application, la même version, le même état et les mêmes écarts. Il vous faut un accès en lecture au code, et rien à nous demander.	The same check, run again on your machine, gives the same application, the same version, the same state and the same gaps. You need read access to the code, and nothing from us.
+« Qu’est-ce que ça nous demande ? »	“What does it ask of us?”
+Une commande dans votre chaîne de livraison. Quand elle refuse, elle dit quelles lignes ne décrivent plus le code. Dans la scène, la réparation tient en deux lignes.	One command in your delivery chain. When it refuses, it says which lines no longer describe the code. In the scene, the repair is two lines.
+runward écrit son verdict dans des formats ouverts. Ce sont des pièces à l’appui d’un examen : la conformité reste celle de l’entité évaluée.	runward writes its verdict in open formats. They are supporting pieces for an assessment: compliance belongs to the assessed entity.
+Les formats	The formats
+Les référentiels	The frameworks
+Une commande, un format, un lecteur.	One command, one format, one reader.
+Ces sorties viennent de la commande runward, dans votre chaîne de livraison. Aucune n’appelle le réseau. L’app, elle, reçoit aujourd’hui le seul compte rendu du contrôle.	These outputs come from the runward command, in your delivery chain. None calls the network. The app itself receives only the check’s report today.
+Format	Format
+Ce qu’il porte	What it carries
+Qui le lit	Who reads it
+JSON du contrôle	The check’s JSON
+Le verdict, l’état de chaque pièce du dossier, les écarts un par un.	The verdict, the state of each document of the record, the gaps one by one.
+L’app runward : c’est le fichier qu’elle reçoit.	The runward app: this is the file it receives.
+Le verdict, lié à l’empreinte du dossier et des preuves citées.	The verdict, bound to the digest of the record and of the cited evidence.
+La commande	The command
+, qui le rejoue hors ligne.	, which replays it offline.
+Une annotation par cause de refus, sur la ligne du dossier concernée.	One annotation per cause of refusal, on the line of the record concerned.
+Validé contre le schéma SARIF 2.1.0 d’OASIS. Vous le téléversez vous-même dans votre forge.	Validated against the OASIS SARIF 2.1.0 schema. You upload it to your forge yourself.
+Une définition de composant, au format du NIST : dix exigences, les catégories ASI01 à ASI10 de l’OWASP, chacune avec un statut dérivé du contrôle.	A component definition, in the NIST format: ten requirements, the OWASP categories ASI01 to ASI10, each with a status derived from the check.
+compliance-trestle 4.2.0 le charge à chaque exécution de la chaîne de runward.	compliance-trestle 4.2.0 loads it on every run of runward’s own chain.
+Brouillon de préparation	Readiness draft
+Un brouillon par référentiel : ce que runward fournit, et ce qui reste à l’entité. La commande le dit elle-même : « a readiness draft, never a compliance claim ».	One draft per framework: what runward provides, and what remains with the entity. The command says it itself: “a readiness draft, never a compliance claim”.
+Un évaluateur.	An assessor.
+Résumé de vérification SLSA	SLSA verification summary
+Un résumé du verdict pour un moteur de politique. Il n’affirme aucun niveau SLSA.	A summary of the verdict for a policy engine. It asserts no SLSA level.
+Recette documentée : une politique Kyverno d’exemple.	Documented recipe: an example Kyverno policy.
+Rapport de livraison	Delivery report
+Une page HTML autonome : le verdict, pour un lecteur sans terminal ni compte.	A standalone HTML page: the verdict, for a reader with no terminal and no account.
+Un évaluateur, seul.	An assessor, alone.
+Sceau des preuves	Evidence seal
+L’empreinte de chaque preuve citée. Une modification ultérieure fait refuser le contrôle.	The digest of each cited piece of evidence. A later change makes the check refuse.
+Aucune de ces sorties n’est signée par runward. La signature est votre geste, avec votre propre clé.	None of these outputs is signed by runward. Signing is your gesture, with your own key.
+runward lit aussi vos rapports comme preuves : JUnit, SARIF, couverture, et un inventaire logiciel au format CycloneDX. Il les lit ; il ne les produit pas pour votre projet.	runward also reads your reports as evidence: JUnit, SARIF, coverage, and a software bill of materials in CycloneDX format. It reads them; it does not produce them for your project.
+Un référentiel est une étiquette et un brouillon.	A framework is a label and a draft.
+Le fichier OSCAL garde toujours les mêmes contrôles : les dix catégories de l’OWASP pour les applications agentiques. Le référentiel choisi change le brouillon qui l’accompagne, pas ces contrôles.	The OSCAL file always keeps the same controls: the ten OWASP categories for agentic applications. The chosen framework changes the draft that comes with it, not those controls.
+Des preuves d’ingénierie qu’un programme de management de l’IA peut utiliser comme intrants.	Engineering evidence that an AI management programme can use as inputs.
+Un cadre volontaire. Le brouillon rattache les décisions écrites, le verdict et les règles à ses fonctions.	A voluntary framework. The draft ties the written decisions, the verdict and the rules to its functions.
+AI Act, règlement (UE) 2024/1689	AI Act, Regulation (EU) 2024/1689
+Le brouillon alimente la documentation technique de l’annexe IV, en particulier son point 2 : les choix de conception et leur justification. Il nomme ce qui reste au fournisseur.	The draft feeds the technical documentation of Annex IV, in particular its point 2: the design choices and their justification. It names what remains with the provider.
+Neuf situations, chacune avec sa limite.	Nine situations, each with its limit.
+Ce que vous avez en main dans chaque cas, la commande qui le produit, et jusqu’où cela va.	What you hold in each case, the command that produces it, and how far it goes.
+Comité de changement	Change advisory board
+Un changement produit par un agent arrive en comité. Vous avez un verdict rejouable sur le commit, avec les écarts par cause.	A change produced by an agent reaches the board. You have a replayable verdict on the commit, with the gaps by cause.
+Limite	Limit
+Ce n’est pas un contrôle d’approbation indépendant : runward ne lit pas les approbations de la forge.	It is not an independent approval control: runward does not read the forge’s approvals.
+Revue d’architecture	Architecture review
+La revue veut les décisions structurantes et ce qui les ferait rouvrir. Vous avez le journal des décisions écrites, avec leurs dates.	The review wants the structuring decisions and what would reopen them. You have the journal of written decisions, with their dates.
+La pièce vient de la commande.	The piece comes from the command.
+Audit interne	Internal audit
+Des mois plus tard, l’audit demande si la preuve citée est encore celle qui a été contrôlée. Vous avez un sceau, et une attestation qui se rejoue hors ligne.	Months later, the audit asks whether the cited evidence is still the one that was checked. You have a seal, and an attestation that replays offline.
+Le sceau n’est pas signé : il détecte une dérive, pas une réécriture par qui peut modifier le fichier. La relecture compare le dossier à l’empreinte ; elle ne vérifie aucune signature.	The seal is not signed: it detects drift, not a rewrite by someone who can change the file. The replay compares the record to the digest; it verifies no signature.
+Dossier AI Act	AI Act file
+Un fournisseur constitue la documentation technique de l’annexe IV. Vous avez un brouillon qui en alimente le point 2 depuis les décisions écrites.	A provider builds the technical documentation of Annex IV. You have a draft that feeds its point 2 from the written decisions.
+Un brouillon de préparation, pas une évaluation. Les journaux d’exécution viennent du système déployé.	A readiness draft, not an assessment. Execution logs come from the deployed system.
+Contrôle des changements, dans la finance	Change control, in finance
+Vous devez montrer comment chaque changement a été décidé et vérifié. Vous avez, par changement, la décision, des preuves qui se résolvent et un verdict rejouable.	You must show how each change was decided and verified. You have, per change, the decision, evidence that resolves and a replayable verdict.
+Des pièces à verser à votre propre dossier. Aucune lecture propre au règlement DORA n’est livrée.	Pieces to add to your own file. No reading specific to the DORA regulation is delivered.
+Évaluation d’un fournisseur	Supplier assessment
+Un intégrateur livre du code produit par des agents. Vous exigez le commit, la version et la commande exacte, et vous rejouez le contrôle vous-même.	An integrator delivers code produced by agents. You require the commit, the version and the exact command, and you replay the check yourself.
+Sur un dépôt privé, il faut un accès en lecture pour rejouer.	On a private repository, replaying needs read access.
+Reprise par une autre équipe	Takeover by another team
+Une équipe hérite d’un système. Le contrôle exige la procédure de reprise et la note de passation avant de laisser passer.	A team inherits a system. The check requires the recovery runbook and the handover note before it lets anything through.
+Il vérifie que ces pièces existent et sont remplies. Leur qualité reste votre jugement.	It verifies that these documents exist and are filled. Their quality remains your judgement.
+Outil de gouvernance et de risque	Governance and risk tool
+L’équipe conformité veut une pièce lisible par une machine, pas un PDF. Vous avez un fichier OSCAL 1.2.3.	The compliance team wants a machine-readable piece, not a PDF. You have an OSCAL 1.2.3 file.
+Outil éprouvé : compliance-trestle. L’import dans votre propre outil reste votre étape de vérification.	Proven tool: compliance-trestle. The import into your own tool remains your verification step.
+Admission d’un déploiement	Deployment admission
+La production ne doit accepter que ce dont le contrôle est passé. Vous avez un résumé de vérification que vous signez avec votre clé.	Production must accept only what passed the check. You have a verification summary that you sign with your key.
+Recette documentée, avec une politique Kyverno d’exemple. Elle n’est pas rejouée dans la chaîne de runward.	Documented recipe, with an example Kyverno policy. It is not replayed in runward’s own chain.
+Ce qui reste chez vous, et ce qui remonte chez runward	What stays with you, and what is sent to runward
+Le code ne sort jamais. Le contrôle tourne dans votre chaîne de livraison. Le service ne reçoit que son compte rendu.	The code never leaves. The check runs in your delivery chain. The service receives only its report.
+Chez vous	With you
+Le code	The code
+Il ne sort jamais. runward n’y a aucun accès.	It never leaves. runward has no access to it.
+Il tourne dans votre chaîne de livraison, à chaque livraison.	It runs in your delivery chain, at every delivery.
+Les documents de l’équipe	The team’s documents
+Ils restent dans votre dépôt. Le service n’en reçoit et n’en stocke aucun.	They stay in your repository. The service receives and stores none of them.
+Chez runward	With runward
+Le compte rendu du contrôle	The check’s report
+Il remonte avec votre accord, application par application. Il cite des chemins de fichiers, les noms que votre dossier mentionne dans le code, et le nom de ceux qui ont validé.	It is sent with your agreement, application by application. It cites file paths, the names your record mentions in the code, and the names of those who endorsed.
+L’état de chaque application	The state of each application
+La lecture de chaque contrôle, sa date de réception, et les contrôles reçus avant lui.	The reading of each check, its date of receipt, and the checks received before it.
+Les accès	Access
+La connexion se fait par clé d’accès : empreinte, visage ou code de l’appareil.	Sign-in uses a passkey: fingerprint, face or device code.
+Aucun document de l’équipe n’est envoyé au service. Ce qui remonte tient en un fichier, décrit ci-dessus.	None of the team’s documents is sent to the service. What is sent is one file, described above.
+En service	In service
+Ce qui est en service.	What is in service.
+La forge	The forge
+L’écran partagé se branche sur GitHub.	The shared screen connects to GitHub.
+L’hébergement	Hosting
+En France, à Paris, chez Scaleway. Exploité par runward.	In France, in Paris, at Scaleway. Operated by runward.
+Une commande, dans n’importe quelle chaîne de livraison. Le moteur est sous licence MIT.	One command, in any delivery chain. The engine is under the MIT licence.
+Votre forge n’est pas GitHub, ou rien ne doit sortir de chez vous ? Dites-le dans votre demande d’essai.	Your forge is not GitHub, or nothing may leave your premises? Say so in your trial request.
+Code QR vers app.runward.dev/stand	QR code to app.runward.dev/stand
+Sur notre stand	At our stand
+Retrouvez-nous sur notre stand, les 18 et 19 novembre.	Meet us at our stand, on 18 and 19 November.
+Deux écrans, l’app elle-même, et nos propres applications. Tout se relance depuis un dépôt public.	Two screens, the app itself, and our own applications. Everything can be replayed from a public repository.
+Proposer un moment au stand	Suggest a time at the stand
+La scène en trente secondes	The scene in thirty seconds
+Ce que vous voyez au stand	What you see at the stand
+L’app, sur nos propres applications	The app, on our own applications
+Une phrase chacune. Celles que le contrôle refuse arrivent en haut.	One sentence each. Those the check refuses come first.
+La scène, rejouée devant vous	The scene, replayed in front of you
+Un nom change dans le code. Les tests restent réussis. Le contrôle refuse, et dit quelles lignes.	A name changes in the code. The tests still pass. The check refuses, and says which lines.
+De quoi le vérifier sans nous	What you need to check it without us
+Le dépôt est public, la commande tient en une ligne. Vous pouvez la relancer depuis votre place.	The repository is public, the command is one line. You can run it again from your seat.
+La scène complète, écran par écran, est sur	The full scene, screen by screen, is on
+la page d’accueil	the home page
+Repartez avec	Take away
+Une page pour votre comité, et de quoi continuer.	One page for your committee, and what you need to go on.
+Le relevé d’une page	The one-page summary
+Des applications publiques de runward, la lecture du contrôle sur chacune, et la commande pour le vérifier. À imprimer ou à enregistrer.	runward’s own public applications, the reading of the check on each, and the command to check it. To print or to save.
+Le site	The site
+Pourquoi, comment ça marche, pour qui, les formats, et où vont vos données.	Why, how it works, who it is for, the formats, and where your data goes.
+Gardez cette page	Keep this page
+Un moment au stand, sur la scène et sur vos questions. Et ensuite, un essai sur une de vos applications.	A moment at the stand, on the scene and on your questions. And then, a trial on one of your applications.
+Éditeur	Publisher
+Ce site est édité par Thibault Souris, qui en est aussi le directeur de la publication.	This site is published by Thibault Souris, who is also its publication director.
+Contact :	Contact:
+Hébergeur	Host
+Scaleway, société par actions simplifiée au capital de 142 050,00 euros. SIREN : 433 115 904 RCS Paris. Siège social : 8, rue de la Ville-l’Évêque, 75008 Paris, France.	Scaleway, simplified joint stock company with a capital of 142 050.00 €. SIREN: 433 115 904 RCS Paris. Registered office: 8, rue de la Ville-l’Évêque, 75008 Paris, France.
+Vos données	Your data
+Ce site ne dépose aucun cookie et ne mesure pas son audience. Votre choix de langue et de thème est gardé dans votre navigateur, nulle part ailleurs.	This site sets no cookie and does not measure its audience. Your choice of language and theme is kept in your browser, nowhere else.
+Quand vous demandez un essai, le formulaire ouvre votre messagerie avec un courriel prêt ; c’est vous qui l’envoyez. Ce courriel contient ce que vous y écrivez : votre nom, votre organisation, votre rôle et votre message.	When you ask for a trial, the form opens your mail application with an email ready; you send it. That email contains what you write in it: your name, your organisation, your role and your message.
+Il est reçu par Thibault Souris à l’adresse thibaultsouris@runward.dev, pour répondre à votre demande. Il est gardé dans cette boîte aux lettres, et seulement là.	It is received by Thibault Souris at thibaultsouris@runward.dev, to answer your request. It is kept in that mailbox, and only there.
+Pour le faire effacer, écrivez à la même adresse.	To have it deleted, write to the same address.
+À emporter	To take away
+Imprimer ou enregistrer en PDF	Print or save as PDF
+Calculé le 10 novembre 2026 sur les dépôts publics	Computed on 10 November 2026 on the public repositories
+Avant le go : ce qui bloque, et pourquoi.	Before the go: what blocks, and why.
+Des applications publiques de runward, lues par le contrôle sur leur dépôt public, avec runward 0.46.0. Une phrase par application, et de quoi le vérifier vous-même.	runward’s own public applications, read by the check on their public repository, with runward 0.46.0. One sentence per application, and what you need to check it yourself.
+La scène, en quatre lignes	The scene, in four lines
+Les 14 tests restent réussis.	All 14 tests still pass.
+Le contrôle refuse : deux preuves du dossier citent encore l’ancien nom, dont une dans le dossier de sécurité.	The check refuses: two pieces of evidence in the record still cite the old name, one of them in the security assessment.
+La réparation tient en deux lignes, et rien ne bloque.	The repair is two lines, and nothing is blocking.
+Le même contrôle, relancé chez vous sur le même commit, rend la même application, la même version, le même état et les mêmes écarts. Node.js 22.12 ou plus récent.	The same check, run again on your side on the same commit, gives the same application, the same version, the same state and the same gaps. Node.js 22.12 or newer.
+Un essai sur une de vos applications :	A trial on one of your applications:

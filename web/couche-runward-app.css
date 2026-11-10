@@ -78,3 +78,37 @@
 }
 
 @media (min-width: 760px){ :root{ --gut:32px; } }
+
+/* ---- the public pages (web/site/, ADR-0022): the landing at / and its pages stand on this layer, and what they
+   add holds its values here too, ported from the mini-site of 2026-11-11 with each value unchanged (an RGB triplet
+   became its hex). Nothing of the shell reads these names.
+   - the scene: a haze of the two warm state hues and a cool grey (never the live blue), a grid of dots, a grain,
+     a glass and two shadows;
+   - the inverted section ("deep on a light page, light on a dark page"): the other theme's roles, two of them
+     its own (--inv-refus, --inv-term); printed, a dark page takes these, which are the light ones;
+   - the paper: the printed one-page summary and the tile of the QR code stay black on white in both themes;
+   - a mask's ink, of which only the alpha counts, and the veil behind the contact box. */
+:root{
+  --nue-1:#d55e00; --nue-2:#e69f00; --nue-3:#f0ac8c; --nue-4:#c4cad6; --nue-a:.68;
+  --dot:rgba(23,23,23,.10); --grain:.045; --blend:multiply;
+  --verre:rgba(255,255,255,.86); --verre-line:rgba(23,23,23,.10);
+  --ombre:0 44px 90px -44px rgba(96,44,6,.34), 0 14px 30px -18px rgba(23,23,23,.20);
+  --ombre-2:0 30px 70px -36px rgba(23,23,23,.30), 0 10px 24px -16px rgba(23,23,23,.14);
+  --scene:#f4f4f6;
+  --inv-bg:#000000; --inv-bg-2:#0c0c0e; --inv-line:#1f1f22; --inv-line-2:#2e2e33; --inv-text:#ededed; --inv-text-2:#a1a1a1;
+  --inv-bar:#6e6e78; --inv-beat:#2a2a2e; --inv-hit:#ffffff; --inv-refus:#c75a0a;
+  --inv-term:#111114; --inv-term-ink:#ededed; --inv-term-soft:#a1a1a1; --inv-dot:rgba(255,255,255,.09);
+  --papier:#ffffff; --encre-papier:#171717;
+  --masque:#000000; --voile:rgba(0,0,0,.42);
+}
+:root[data-theme="dark"]{
+  --nue-3:#96461e; --nue-4:#464a5a; --nue-a:.40;
+  --dot:rgba(255,255,255,.10); --grain:.09; --blend:overlay;
+  --verre:rgba(12,12,14,.84); --verre-line:rgba(255,255,255,.12);
+  --ombre:0 50px 120px -30px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.06);
+  --ombre-2:0 40px 90px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.05);
+  --scene:#0a0a0c;
+  --inv-bg:#ffffff; --inv-bg-2:#f7f7f8; --inv-line:#ebebeb; --inv-line-2:#dcdcdf; --inv-text:#171717; --inv-text-2:#5e5e5e;
+  --inv-bar:#7e7e88; --inv-beat:#ececef; --inv-hit:#000000; --inv-refus:#9f4502;
+  --inv-term:#f1f1f3; --inv-term-ink:#171717; --inv-term-soft:#5e5e5e; --inv-dot:rgba(23,23,23,.10);
+}
