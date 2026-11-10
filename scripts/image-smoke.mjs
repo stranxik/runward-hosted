@@ -46,7 +46,16 @@ if (smoke.status !== 0) fail("smoke");
 if (SEND_TOKEN_FROM_THIS_JOB === "yes") {
   // A real token of this job, verified against GitHub's real keys: it must be refused because ci.yml is not
   // the send workflow, which proves the signature, issuer and audience passed.
-  const t = await (await fetch(`${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encodeURIComponent(ORIGIN)}`, { headers: { authorization: `Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } })).json();
+  // GitHub's token service can answer a proxy error page for a moment (seen on main, 2026-11-10): read the token
+  // only from a 200 that parses, and try again a few times before failing on GitHub's side, not ours.
+  let t = null;
+  for (let i = 0; i < 5 && !t; i++) {
+    if (i) await sleep(3000);
+    const res = await fetch(`${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${encodeURIComponent(ORIGIN)}`, { headers: { authorization: `Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}` } }).catch(() => null);
+    if (res?.ok) t = await res.json().catch(() => null);
+    if (t && typeof t.value !== "string") t = null;
+  }
+  if (!t) fail("GitHub's OIDC token service did not answer a token after five tries (GitHub's side, not the image)");
   const body = Buffer.from("{}");
   const r = await fetch(`${ORIGIN}/api/v0/exports`, { method: "POST", headers: { authorization: `Bearer ${t.value}`, "runward-mission": "ci", "runward-export-kind": "check", "content-digest": "sha-256=:RBNvo1WzZ4oRRq0W9+hknpT7T8If536DEMBg9hyq/4o=:" }, body });
   const b = await r.json();
