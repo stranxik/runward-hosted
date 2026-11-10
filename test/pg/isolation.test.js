@@ -285,6 +285,30 @@ test("the daily jobs' last outcome is read by the service (rw_app) through rw.da
   assert.equal((await h.store.tx(null, (tx) => tx.dailyJobs())).retention.ok, true, "the latest run is the one read");
 });
 
+// Review finding of 2026-11-10 (code review C4): rw.daily_jobs() evaluated its `ok` on every retained note of
+// both jobs, not on the two it keeps, on each call of the public /api/health: 365 days of 1,000 tenants took
+// 1.5 s a call, on the way to the 10 s statement deadline. It reads the last note of each job by an index.
+test("rw.daily_jobs() evaluates the last note of each job and no other, found through its index", async () => {
+  const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+  try {
+    // an older note that cannot be evaluated at all: a function that reads every note fails on it
+    await maint.tx(null, (tx) => tx.operatorNote("retention", { failed: "not a number", report: [] }));
+    for (let day = 0; day < 40; day++) await maint.tx(null, (tx) => tx.operatorNote("retention", { failed: 0, report: Array.from({ length: 25 }, () => ({ erased: 0, attempts: 1 })) }));
+  } finally { await maint.close(); }
+  const j = await h.store.tx(null, (tx) => tx.dailyJobs());
+  assert.equal(j.retention.ok, true, "the last note is the one evaluated");
+  const [index] = await adminDb`select indexdef from pg_indexes where schemaname = 'rw' and indexname = 'operator_journal_what_seq'`;
+  assert.match(index?.indexdef ?? "", /\(what, seq DESC\)/);
+  // the read the function makes for each job is served by that index, not by a scan of the journal
+  const plan = await adminDb.begin(async (q) => {
+    await q.unsafe("set local enable_seqscan = off");
+    return q.unsafe("explain (format json) select o.what, o.at, o.detail from rw.operator_journal o where o.what = 'retention' order by o.seq desc limit 1");
+  });
+  assert.match(JSON.stringify(plan), /operator_journal_what_seq/);
+  // control: the unreadable note is still there, and reading every note fails on it, as the function did
+  await assert.rejects(adminDb.unsafe("select (detail ->> 'failed')::integer from rw.operator_journal where what = 'retention'"), /invalid input syntax for type integer/);
+});
+
 // Review finding of 2026-11-10 (code review C1, blocking): rw.daily_jobs() named the type jsonb without its
 // schema under `search_path = rw, pg_catalog`. PostgreSQL searches pg_temp first for a type unless the path
 // names it, so a session as rw_app planted pg_temp.jsonb, a domain whose check calls its own function, and

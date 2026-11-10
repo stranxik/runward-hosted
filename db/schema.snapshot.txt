@@ -452,6 +452,7 @@ grant rw_meta.migration rw_owner SELECT
 grant rw_meta.migration rw_owner TRIGGER
 grant rw_meta.migration rw_owner TRUNCATE
 grant rw_meta.migration rw_owner UPDATE
+index CREATE INDEX operator_journal_what_seq ON rw.operator_journal USING btree (what, seq DESC)
 index CREATE UNIQUE INDEX archive_pkey ON rw.archive USING btree (id)
 index CREATE UNIQUE INDEX blob_pkey ON rw.blob USING btree (tenant_id, sha256)
 index CREATE UNIQUE INDEX fleet_index_pkey ON rw.fleet_index USING btree (tenant_id, version)
