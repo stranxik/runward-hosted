@@ -3,7 +3,9 @@
 # and the daily jobs' alert (a run that did not complete, or no run for more than a day), and the alert on
 # calls the budgets of failures served untracked (the limiter's tables were full), all judged by
 # scripts/probe-verdict.mjs; after two failures in a row it opens (or updates) an issue "service unavailable", and
-# closes it when the service answers again. It also watches the certificate (14 days) and its own
+# closes it when the service answers again. One reason opens the issue on the first probe that reads it:
+# calls served untracked, whose count is one instance's memory and is gone when the instance stops or is
+# replaced (code review C34; the verdict's exit 3). It also watches the certificate (14 days) and its own
 # disabling by GitHub after 60 days without activity (a warning issue at 45). Off until the service is
 # deployed: set the repository variable RW_PROBE_ENABLED to true.
 name: probe
@@ -33,9 +35,10 @@ jobs:
           days=$(( ( $(date -d "$end" +%s 2>/dev/null || echo 0) - $(date +%s) ) / 86400 ))
           echo "health=$h commit=$v cert_days=$days $verdict" | tee -a "$GITHUB_STEP_SUMMARY"
           ok=$([ "$vcode" = "0" ] && echo yes || echo no)
-          echo "ok=$ok" >> "$GITHUB_OUTPUT"; echo "days=$days" >> "$GITHUB_OUTPUT"; echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          at_once=$([ "$vcode" = "3" ] && echo yes || echo no)
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"; echo "at_once=$at_once" >> "$GITHUB_OUTPUT"; echo "days=$days" >> "$GITHUB_OUTPUT"; echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
       - name: open, update or close the issue
-        env: { OK: "${{ steps.read.outputs.ok }}", DAYS: "${{ steps.read.outputs.days }}", VERDICT: "${{ steps.read.outputs.verdict }}" }
+        env: { OK: "${{ steps.read.outputs.ok }}", AT_ONCE: "${{ steps.read.outputs.at_once }}", DAYS: "${{ steps.read.outputs.days }}", VERDICT: "${{ steps.read.outputs.verdict }}" }
         run: |
           open=$(gh issue list -R "$REPO" --label probe --state open --json number -q '.[0].number')
           prev=$(gh run list -R "$REPO" --workflow probe.yml --limit 2 --json conclusion -q '.[1].conclusion')
@@ -43,6 +46,7 @@ jobs:
             [ -n "$open" ] && gh issue close -R "$REPO" "$open" -c "The service answers again ($(date -u +%FT%TZ))."
           else
             if [ -n "$open" ]; then gh issue comment -R "$REPO" "$open" -b "Still failing at $(date -u +%FT%TZ): $VERDICT."
+            elif [ "$AT_ONCE" = "yes" ]; then gh issue create -R "$REPO" --label probe -t "service unavailable or erring" -b "This probe failed for a reason that does not wait for a second one: $VERDICT ($(date -u +%FT%TZ))."
             elif [ "$prev" = "failure" ]; then gh issue create -R "$REPO" --label probe -t "service unavailable or erring" -b "Two probes in a row failed: $VERDICT ($(date -u +%FT%TZ))."; fi
           fi
           if [ "${DAYS:-0}" -lt 14 ]; then gh issue create -R "$REPO" --label probe -t "certificate expires in ${DAYS} days" -b "Renew the certificate of app.runward.dev." || true; fi

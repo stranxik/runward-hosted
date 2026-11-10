@@ -2,6 +2,10 @@
 // requests of the other routes that are not authenticated yet). Per address and for the instance, a fixed
 // window of one minute, on a real socket through the real routes.
 import { test, after } from "node:test";
+import { execFile, spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync, chmodSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import assert from "node:assert/strict";
 import { readConfig, compose } from "../../src/main.js";
 import { memoryStore } from "../../src/adapters/store/memory.js";
@@ -389,17 +393,17 @@ test("C14: past the table of prefixes a call is served untracked, said once a wi
   assert.deepEqual([call("10.0.2.1"), call("10.0.3.1")], ["prefix", "prefix"], "the table of prefixes: two prefixes");
   assert.deepEqual([call("10.0.4.1"), call("10.0.5.1"), call("10.0.4.1")], ["none", "none", "none"], "past both, served untracked");
   assert.equal(said, 1, "said once in this window, not once a call");
-  assert.deepEqual(l.overflow(), { countedByPrefix: 2, untracked: 3 });
+  assert.deepEqual(l.overflow(), { countedByPrefix: 2, untracked: 3, refusedByPrefix: 0 });
   t = 60_000;
   assert.deepEqual([call("10.0.0.1"), call("10.0.1.1"), call("10.0.2.1"), call("10.0.3.1"), call("10.0.4.1")], ["address", "address", "prefix", "prefix", "none"]);
   assert.equal(said, 2, "and once in the next window");
-  assert.deepEqual(l.overflow(), { countedByPrefix: 4, untracked: 4 }, "the last windows are remembered");
+  assert.deepEqual(l.overflow(), { countedByPrefix: 4, untracked: 4, refusedByPrefix: 0 }, "the last windows are remembered");
   t = (OVERFLOW_HISTORY_MINUTES - 1) * 60_000;
-  assert.deepEqual(l.overflow(), { countedByPrefix: 4, untracked: 4 }, "for 130 minutes: two hourly probes see it");
+  assert.deepEqual(l.overflow(), { countedByPrefix: 4, untracked: 4, refusedByPrefix: 0 }, "for 130 minutes, in one process");
   t = OVERFLOW_HISTORY_MINUTES * 60_000;
-  assert.deepEqual(l.overflow(), { countedByPrefix: 2, untracked: 1 }, "then the first window is forgotten");
+  assert.deepEqual(l.overflow(), { countedByPrefix: 2, untracked: 1, refusedByPrefix: 0 }, "then the first window is forgotten");
   t = (OVERFLOW_HISTORY_MINUTES + 1) * 60_000;
-  assert.deepEqual(l.overflow(), { countedByPrefix: 0, untracked: 0 });
+  assert.deepEqual(l.overflow(), { countedByPrefix: 0, untracked: 0, refusedByPrefix: 0 });
 });
 
 test("C14, through the routes: untracked calls are a log line without an address, a count in /api/health, and an alert of the probe", async () => {
@@ -409,15 +413,15 @@ test("C14, through the routes: untracked calls are a log line without an address
   const s = await serve({ trustProxy: true, log, reads: { perAddress: 100, global: 1000 }, signedOut: { ...RATE_LIMITS.signedOut, ...tiny }, machine: { ...RATE_LIMITS.machine, ...tiny } });
   const health = async () => (await s.get("/api/health", { "x-forwarded-for": "192.0.2.200" })).json();
   const quiet = await health();
-  assert.deepEqual(quiet.limits, { windowSeconds: OVERFLOW_HISTORY_MINUTES * 60, machine: { countedByPrefix: 0, untracked: 0 }, signedOut: { countedByPrefix: 0, untracked: 0 } });
+  assert.deepEqual(quiet.limits, { windowSeconds: OVERFLOW_HISTORY_MINUTES * 60, machine: { countedByPrefix: 0, untracked: 0, refusedByPrefix: 0 }, signedOut: { countedByPrefix: 0, untracked: 0, refusedByPrefix: 0 } });
   const up = { ...quiet, ok: true, db: "ok", objectStore: "ok", dailyJobs: { retention: { lastRun: null, ok: null } } };
   assert.equal(probeVerdict({ healthStatus: 200, health: up, version: { commit: "abc" } }).ok, true, "nothing untracked: no alert");
 
   // six dead cookies, each from its own /24: two take the table, two the prefixes, two are untracked
   for (let i = 0; i < 6; i++) assert.equal((await s.get("/api/v0/session", { "x-forwarded-for": `198.51.${i}.9`, cookie: `__Host-rw_session=dead-${i}` })).status, 401);
   const after = await health();
-  assert.deepEqual(after.limits.signedOut, { countedByPrefix: 2, untracked: 2 });
-  assert.deepEqual(after.limits.machine, { countedByPrefix: 0, untracked: 0 });
+  assert.deepEqual(after.limits.signedOut, { countedByPrefix: 2, untracked: 2, refusedByPrefix: 0 });
+  assert.deepEqual(after.limits.machine, { countedByPrefix: 0, untracked: 0, refusedByPrefix: 0 });
   assert.equal(lines.length, 1, "one line for the window, not one a call");
   assert.equal(lines[0].event, "limits.untracked");
   assert.equal(lines[0].detail.budget, "signedOut");
@@ -426,6 +430,120 @@ test("C14, through the routes: untracked calls are a log line without an address
   assert.equal(verdict.ok, false);
   assert.match(verdict.reasons.join(), /2 call\(s\) of the session cookies were served untracked/);
   // counted with a prefix is not an alert: the budgets hold there
-  const held = { ...after.limits, signedOut: { countedByPrefix: 5, untracked: 0 } };
+  const held = { ...after.limits, signedOut: { countedByPrefix: 5, untracked: 0, refusedByPrefix: 0 } };
   assert.equal(probeVerdict({ healthStatus: 200, health: { ...up, limits: held }, version: { commit: "abc" } }).ok, true);
+});
+
+// Code review of 2026-11-10 on 144211b, C34: the count the alert reads is one process's memory, the service
+// scales to zero, and the issue needed two failed probes in a row: a flood, then an instance stopped or
+// replaced within the hour, and the second probe read a new process whose count was zero.
+test("C34: the count of untracked calls ends with the process, so the probe's verdict asks for the issue at once (exit 3), and for that reason only", () => {
+  const up = { ok: true, db: "ok", objectStore: "ok", dailyJobs: { retention: { lastRun: null, ok: null } } };
+  const flooded = { ...up, limits: { windowSeconds: 7800, machine: { countedByPrefix: 0, untracked: 0, refusedByPrefix: 0 }, signedOut: { countedByPrefix: 9, untracked: 4, refusedByPrefix: 2 } } };
+  const quiet = { ...up, limits: { windowSeconds: 7800, machine: { countedByPrefix: 3, untracked: 0, refusedByPrefix: 7 }, signedOut: { countedByPrefix: 9, untracked: 0, refusedByPrefix: 2 } } };
+  const v = (health, healthStatus = 200) => probeVerdict({ healthStatus, health, version: { commit: "abc" } });
+  assert.deepEqual([v(flooded).ok, v(flooded).atOnce], [false, true], "an untracked call does not wait for a second probe");
+  assert.deepEqual([v(quiet).ok, v(quiet).atOnce], [true, false], "counted with a prefix, or refused for one, is no alert: the budgets held");
+  // the other reasons keep the rule of two failures in a row
+  assert.deepEqual([v({ ok: false, db: "down", objectStore: "ok" }, 503).ok, v({ ok: false, db: "down", objectStore: "ok" }, 503).atOnce], [false, false]);
+  assert.equal(v({ ...up, errors: { windowSeconds: 300, requests: 100, serverErrors: 50, rate: 0.5 } }).atOnce, false);
+  assert.equal(v({ ...up, dailyJobs: null }).atOnce, false);
+  // the process is the memory: a second limiter, as after a restart, has forgotten what the first one counted
+  const tiny = { perAddress: 2, global: 100, maxAddresses: 1, maxPrefixes: 1 };
+  const first = failureLimiter(tiny);
+  for (const a of ["10.0.0.1", "10.0.1.1", "10.0.2.1"]) first.enter(a).settle(true);
+  assert.equal(first.overflow().untracked, 1);
+  assert.equal(failureLimiter(tiny).overflow().untracked, 0, "the control: a new process starts at zero");
+  // the command the workflow runs, and its exit code
+  const dir = mkdtempSync(join(tmpdir(), "rw-probe-"));
+  try {
+    const run = (health, status) => {
+      writeFileSync(join(dir, "health.json"), JSON.stringify(health)); writeFileSync(join(dir, "version.json"), JSON.stringify({ commit: "abc" }));
+      return spawnSync(process.execPath, [new URL("../../scripts/probe-verdict.mjs", import.meta.url).pathname, join(dir, "health.json"), String(status), join(dir, "version.json")], { encoding: "utf8" });
+    };
+    assert.equal(run(up, 200).status, 0);
+    assert.equal(run(flooded, 200).status, 3);
+    assert.match(run(flooded, 200).stdout, /^probe: 4 call\(s\) of the session cookies were served untracked/);
+    assert.equal(run({ ok: false, db: "down", objectStore: "ok" }, 503).status, 1);
+    assert.equal(run({ ...flooded, ok: false, db: "down" }, 503).status, 3, "with another reason next to it, still at once");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// The step of probe.yml that opens, updates or closes the issue, run as GitHub runs it (bash -e), with a
+// `gh` and a `date` of our own on its PATH.
+test("C34: probe.yml opens the issue on the first failed probe when the verdict says at once, and keeps two failures in a row for the rest", async () => {
+  const text = readFileSync(new URL("../../.github/workflows/probe.yml", import.meta.url), "utf8");
+  // the first step turns the verdict's exit 3 into the output the second step reads
+  assert.match(text, /^ {10}at_once=\$\(\[ "\$vcode" = "3" \] && echo yes \|\| echo no\)$/m);
+  assert.match(text, /echo "at_once=\$at_once" >> "\$GITHUB_OUTPUT"/);
+  assert.match(text, /AT_ONCE: "\$\{\{ steps\.read\.outputs\.at_once \}\}"/);
+  const lines = text.split("\n");
+  const at = lines.indexOf("      - name: open, update or close the issue");
+  assert.ok(at > 0 && lines[at + 2] === "        run: |", "the step is where this test reads it");
+  const script = lines.slice(at + 3).filter((l) => l.startsWith("          ") || !l.trim()).map((l) => l.slice(10)).join("\n");
+  assert.match(script, /gh issue create/);
+  const dir = mkdtempSync(join(tmpdir(), "rw-probe-"));
+  try {
+    writeFileSync(join(dir, "step.sh"), script);
+    writeFileSync(join(dir, "gh"), `#!/bin/bash\necho "$1 $2" >> "$CALLS"\ncase "$1 $2" in\n  "issue list") echo "$FAKE_OPEN";;\n  "run list") echo "$FAKE_PREV";;\n  "api "*) echo 2026-11-09T00:00:00Z;;\n  "issue create") echo "$*" >> "$CREATED";;\nesac\n`);
+    writeFileSync(join(dir, "date"), `#!/bin/bash\ncase "$*" in *+%s*) echo 1794268800;; *) echo 2026-11-10T00:00:00Z;; esac\n`);
+    chmodSync(join(dir, "gh"), 0o755); chmodSync(join(dir, "date"), 0o755);
+    const step = async ({ ok, atOnce, open = "", prev = "success" }) => {
+      rmSync(join(dir, "calls"), { force: true }); rmSync(join(dir, "created"), { force: true });
+      const env = { PATH: `${dir}:/usr/bin:/bin`, OK: ok, AT_ONCE: atOnce, DAYS: "90", VERDICT: "the verdict", REPO: "o/r", GH_TOKEN: "x", FAKE_OPEN: open, FAKE_PREV: prev, CALLS: join(dir, "calls"), CREATED: join(dir, "created") };
+      const code = await new Promise((resolve) => execFile("/bin/bash", ["-e", join(dir, "step.sh")], { env, timeout: 30_000 }, (e) => resolve(e ? e.code : 0)));
+      const calls = existsSync(join(dir, "calls")) ? readFileSync(join(dir, "calls"), "utf8").trim().split("\n") : [];
+      return { code, calls: calls.filter((c) => /^issue (create|comment|close)$/.test(c)), created: existsSync(join(dir, "created")) ? readFileSync(join(dir, "created"), "utf8") : "" };
+    };
+    // the first failed probe, the one before it green
+    const first = await step({ ok: "no", atOnce: "yes" });
+    assert.deepEqual([first.code, first.calls], [1, ["issue create"]], "at once: the issue opens on this probe");
+    assert.match(first.created, /--label probe .*This probe failed for a reason that does not wait for a second one: the verdict/);
+    assert.deepEqual(await step({ ok: "no", atOnce: "no" }).then((r) => [r.code, r.calls]), [1, []], "any other reason waits for the second failure");
+    const second = await step({ ok: "no", atOnce: "no", prev: "failure" });
+    assert.deepEqual(second.calls, ["issue create"]);
+    assert.match(second.created, /Two probes in a row failed: the verdict/);
+    // an issue already open is commented, never opened twice; a green probe closes it
+    assert.deepEqual((await step({ ok: "no", atOnce: "yes", open: "12" })).calls, ["issue comment"]);
+    assert.deepEqual(await step({ ok: "yes", atOnce: "no", open: "12" }).then((r) => [r.code, r.calls]), [0, ["issue close"]]);
+    assert.deepEqual(await step({ ok: "yes", atOnce: "no" }).then((r) => [r.code, r.calls]), [0, []]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// Same review, C35: a key without a place is refused for what the keys of its own prefix that had no place
+// did. The cost was written nowhere, and those refusals were counted nowhere.
+test("C35: the refusals on a prefix's allowance are counted, and what they cost inside one /48 is 496 requests a minute", () => {
+  let t = 0;
+  const l = failureLimiter({ ...RATE_LIMITS.signedOut, now: () => t });
+  const fail = (a) => { const e = l.enter(a); if (e.ok) e.settle(true); return e.ok ? e.counted : e.scope; };
+  const net = (i) => `2001:db8:1:${i.toString(16)}::1`;
+  let sent = 0;
+  // 256 calls, each from its own /64 of one /48, take the prefix's share of the table
+  for (let i = 0; i < 256; i++) { assert.equal(fail(net(i)), "address"); sent++; }
+  // then 240 failures from further /64s spend the prefix's allowance (eight times an address's)
+  for (let i = 256; i < 256 + 240; i++) { assert.equal(fail(net(i)), "prefix"); sent++; }
+  assert.equal(sent, 496);
+  assert.deepEqual(l.overflow(), { countedByPrefix: 240, untracked: 0, refusedByPrefix: 0 });
+  // from here every /64 of that /48 without a place is refused, a stranger's first call included
+  assert.equal(fail(net(0x9000)), "prefix");
+  const stranger = l.enter(net(0x9001));
+  assert.deepEqual([stranger.ok, stranger.scope], [false, "prefix"]);
+  assert.deepEqual(l.overflow(), { countedByPrefix: 240, untracked: 0, refusedByPrefix: 2 }, "counted, where /api/health reads it");
+  // never a /64 that has its place, never another prefix
+  assert.equal(l.enter(net(3)).ok, true);
+  assert.equal(l.enter("2001:db8:2:1::1").ok, true);
+  // the machine routes count every call: 256, then 480, so 736 a minute
+  const m = failureLimiter({ ...RATE_LIMITS.machine, everyCall: true, now: () => t });
+  let calls = 0;
+  for (let i = 0; m.enter(net(i)).ok; i++) calls++;
+  assert.deepEqual([calls, m.overflow()], [736, { countedByPrefix: 480, untracked: 0, refusedByPrefix: 1 }]);
+  // an IPv4 /24 never holds more than its share: it is counted with its prefix only once the table is full
+  const v4 = failureLimiter({ ...RATE_LIMITS.signedOut, now: () => t });
+  for (let i = 0; i < 256; i++) assert.equal(v4.enter(`192.0.2.${i}`).counted, "address");
+  assert.equal(v4.overflow().countedByPrefix, 0);
+  // the count is kept with the others, then forgotten with them
+  t = 60_000;
+  assert.equal(l.overflow().refusedByPrefix, 2);
+  t = (OVERFLOW_HISTORY_MINUTES + 1) * 60_000;
+  assert.equal(l.overflow().refusedByPrefix, 0);
 });

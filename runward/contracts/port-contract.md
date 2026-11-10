@@ -34,6 +34,7 @@ TenantStore     tx(tenantId | null, fn(tx) -> T) -> T             one transactio
                 newId() | ping() | close()
 ObjectStore     putBytes(tenant, sha256, bytes) | getBytes(tenant, sha256) -> bytes | null | removeBytes(tenant, sha256)
                 writeSecurity(tenant, ulid, event) | securitySince(tenant, afterUlid) -> [{ id, event }]
+                securityLatest(tenant, match) -> { id, event } | null   (read from the newest object back)
                 putArchive(tenant, id, bytes) | getArchive(tenant, id) -> bytes | null | removeArchive(tenant, id) | ping() -> boolean
 WorkloadVerifier verify(token, { audience }) -> claims        throws TokenRefused(code) or KeysUnavailable
 HumanAuthenticator registrationOptions({ memberId, label, exclude }) | verifyRegistration({ response, expectedChallenge }) -> credential | null

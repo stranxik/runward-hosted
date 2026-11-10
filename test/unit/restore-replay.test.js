@@ -763,7 +763,7 @@ test("C17: `restore-replay --anchor` is refused restore-not-replayed when a rest
 });
 
 test("C17: `restore-replay --anchor` is refused whole when a tenant's security log cannot be read: it cannot tell whether a restore is waiting", async () => {
-  const h = harness();
+  const h = harness({ config: { jobRetryWaits: [0, 0] } });
   const f = await founder(h);
   await h.app.operator.restoreReplay({ anchor: true });
   unreadable(h, f.tenant);
@@ -773,4 +773,102 @@ test("C17: `restore-replay --anchor` is refused whole when a tenant's security l
   assert.equal(notes(h, "restore-anchored").pop().detail.refused, "security-log-unreadable");
   delete h.objects._map.has;
   assert.equal((await h.app.operator.restoreReplay({ anchor: true })).length, 1, "the object store answers again: the anchor is taken");
+});
+
+// Code review of 2026-11-10 on 144211b, C36: the note of an earlier restore's replay comes back with a
+// later backup. Read without its date, it passed for the replay of the restore that is waiting, and the
+// mistaken anchor was taken (the review's control K15: the date dropped, every test stayed green).
+test("C36: the replay of an earlier restore, back with the backup, does not count for the restore that is waiting: `--anchor` is still refused", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 4, prefix: "p" });
+  const anchorsOf = async () => (await h.objects.securitySince(f.tenant, "")).filter((x) => x.event.what === "journal-anchored").length;
+  // a first restore, anchored and replayed
+  const b1 = backup(h);
+  await removePasskey(h, f, "p-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  restore(h, b1);
+  tick(h);
+  await h.app.operator.restoreReplay({ since: b1.since });
+  const firstNote = (await journal(h, f.tenant)).filter((e) => e.body.what === "restore-replayed");
+  assert.equal(firstNote.length, 1, "the control: the first replay is noted in the journal");
+  // life goes on; a second backup holds that note; then a gesture, an anchor, and the second loss
+  const again = { ...f, session: await h.app.identity.sessionFrom((await signIn(h, "p-1")).token) };
+  await removePasskey(h, again, "p-3");
+  const b2 = backup(h);
+  await removePasskey(h, again, "p-4");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = await head(h, f.tenant);
+  restore(h, b2);
+  const restored = await head(h, f.tenant);
+  assert.equal((await journal(h, f.tenant)).filter((e) => e.body.what === "restore-replayed").length, 1, "the control: the earlier replay's note came back with the backup");
+  assert.equal(await anchorsOf(), 2);
+
+  // by mistake: the anchor again, before the replay of the second restore
+  tick(h);
+  const e = await h.app.operator.restoreReplay({ anchor: true }).then(() => null, (x) => x);
+  assert.equal(e?.code, "restore-not-replayed", `a refusal with its code, not ${e?.constructor.name}: ${e?.message}`);
+  assert.equal(await anchorsOf(), 2, "nothing was anchored");
+  // so the replay still says what the second restore lost
+  tick(h);
+  await h.app.operator.restoreReplay({ since: b2.since });
+  const d = await replayNote(h, f.tenant);
+  assert.deepEqual(d.lost, { from: restored.seq + 1, to: before.seq, count: before.seq - restored.seq });
+  assert.ok(d.lost.count >= 1);
+  tick(h);
+  assert.equal((await h.app.operator.restoreReplay({ anchor: true })).length, 1, "and the next anchor is taken");
+});
+
+// Same review, C37: `--anchor` read every tenant's whole security log, one object at a time, and a journal
+// that could not be read ended the gesture for every tenant with no note.
+test("C37: `--anchor` reads each log from its newest object back to its latest anchor, and a journal that cannot be read is retried, then noted", async () => {
+  const h = harness({ config: { jobRetryWaits: [0, 0] } });
+  const f = await founder(h, { passkeys: 3, prefix: "p" });
+  const other = await founder(h, { passkeys: 1, prefix: "q" });
+  await removePasskey(h, f, "p-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  await removePasskey(h, f, "p-3");
+  // what the check reads: the objects written since the latest anchor, and that anchor
+  const m = h.objects._map, get = m.get;
+  let read = [];
+  m.get = function (k) { if (/\/security\//.test(k)) read.push(k); return get.call(this, k); };
+  const log = async (tenant) => (await h.objects.securitySince(tenant, "")).map((x) => x.event.what);
+  const whole = await log(f.tenant);
+  assert.ok(whole.length >= 5 && whole.indexOf("journal-anchored") === whole.length - 2, `the control: the log holds events before its anchor (${whole})`);
+  assert.deepEqual(await h.objects.securityLatest(f.tenant, (ev) => ev.what === "journal-anchored").then((x) => x.event.what), "journal-anchored");
+  read = [];
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const mine = read.filter((k) => k.includes(f.tenant)).length, theirs = read.filter((k) => k.includes(other.tenant)).length;
+  assert.deepEqual([mine, theirs], [2, 1], `the newest object and the anchor before it, never the ${whole.length} of the log`);
+  m.get = get;
+  // no anchor in a log: the whole log is read, and null is the answer
+  assert.equal(await h.objects.securityLatest(f.tenant, () => false), null);
+  // an object that cannot be read on the way to the anchor is the refusal securitySince gives
+  const id = unreadable(h, f.tenant);
+  assert.match(await h.objects.securityLatest(f.tenant, () => false).then(() => "", (x) => x.message), new RegExp(`^security-log-unreadable: object ${id} is listed and cannot be read$`));
+  delete m.has;
+
+  // a journal that cannot be read: tried three times, then noted, and nothing is anchored for anyone
+  const tx = h.store.tx.bind(h.store);
+  let tries = 0, broken = true;
+  h.store.tx = (tenant, fn) => tx(tenant, (t) => fn(tenant === f.tenant && broken ? new Proxy(t, { get: (o, k) => (k === "ledgerAll" ? () => { tries++; throw new Error("the database closed the connection"); } : o[k]) }) : t));
+  const anchorsOf = async (tenant) => (await log(tenant)).filter((w) => w === "journal-anchored").length;
+  const had = [await anchorsOf(f.tenant), await anchorsOf(other.tenant)];
+  tick(h);
+  const e = await h.app.operator.restoreReplay({ anchor: true }).then(() => null, (x) => x);
+  assert.match(e?.message ?? "", /^the journal of 1 tenant\(s\) out of 2 could not be read to check that no restore is waiting for its replay; nothing was anchored; first reason: the database closed the connection$/);
+  assert.equal(tries, 3, "three attempts, as a daily job's step");
+  assert.deepEqual([await anchorsOf(f.tenant), await anchorsOf(other.tenant)], had, "nothing was anchored");
+  const note = notes(h, "restore-anchored").pop();
+  assert.deepEqual({ failed: note.detail.failed, report: note.detail.report.map((r) => [r.tenant, r.failed, r.attempts, r.error]) }, { failed: 1, report: [[f.tenant, true, 3, "the database closed the connection"]] });
+  // a read that fails once is tried again, and the anchors are taken
+  broken = true; tries = 0;
+  h.store.tx = (tenant, fn) => tx(tenant, (t) => fn(tenant === f.tenant && tries === 0 ? new Proxy(t, { get: (o, k) => (k === "ledgerAll" ? () => { tries++; throw new Error("the database closed the connection"); } : o[k]) }) : t));
+  tick(h);
+  const report = await h.app.operator.restoreReplay({ anchor: true });
+  assert.deepEqual(report.map((r) => r.failed), [undefined, undefined]);
+  assert.deepEqual([await anchorsOf(f.tenant), await anchorsOf(other.tenant)], had.map((n) => n + 1));
 });
