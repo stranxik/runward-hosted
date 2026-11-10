@@ -7,6 +7,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SCRIPT = new URL("../../scripts/container-deploy.sh", import.meta.url).pathname;
 const ID = "11111111-2222-4333-8444-555555555555";
@@ -14,31 +17,46 @@ const TOKEN = ["stand", "in", "key"].join("-");
 const digest = (n) => `rg.fr-par.scw.cloud/runward/runward-hosted@sha256:${String(n).repeat(64).slice(0, 64)}`;
 const ENV = { NODE_ENV: "production", DATABASE_SSL: "verify-full", DATABASE_CA: "-----BEGIN CERTIFICATE-----\nMII\n-----END CERTIFICATE-----\n", S3_BUCKET: "runward-hosted-objects", RW_IMAGE: digest(1), RW_COMMIT: "a".repeat(40) };
 
-/** The hoster, as far as this script uses it: GET, PATCH (environment_variables replaced whole), POST deploy. */
-async function hoster({ env = ENV, lose = null } = {}) {
+/** The hoster, as far as this script uses it: GET, PATCH (environment_variables replaced whole), POST deploy.
+ * As in production (deploy run of 2026-11-10): an accepted PATCH starts a redeploy by itself (`pending` for
+ * `pending` reads, then `ends`), and a POST /deploy on a container that is redeploying is answered 409.
+ * `refuse` answers the PATCH itself 409, changing nothing (a container the hoster does not let be updated). */
+async function hoster({ env = ENV, lose = null, pending = 0, ends = "ready", refuse = false } = {}) {
   const state = { registry_image: digest(1), status: "ready", environment_variables: { ...env }, secret_environment_variables: [{ key: "DATABASE_URL", hashed_value: "$argon2id$x" }] };
   const patches = [];
+  const deploys = [];
+  let left = 0;
   const server = createServer((req, res) => {
     let body = "";
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       if (req.headers["x-auth-token"] !== TOKEN) { res.writeHead(401).end("{}"); return; }
       const path = `/containers/v1beta1/regions/fr-par/containers/${ID}`;
-      if (req.method === "GET" && req.url === path) { res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(state)); return; }
+      if (req.method === "GET" && req.url === path) {
+        const seen = JSON.stringify(state);
+        if (state.status === "pending" && --left <= 0) { state.status = ends; if (ends === "error") state.error_message = "the image does not start"; }
+        res.writeHead(200, { "content-type": "application/json" }).end(seen); return;
+      }
       if (req.method === "PATCH" && req.url === path) {
         const b = JSON.parse(body);
         patches.push(b);
+        if (refuse) { res.writeHead(409, { "content-type": "application/json" }).end(JSON.stringify({ message: "resource is locked", type: "locked" })); return; }
+        if (pending > 0) { state.status = "pending"; left = pending; }
         if (b.registry_image) state.registry_image = b.registry_image;
         if (b.environment_variables) state.environment_variables = { ...b.environment_variables }; // replaced, as the hoster does
         if (lose) delete state.environment_variables[lose];
         res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(state)); return;
       }
-      if (req.method === "POST" && req.url === `${path}/deploy`) { state.status = "ready"; res.writeHead(200).end(JSON.stringify(state)); return; }
+      if (req.method === "POST" && req.url === `${path}/deploy`) {
+        deploys.push(state.status);
+        if (state.status === "pending") { res.writeHead(409, { "content-type": "application/json" }).end(JSON.stringify({ message: "resource is in a transient state", type: "transient_state" })); return; }
+        res.writeHead(200).end(JSON.stringify(state)); return;
+      }
       res.writeHead(404).end("{}");
     });
   });
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
-  return { state, patches, url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)) };
+  return { state, patches, deploys, url: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => server.close(r)) };
 }
 
 test("container-deploy: the tools it runs with are here (bash, curl, jq, as on the deploy runner ubuntu-24.04)", () => {
@@ -46,9 +64,9 @@ test("container-deploy: the tools it runs with are here (bash, curl, jq, as on t
   for (const tool of ["bash", "curl", "jq"]) assert.equal(spawnSync(tool, ["--version"]).status, 0, `${tool} is required by scripts/container-deploy.sh and by this test`);
 });
 
-function run(args, env) {
+function run(args, env, script = SCRIPT) {
   return new Promise((resolve) => {
-    const child = spawn("bash", [SCRIPT, ...args], { env: { PATH: process.env.PATH, ...env } });
+    const child = spawn("bash", [script, ...args], { env: { PATH: process.env.PATH, ...env } });
     let out = "";
     child.stdout.on("data", (c) => (out += c));
     child.stderr.on("data", (c) => (out += c));
@@ -116,4 +134,73 @@ test("container-deploy: a tag, another registry, or an API other than the hoster
     }
     assert.equal(h.patches.length, 0);
   } finally { await h.close(); }
+});
+
+// The deploy of 2026-11-10: the PATCH was accepted, the hoster redeployed by itself, and the POST /deploy
+// the script sent next was answered 409; the step failed with a container already changed, and so did the
+// rollback's first line, which left the gateway on the new digest.
+const FAST = { CONTAINER_DEPLOY_PAUSE: "0.05" };
+
+test("container-deploy: the update alone deploys; no POST /deploy is sent to a container that already redeploys, and the digest is waited for", async () => {
+  const h = await hoster({ pending: 3 });
+  try {
+    const r = await run([ID, digest(7), "e".repeat(40)], { SCW_SECRET_KEY: TOKEN, SCW_API_URL: h.url, ...FAST });
+    assert.equal(r.code, 0, r.out);
+    assert.equal(h.patches.length, 1);
+    assert.deepEqual(h.deploys, [], "a POST /deploy was sent");
+    assert.equal(h.state.status, "ready");
+    assert.match(r.out, /serves rg\.fr-par/);
+  } finally { await h.close(); }
+});
+
+test("container-deploy: planted control, the script that still sends POST /deploy after the update fails on the stand-in's 409, as in production", async () => {
+  const now = readFileSync(SCRIPT, "utf8");
+  const mark = "\n# the pause between two reads";
+  assert.equal(now.split(mark).length, 2, "the place where the old script sent its POST is not found");
+  assert.equal(/-X POST/.test(now), false, "scripts/container-deploy.sh sends a POST again");
+  const dir = mkdtempSync(join(tmpdir(), "rw-container-deploy-"));
+  const h = await hoster({ pending: 3 });
+  try {
+    const old = join(dir, "container-deploy-old.sh");
+    writeFileSync(old, now.replace(mark, `\ncurl -sSf --max-time 30 -X POST -H @<(auth) -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null${mark}`));
+    const r = await run([ID, digest(7), "e".repeat(40)], { SCW_SECRET_KEY: TOKEN, SCW_API_URL: h.url, ...FAST }, old);
+    assert.equal(r.code, 22, r.out);
+    assert.match(r.out, /error: 409/);
+    assert.deepEqual(h.deploys, ["pending"]);
+    assert.equal(h.state.registry_image, digest(7), "the container was changed before the failure, as in production");
+  } finally { await h.close(); rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("container-deploy: a 409 of another kind, the update itself refused, fails with the status and the hoster's message, and nothing is waited for", async () => {
+  const h = await hoster({ refuse: true });
+  try {
+    const r = await run([ID, digest(8), "f".repeat(40)], { SCW_SECRET_KEY: TOKEN, SCW_API_URL: h.url, ...FAST });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /the update of \S+ was refused \(HTTP 409\): resource is locked/);
+    assert.equal(/serves/.test(r.out), false);
+    assert.equal(h.state.registry_image, digest(1));
+    assert.deepEqual(h.deploys, []);
+  } finally { await h.close(); }
+});
+
+test("container-deploy: a redeploy that ends in error fails and says the hoster's message; one that never ends fails after a bounded number of reads", async () => {
+  const failed = await hoster({ pending: 2, ends: "error" });
+  try {
+    const r = await run([ID, digest(9), "a".repeat(40)], { SCW_SECRET_KEY: TOKEN, SCW_API_URL: failed.url, ...FAST });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /is in error: the image does not start/);
+  } finally { await failed.close(); }
+  const stuck = await hoster({ pending: 1000 });
+  try {
+    const r = await run([ID, digest(9), "a".repeat(40)], { SCW_SECRET_KEY: TOKEN, SCW_API_URL: stuck.url, ...FAST });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /does not serve \S+ after 60 reads/);
+  } finally { await stuck.close(); }
+});
+
+test("container-deploy: the pause between two reads is shortened for the loopback stand-in only, never for the hoster's API", () => {
+  const text = readFileSync(SCRIPT, "utf8");
+  assert.match(text, /^pause=10$/m);
+  assert.match(text, /^\[\[ "\$base" == http:\/\/127\.0\.0\.1:\* && .*CONTAINER_DEPLOY_PAUSE.* \]\] && pause="\$CONTAINER_DEPLOY_PAUSE"$/m);
+  assert.equal((text.match(/CONTAINER_DEPLOY_PAUSE/g) ?? []).length, 2, "CONTAINER_DEPLOY_PAUSE is read elsewhere");
 });
