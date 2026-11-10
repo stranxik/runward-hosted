@@ -43,7 +43,7 @@ The whole sequence of a deploy's first gestures, rehearsed on a throwaway stack 
 - **Recovery**: a restart needs nothing replayed: every state is in PostgreSQL and S3; a dropped upload is re-sent by re-running the client job (idempotent per run, attempt, mission and kind).
 - **Replication**: one instance; per-tenant advisory locks already serialise journal appends and publications if a second instance comes.
 - **Agent suspended awaiting approval**: no agent; an operator workflow waits for its environment approval, then expires (§15).
-- **The journal**: `verify-chains` (daily at the hoster, 03:37 Paris, through the gateway) checks every tenant's chain and writes its report to the operator's journal; `/api/health` says whether its last run completed (§10).
+- **The journal**: `verify-chains` (daily at the hoster, 03:53 Paris, through the gateway) checks every tenant's chain and writes its report to the operator's journal; `/api/health` says whether its last run completed (§10).
 - **A restore of the database** (PADR-0014 note, T24): restore the day's backup; then `scripts/operator-call.sh restore-replay '{"since":"<ULID of the backup's time>","headBefore":"<head before>"}'` (§8); it closes every session of every tenant, replays the access gestures from the object store in ULID order, writes "restore of …: entries lost between seq … and …" to each tenant's journal, and opens a recovery for a member left without a passkey when `--recovery-hash` is given. Drill it once before declaring the floor, on a throwaway instance, timed.
 
 ## 4. Common incidents
@@ -54,8 +54,8 @@ The whole sequence of a deploy's first gestures, rehearsed on a throwaway stack 
 | an upload "not accepted" with a code | validation | the code, message and action in the job summary and in Envois | follow the action named |
 | an index not published (quarantine) | business | the journal entry names the field | fix the export or wait for the runward-fleet update |
 | the probe opened "service unavailable" | unavailable | the hoster console, the container logs by request id | redeploy the last green digest (below) |
-| the probe's issue says "the daily job retention (or verify-chains) did not complete" | job | the gateway's log line `operator.gesture` at the hour of the run (Cockpit, Serverless Containers logs, container `runward-hosted-operator`): how many tenants, and the first reason; the tenant itself is named only in the operator journal, in the database | re-run it: `scripts/operator-call.sh retention` (or `verify-chains`), both idempotent; a broken chain is an incident of its own (T10): do not re-run until the entry is understood |
-| the probe's issue says "has not run since" | job | the triggers of the container `runward-hosted-operator` in the console (`retention` 03:23, `verify-chains` 03:37, Europe/Paris) | run it by hand as above, then check the triggers |
+| the probe's issue says "the daily job retention (or verify-chains) did not complete" | job | the gateway's log lines `operator.gesture` and `operator.job-note` (reasons `deadline`, `exit`, `busy`: a job killed at its deadline, ended without its status, or refused because another gesture ran, then noted by a second short child) at the hour of the run (Cockpit, Serverless Containers logs, container `runward-hosted-operator`): how many tenants, and the first reason; the tenant itself is named only in the operator journal, in the database | re-run it: `scripts/operator-call.sh retention` (or `verify-chains`), both idempotent; a broken chain is an incident of its own (T10): do not re-run until the entry is understood |
+| the probe's issue says "has not run since" | job | the triggers of the container `runward-hosted-operator` in the console (`retention` 03:23, `verify-chains` 03:53, Europe/Paris) | run it by hand as above, then check the triggers |
 | `operator-call` answered `HTTP 409 (error=busy)` | transient | another gesture runs (one at a time) | wait for it, then call again |
 | `operator-call` answered `HTTP 400 (error=arguments)` | validation | the gateway's log line `operator.refused` names the argument | compare with the forms of §8 and call again |
 | the bill nears 15 EUR | ceiling | the console | check the minimum scale (must be 0) and the probe frequency |
@@ -99,9 +99,9 @@ All run inside the hoster's private network through the operator's gateway (ADR-
 | open a bootstrap | `open-bootstrap --hash <sha256> [--tenant <id>] [--witness] [--title <text>]` |
 | open a recovery | `open-recovery --hash <sha256> --tenant <id> --member <id>` |
 | reset a tenant's access | `reset-access --hash <sha256> --tenant <id>` |
-| maintenance | `maintenance --on --until <iso> --reason <text>` / `maintenance --off` |
+| maintenance | `maintenance --on --until <iso> --reason <text>` / `maintenance --off` (during a maintenance, sign-in, the link options and the redemption of a link are refused, as is every browser write; open sessions still read) |
 | retention (daily, 03:23 Paris, trigger) | `retention` |
-| chain check (daily, 03:37 Paris, trigger) | `verify-chains` |
+| chain check (daily, 03:53 Paris, trigger) | `verify-chains` |
 | after a restore | `restore-replay --since <ulid>` |
 
 ## 9. Secrets
@@ -114,7 +114,7 @@ A value the author types or pastes is put in the macOS keychain by masked input,
 
 The hourly probe (`.github/workflows/probe.yml`, on when `vars.RW_PROBE_ENABLED == 'true'`) opens an issue after two failures in a row, and comments on it each hour with its verdict until the cause is gone: the service unavailable, an error rate above 5 % over five minutes, or a daily job that did not complete or has not run for more than 26 hours; the witness reader (`temoin.yml`) publishes S1 daily; the billing alert at 15 EUR is set in the console.
 
-- **Is it healthy?** `curl -s https://app.runward.dev/api/health | jq .`: `ok`, `db`, `objectStore`, `maintenance`, `errors` (the last five minutes), `dailyJobs` (`lastRun`, `ok` for `retention` and `verify-chains`; null before a first run). The probe's history: `gh run list -R stranxik/runward-hosted --workflow probe.yml`, each run's summary holding its verdict.
+- **Is it healthy?** `curl -s https://app.runward.dev/api/health | jq .`: `ok`, `db`, `objectStore` (a fixed witness object without data, written then read back, its verdict kept 30 s), `maintenance`, `errors` (the last five minutes), `dailyJobs` (`lastRun`, `ok` for `retention` and `verify-chains`, both null before a first run; when `db` is ok and `dailyJobs` itself is null, the outcome could not be read and the probe alerts). The probe's history: `gh run list -R stranxik/runward-hosted --workflow probe.yml`, each run's summary holding its verdict.
 - **What do the containers do?** Cockpit → Access Grafana → Scaleway Dashboards → Serverless Containers Overview (metrics) and Serverless Containers logs, filtered on `runward-hosted` or `runward-hosted-operator`; the logs are kept 7 days, the metrics 31 days (the hoster's defaults, `governance/observability-schema.md` §6).
 - **Debug one request** (a trajectory): take its request id (`r-` and 12 hex: the `Runward-Request-Id` header, the `requestId` of a refusal, the `request:` line of the send job's summary), search it in Serverless Containers logs (one `http` line: route, status, duration, refusal, the tenant as a digest), then in the tenant's journal (`GET /api/v0/journal`, the entry that carries the same request id). Locally, `grep '"requestId":"r-…"'` on the service's standard output (§13, step 10).
 
@@ -140,7 +140,7 @@ Described in `infra/scaleway/main.tf` (OpenTofu, provider scaleway 2.88.0), proj
 |---|---|---|
 | Serverless Container `runward-hosted` (the service) | 0.25 vCPU, 512 MiB, scale 0 to 1, public, in the private network | about 0 EUR within the monthly free tier (200 000 vCPU-s, 400 000 GB-s); about 6.50 EUR if the minimum scale becomes 1 |
 | Serverless Containers namespace `runward-hosted-operator` and container `runward-hosted-operator` (the operator's gateway, ADR-0016) | 0.25 vCPU, 512 MiB, scale 0 to 1, **private**, in the private network, request timeout 900 s | about 0 EUR (a few minutes a day, within the same free tier) |
-| Two scheduled triggers of the gateway | `retention` 03:23 and `verify-chains` 03:37, time zone `Europe/Paris` | 0 EUR |
+| Two scheduled triggers of the gateway | `retention` 03:23 and `verify-chains` 03:53, time zone `Europe/Paris` | 0 EUR |
 | Domain `app.runward.dev` | container domain, applied with `-var app_domain=true` once the CNAME resolves | 0 EUR |
 | Cockpit (logs and metrics) | the products' own logs and metrics, at the default retention: logs 7 days, metrics 31 days (`governance/observability-schema.md` §6) | 0 EUR (free at the default retention, the hoster's documentation) |
 | **Total** | | **about 12.3 EUR a month** (phase 1 alone about 12.3 EUR) |
@@ -162,7 +162,7 @@ No Serverless Job and no Secret Manager entry is created any more (ADR-0016): th
 - Create the bucket's key (an IAM application restricted to Object Storage in the project `runward`) and store it in the keychain by masked input (§9's script): service `runward-hosted-s3`, accounts `access-key-id` and `secret-access-key`. Phase 2 refuses to plan without it.
 - Give the CI's key (the secret `SCW_SECRET_KEY` of the environment `production`, reserved to `main`) ContainerRegistryFullAccess, ContainersFullAccess and ContainersPrivateAccess in the project `runward` (the last can carry the condition `resource.name == "runward-hosted-operator"`).
 - Publish the first release of this repository (its SHA becomes `RW_SEND_WORKFLOW_SHAS`).
-- The passkey ceremonies, in a real browser: the founder's link (`npm run operateur:amorcage`, approve the run, open the link, create the passkey), the second passkey (a security key or another manager), a sign-in, a per-gesture verification (declare with consent), a removal then a restore of a passkey.
+- The passkey ceremonies, in a real browser: the founder's link (`npm run operateur:amorcage` on the author's workstation draws the link and prints the `scripts/operator-call.sh open-bootstrap` command that opens it; run that command, then open the link and create the passkey), the second passkey (a security key or another manager), a sign-in, a per-gesture verification (declare with consent), a removal then a restore of a passkey.
 
 **The first deploy** (the chicken and the egg: the containers must exist before `deploy.yml` updates them, and an image must exist before OpenTofu creates them; no image is built on a workstation). A session does each step, after the author's two gestures above:
 
@@ -287,9 +287,9 @@ What it proves: that someone who did not build this repository can, from this ru
 
 The service calls no model: its evaluation bench is its test pyramid and the six measures of the framing note (S1 to S6, on the deployed service only).
 
-- **Unit, application and HTTP**: `npm test` (in memory, no Docker; on the author's Mac, the suites run on the NAS: `~/.claude/skills/nas/scripts/verifier-sur-nas.sh . 'npm test'`).
-- **PostgreSQL**: `PG_ADMIN_URL=postgres://postgres@<a throwaway server>/postgres npm run test:pg` (isolation, catalog, planted controls, the schema snapshot, the statement deadline, the daily jobs' outcome).
-- **The committed reports**: `npm run test:reports` says whether `reports/` still describes the tree; `npm run test:reports:write` rewrites them, in the reference environment only (Linux, Node.js 22, PostgreSQL 17 at the digest of `ci.yml`, jq): the report lands in `reports/junit.xml`, `reports/eslint.json`, `reports/eslint-security.sarif`, `reports/secretlint.sarif`.
+- **Unit, application and HTTP**: `npm test` (in memory; from the author's Mac the suites run on the NAS: `scripts/on-nas.sh 'npm test'`; on a Linux host with Docker: `scripts/reference-env.sh 'npm test'`, which brings jq).
+- **PostgreSQL**: `scripts/on-nas.sh 'npm run test:pg'` from the author's Mac, or `scripts/reference-env.sh 'npm run test:pg'` on a Linux host with Docker: both start a throwaway PostgreSQL 17 at the digest of `ci.yml`, set `PG_ADMIN_URL`, and remove the server with its volume (isolation, catalog, planted controls, the schema snapshot, the statement deadline, the daily jobs' outcome).
+- **The committed reports**: `scripts/on-nas.sh 'npm run test:reports'` says whether `reports/` still describes the tree; `scripts/on-nas.sh -r 'npm run test:reports:write'` rewrites them in the reference environment (Linux, Node.js 22, PostgreSQL 17 at the digest of `ci.yml`, jq) and brings them back: the report lands in `reports/junit.xml`, `reports/eslint.json`, `reports/eslint-security.sarif`, `reports/secretlint.sarif`.
 - **The gate**: `npx -y runward@0.46.0 check --strict` (CI runs the same version, integrity checked).
 - **S1 to S6**: `temoin.yml` (S1, daily), the probe (availability), `deploy.yml`'s run summary (S5, the time to roll back).
 
