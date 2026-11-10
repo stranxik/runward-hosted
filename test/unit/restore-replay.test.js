@@ -522,3 +522,76 @@ test("restore-replay's arguments: an anchor or a `since`, never a head for every
   assert.deepEqual(restoreArgs(parse(["restore-replay", "--since", since, "--recovery-hash", "a".repeat(64)]).o), { since, anchor: false, recoveryHash: "a".repeat(64) });
   assert.throws(() => restoreArgs(parse(["restore-replay", "--since", since, "--head-before", "a".repeat(64)]).o), /--head-before is no longer taken/);
 });
+
+// ---------------------------------------------------------------- defect 2: the note says which entries are gone
+
+test("the note says which entries are lost, by their seq, from the restored head to the tenant's head before the loss (runbook §3)", async () => {
+  const h = harness();
+  const fs = [await founder(h, { passkeys: 3, prefix: "a" }), await founder(h, { passkeys: 2, prefix: "b" }), await founder(h, { passkeys: 1, prefix: "c" })];
+  const b = backup(h);
+  await removePasskey(h, fs[0], "a-2");
+  await removePasskey(h, fs[0], "a-3");
+  await removePasskey(h, fs[1], "b-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = [];
+  for (const f of fs) before.push(await head(h, f.tenant));
+  restore(h, b);
+  const after = [];
+  for (const f of fs) after.push(await head(h, f.tenant));
+  const report = await h.app.operator.restoreReplay({ since: b.since });
+
+  // A lost two entries, B one, C none: computed here from the heads read before and after the loss
+  const expected = [
+    { from: after[0].seq + 1, to: before[0].seq, count: 2 },
+    { from: after[1].seq + 1, to: before[1].seq, count: 1 },
+    { from: null, to: null, count: 0 },
+  ];
+  for (const [i, f] of fs.entries()) {
+    const entries = await journal(h, f.tenant);
+    const note = entries.filter((e) => e.body.what === "restore-replayed").pop();
+    assert.deepEqual(note.body.detail.lost, expected[i], `tenant ${i}: the note carries the range of the entries lost`);
+    assert.deepEqual(note.body.detail.headAfterRestore, after[i], "and the restored head, with its seq");
+    assert.equal(note.seq, after[i].seq + 1, "the note takes the first number after the restored head");
+    assert.deepEqual(report[i].lost, expected[i], "the operator journal's row carries it too");
+    assert.equal(verifyChain(entries).ok, true);
+  }
+  assert.equal(expected[0].to - expected[0].from, 1, "the control: the range is two entries wide");
+});
+
+test("the range is open when the head before the loss was not anchored, and the same when the gesture runs again", async () => {
+  // no anchor: `to` is unknown, and said so
+  const h = harness();
+  const f = await founder(h);
+  const b = backup(h);
+  await removePasskey(h, f, "cred-2");
+  restore(h, b);
+  const restored = await head(h, f.tenant);
+  await h.app.operator.restoreReplay({ since: b.since });
+  assert.deepEqual((await replayNote(h, f.tenant)).lost, { from: restored.seq + 1, to: null, count: null });
+
+  // run again after the journal went on (a sign-in, and an anchor taken after the restore by mistake):
+  // the second note says the same range and the same heads as the first, and names it
+  const h2 = harness();
+  const f2 = await founder(h2);
+  const b2 = backup(h2);
+  await removePasskey(h2, f2, "cred-2");
+  tick(h2);
+  await h2.app.operator.restoreReplay({ anchor: true });
+  restore(h2, b2);
+  await h2.app.operator.restoreReplay({ since: b2.since });
+  const first = (await journal(h2, f2.tenant)).pop();
+  tick(h2);
+  await signIn(h2, "cred-1");
+  tick(h2);
+  await h2.app.operator.restoreReplay({ anchor: true });
+  tick(h2);
+  await h2.app.operator.restoreReplay({ since: b2.since });
+  const second = (await journal(h2, f2.tenant)).pop();
+  assert.equal(second.body.what, "restore-replayed");
+  assert.ok(second.seq > first.seq + 1, "the control: the journal went on between the two runs");
+  for (const k of ["lost", "headAfterRestore", "headBefore"]) assert.deepEqual(second.body.detail[k], first.body.detail[k], `run again, the note says the same ${k}`);
+  assert.deepEqual(first.body.detail.lost, { from: first.seq, to: first.seq, count: 1 });
+  assert.equal(first.body.detail.rerunOf, undefined);
+  assert.equal(second.body.detail.rerunOf, first.seq, "and names the first note of this replay");
+});

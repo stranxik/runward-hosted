@@ -3,7 +3,7 @@
 // hoster's private network, started by an approved workflow of the private operator repository or by
 // the hoster's schedule. Only digests of link tokens ever reach them; the database writes link dates.
 import { Refusal } from "../domain/refusals.js";
-import { verifyChain } from "../domain/ledger.js";
+import { verifyChain, GENESIS } from "../domain/ledger.js";
 import { bytesExpired, archiveExpired, PENDING_LIFE } from "../domain/repository.js";
 import { iso } from "./context.js";
 
@@ -140,18 +140,42 @@ export const SECURITY_NOT_REPLAYED = {
 };
 
 /**
+ * The head of a tenant's journal as the restore left it: the entry before the first note of this replay
+ * (the same `since`) when the gesture runs again, the journal's last entry otherwise. Run twice, the gesture
+ * says the same range twice.
+ */
+function restoredHead(entries, since) {
+  const first = entries.find((e) => e.body.what === "restore-replayed" && e.body.detail?.since === since) ?? null;
+  const last = first ? entries.find((e) => e.seq === first.seq - 1) ?? null : entries[entries.length - 1] ?? null;
+  return { head: last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS }, rerunOf: first ? first.seq : null };
+}
+
+/**
  * The head of a tenant's journal before the loss, as the system itself wrote it: the last `journal-anchored`
  * of the tenant's own security log (restore-replay --anchor, run while the database could still be read)
- * that is not behind the restored journal. Null when there is none: nothing is taken on anyone's word.
+ * that is not behind the restored journal and is not an entry written since the restore (an anchor taken
+ * after it describes the new journal, not the lost one). Null when there is none: nothing is taken on
+ * anyone's word.
  */
-function anchoredHead(events, restored) {
+function anchoredHead(events, restored, entries) {
   for (let i = events.length - 1; i >= 0; i--) {
     const { id, event: e } = events[i];
     if (e.what !== "journal-anchored" || !Number.isSafeInteger(e.seq) || !HEX64.test(String(e.hash))) continue;
-    const seq = restored?.seq ?? 0;
-    if (e.seq > seq || (e.seq === seq && e.hash === restored?.hash)) return { seq: e.seq, hash: e.hash, anchor: id };
+    if (e.seq === restored.seq && e.hash === restored.hash) return { seq: e.seq, hash: e.hash, anchor: id };
+    if (e.seq > restored.seq && !entries.some((x) => x.seq === e.seq && x.hash === e.hash)) return { seq: e.seq, hash: e.hash, anchor: id };
   }
   return null;
+}
+
+/**
+ * The entries of before the loss that are gone, by their seq: from the one after the restored head to the
+ * head before the loss. `to` and `count` are null when that head was not anchored: the range is then open,
+ * said so, never guessed. The note itself, and what follows it, take the numbers of the lost entries.
+ */
+function lostRange(restored, before) {
+  if (!before) return { from: restored.seq + 1, to: null, count: null };
+  if (before.seq === restored.seq) return { from: null, to: null, count: 0 };
+  return { from: restored.seq + 1, to: before.seq, count: before.seq - restored.seq };
 }
 
 /** Waits between the attempts of a daily job on one tenant: three attempts in all. */
@@ -287,8 +311,9 @@ export function operatorCases(ctx) {
   /**
    * After a database restore (PADR-0014 note, T24): close every session of every tenant, replay from the
    * object store the gestures after `since` (ULID order, the REPLAY table above), and say so in each
-   * tenant's journal, with the head that tenant's journal had before the loss when it was anchored
-   * (`anchor`, run before the database is replaced). A member left with no passkey is reported `stranded` (a recovery is opened for the
+   * tenant's journal: which entries of before the loss are gone, by their seq (`lost`), from the restored
+   * head to the head that tenant's journal had before the loss when it was anchored (`anchor`, run before
+   * the database is replaced). A member left with no passkey is reported `stranded` (a recovery is opened for the
    * first one when `recoveryHash` is given); a tenant left with no member is reported `memberless`: the
    * operator opens its bootstrap again. Refused whole, before any write, when a tenant's security log
    * cannot be read (`security-log-unreadable`); a tenant whose replay fails is recorded and the others
@@ -376,6 +401,7 @@ export function operatorCases(ctx) {
 
   /** One tenant's replay, in its transaction: the sessions closed, the gestures replayed in ULID order, the note in its journal. */
   async function replayTenant(tx, tenant, events, since) {
+    await tx.lockTenant();
     let closed = 0, replayed = 0;
     for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
     for (let i = 0; i < events.length; i++) {
@@ -385,9 +411,13 @@ export function operatorCases(ctx) {
     const members = (await tx.list("member")).filter((x) => !x.removedAt);
     const stranded = [];
     for (const m of members) if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
-    const head = await tx.ledgerHead();
-    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: anchoredHead(events, head), headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
-    return { closed, replayed, stranded, memberless: members.length === 0, seq: e.seq };
+    // the note: "restore of <since>: entries lost between seq <from> and <to>" (runbook §3), as fields
+    const entries = await tx.ledgerAll();
+    const { head, rerunOf } = restoredHead(entries, since);
+    const headBefore = anchoredHead(events, head, entries);
+    const lost = lostRange(head, headBefore);
+    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headAfterRestore: head, headBefore, lost, closed, replayed, stranded, ...(rerunOf ? { rerunOf } : {}) } });
+    return { closed, replayed, stranded, memberless: members.length === 0, lost, seq: e.seq };
   }
 
   return { openBootstrap, openRecovery, resetAccess, maintenance, retention, verifyChains, restoreReplay };

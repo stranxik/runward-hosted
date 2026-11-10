@@ -127,6 +127,8 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   for (const f of [A, B, C]) heads.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
 
   await restore();
+  const restored = new Map();
+  for (const f of [A, B, C]) restored.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
   // the control (what the drill found at 7f00128): the restore alone gives the withdrawn accesses back
   assert.deepEqual([await live(C.tenant, "member"), await live(C.tenant, "passkey")], [1, 1], "the restore gave C's member and passkey back");
   assert.ok(await h.app.identity.sessionFrom(second.token), "and the session closed with a-2");
@@ -158,6 +160,14 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
     assert.deepEqual({ seq: note.body.detail.headBefore?.seq, hash: note.body.detail.headBefore?.hash }, heads.get(f.tenant), "the note carries the head of its own tenant's journal before the loss");
   }
   assert.equal(new Set([...heads.values()].map((x) => x.hash)).size, 3, "the control: three chains, three heads");
+  // and which entries are gone, by their seq, as runbook §3 says of the note
+  for (const f of [A, B, C]) {
+    const [note] = await replayNotes(f.tenant, since);
+    const from = restored.get(f.tenant).seq + 1, to = heads.get(f.tenant).seq;
+    assert.deepEqual(note.body.detail.lost, { from, to, count: to - from + 1 }, "the note carries the range of the entries lost");
+    assert.deepEqual(note.body.detail.headAfterRestore, restored.get(f.tenant));
+    assert.equal(note.seq, from);
+  }
   // every chain holds, from its first entry to the note
   const chains = await operator((op) => op.verifyChains());
   assert.deepEqual(chains.map((c) => c.ok), [true, true, true]);
