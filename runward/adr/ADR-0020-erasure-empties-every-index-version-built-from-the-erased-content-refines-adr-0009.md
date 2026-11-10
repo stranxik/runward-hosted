@@ -1,7 +1,7 @@
 # ADR-0020: Erasure empties every index version built from the erased content (refines ADR-0009)
 
 **Date**: 2026-11-10
-**Status**: proposed (acceptance is the author's)
+**Status**: accepted 2026-11-10 by the author in chat ("je suis ok pour tout ce que tu m'as cité", in answer to a list that named this record), after the independent review of `8fae95e` and its fixes
 **Refines**: ADR-0009 (accepted 2026-11-06), which stays in force for everything this record does not change
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the store, the archive and the restore replay at `9e5728e`), a planted control on the old code, durable position; revised on 2026-11-10, while still proposed, after the independent review of `8fae95e` (`runward/governance/reviews/2026-11-10_code-review_8fae95e.md`, findings C21 to C26)

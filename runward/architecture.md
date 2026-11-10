@@ -76,7 +76,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Forced RLS, exact-key resolution | ADR-0006 |
 | The chained journal and the security log | ADR-0007 |
 | The deployment chain | ADR-0008 |
-| Consent, retention, erasure | ADR-0009; pending: ADR-0020 (erasure empties the index versions built from the erased content), proposed |
+| Consent, retention, erasure | ADR-0009, refined by ADR-0020 (erasure empties the index versions built from the erased content) |
 | Operating with one human | ADR-0010 |
 | Members, invitation at its trigger | ADR-0011 |
 | The witness reader | ADR-0012 |
