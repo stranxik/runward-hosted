@@ -93,8 +93,12 @@ test("the catalogue of refusals is merged from one file per domain: every code o
 });
 
 test("the words the product never says are absent from every text it shows", async () => {
-  const { readFileSync } = await import("node:fs");
-  const texts = [JSON.stringify(REFUSALS), readFileSync(new URL("../../web/app.js", import.meta.url), "utf8"), readFileSync(new URL("../../web/index.html", import.meta.url), "utf8")].join("\n");
+  const { readFileSync, readdirSync } = await import("node:fs");
+  // every script under web/, served or not: web/app.js and the modules of web/views/
+  const web = new URL("../../web/", import.meta.url);
+  const scripts = readdirSync(web, { recursive: true }).filter((f) => f.endsWith(".js")).sort();
+  assert.ok(scripts.includes("app.js") && scripts.length >= 25, "the guard must see the shell's modules, or it proves nothing");
+  const texts = [JSON.stringify(REFUSALS), ...scripts.map((f) => readFileSync(new URL(f, web), "utf8")), readFileSync(new URL("index.html", web), "utf8")].join("\n");
   for (const w of [/\bcompliant\b/i, /\bcertif(y|ied|ication)\b/i, /\bguarantee/i, /tamper-proof/i, /no human/i, /\bplatform\b/i, /\bsovereign/i, /\bplateforme\b/i, /\bsouverain/i, /garanti/i, /certifi/i, /conforme\b/i]) assert.equal(w.test(texts), false, String(w));
 });
 

@@ -147,8 +147,11 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   assert.match(r.headers.get("cache-control"), /immutable/);
   const { readFileSync } = await import("node:fs");
   assert.equal(sha(Buffer.from(await r.arrayBuffer())), sha(readFileSync(new URL("../../node_modules/runward-fleet/ui/views.js", import.meta.url))));
-  const app = /src="(\/assets\/app\.[0-9a-f]{16}\.js)"/.exec(html)[1];
-  const js = await (await call("GET", app)).text();
+  // the shell is modules under one folder named by their digest; one of them names the pinned views
+  const folder = /src="(\/assets\/app\.[0-9a-f]{16}\/)app\.js"/.exec(html)[1];
+  const app = await call("GET", `${folder}app.js`);
+  assert.match(app.headers.get("cache-control"), /immutable/);
+  const js = await (await call("GET", `${folder}views/fleet-views.js`)).text();
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
 
