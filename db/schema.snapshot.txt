@@ -10,6 +10,7 @@ column rw.blob.refs integer null=NO default=0
 column rw.blob.sha256 text null=NO default=
 column rw.blob.tenant_id uuid null=NO default=rw.rw_tenant()
 column rw.fleet_index.bytes bytea null=NO default=
+column rw.fleet_index.erased_at timestamp with time zone null=YES default=
 column rw.fleet_index.fleet_archive_sha256 text null=NO default=
 column rw.fleet_index.fleet_version text null=NO default=
 column rw.fleet_index.manifest bytea null=NO default=
@@ -153,6 +154,7 @@ constraint rw.archive archive_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES 
 constraint rw.blob blob_pkey PRIMARY KEY (tenant_id, sha256)
 constraint rw.blob blob_refs_check CHECK ((refs >= 0))
 constraint rw.blob blob_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.fleet_index fleet_index_erased_holds_no_byte CHECK (((erased_at IS NULL) OR (octet_length(bytes) = 0)))
 constraint rw.fleet_index fleet_index_pkey PRIMARY KEY (tenant_id, version)
 constraint rw.fleet_index fleet_index_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
 constraint rw.forge_repository forge_repository_forge_check CHECK ((forge = 'github'::text))
@@ -202,6 +204,7 @@ constraint rw.webauthn_challenge webauthn_challenge_pkey PRIMARY KEY (id)
 constraint rw_meta.migration migration_pkey PRIMARY KEY (name)
 function rw.count_refused(p_repository_id text, p_bucket bigint) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.daily_jobs() definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.fleet_index_written_once() definer=f owner=rw_owner config=search_path=pg_catalog, rw, pg_temp
 function rw.ledger_refuse() definer=f owner=rw_owner config=
 function rw.link_dates() definer=f owner=rw_owner config=
 function rw.link_dates_frozen() definer=f owner=rw_owner config=
@@ -219,6 +222,10 @@ function rw.take_challenge(p_id uuid) definer=t owner=rw_resolve config=search_p
 function rw.take_rate(p_repository_id text, p_bucket bigint, p_run_id text, p_limit integer) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.tenant_ids() definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.use_jti(p_jti text, p_expires_at timestamp with time zone) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+grant database rw_app CONNECT
+grant database rw_maint CONNECT
+grant database rw_owner CONNECT
+grant database rw_owner CREATE
 grant rw.archive rw_app INSERT
 grant rw.archive rw_app SELECT
 grant rw.archive rw_app UPDATE
@@ -247,6 +254,7 @@ grant rw.fleet_index rw_app INSERT
 grant rw.fleet_index rw_app SELECT
 grant rw.fleet_index rw_app UPDATE
 grant rw.fleet_index rw_maint SELECT
+grant rw.fleet_index rw_maint UPDATE
 grant rw.fleet_index rw_owner DELETE
 grant rw.fleet_index rw_owner INSERT
 grant rw.fleet_index rw_owner REFERENCES
@@ -452,6 +460,14 @@ grant rw_meta.migration rw_owner SELECT
 grant rw_meta.migration rw_owner TRIGGER
 grant rw_meta.migration rw_owner TRUNCATE
 grant rw_meta.migration rw_owner UPDATE
+grant schema rw rw_app USAGE
+grant schema rw rw_maint USAGE
+grant schema rw rw_owner CREATE
+grant schema rw rw_owner USAGE
+grant schema rw rw_resolve CREATE
+grant schema rw rw_resolve USAGE
+grant schema rw_meta rw_owner CREATE
+grant schema rw_meta rw_owner USAGE
 index CREATE INDEX operator_journal_what_seq ON rw.operator_journal USING btree (what, seq DESC)
 index CREATE UNIQUE INDEX archive_pkey ON rw.archive USING btree (id)
 index CREATE UNIQUE INDEX blob_pkey ON rw.blob USING btree (tenant_id, sha256)
@@ -516,6 +532,7 @@ table rw.tenant rls=t force=t
 table rw.upload rls=t force=t
 table rw.webauthn_challenge rls=f force=f
 table rw_meta.migration rls=f force=f
+trigger CREATE TRIGGER fleet_index_written_once BEFORE UPDATE ON rw.fleet_index FOR EACH ROW EXECUTE FUNCTION rw.fleet_index_written_once()
 trigger CREATE TRIGGER ledger_no_truncate BEFORE TRUNCATE ON rw.ledger FOR EACH STATEMENT EXECUTE FUNCTION rw.ledger_refuse()
 trigger CREATE TRIGGER ledger_no_update BEFORE DELETE OR UPDATE ON rw.ledger FOR EACH ROW EXECUTE FUNCTION rw.ledger_refuse()
 trigger CREATE TRIGGER link_dates BEFORE INSERT ON rw.link FOR EACH ROW EXECUTE FUNCTION rw.link_dates()

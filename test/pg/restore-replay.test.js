@@ -12,7 +12,8 @@ import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
 import { ulid } from "../../src/adapters/system/ulid.js";
-import { harness, founder, gesture, pinnedRepository, send, sha } from "../helpers.js";
+import { harness, founder, gesture, pinnedRepository, send, sha, markedCheck, contentLeft } from "../helpers.js";
+import { untar } from "../../src/adapters/archive/tar.js";
 
 const ADMIN = process.env.PG_ADMIN_URL;
 if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
@@ -151,8 +152,13 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   // tenant B: the erased content is erased again, and the next upload is assembled without it
   assert.deepEqual({ closed: of(B).closed, replayed: of(B).replayed }, { closed: 1, replayed: 1 });
   assert.equal((await rows(B.tenant, "upload")).filter((u) => !u.erasedAt).length, 0);
+  // the version of its index built from that content, which the restore gave back whole, holds no byte again
+  // (rw_maint's grant on rw.fleet_index is that erasure), and no erased index is served meanwhile
+  assert.deepEqual((await rows(B.tenant, "fleet_index")).map((v) => [v.version, v.bytes.length, v.erasedAt != null]), [[1, 0, true]]);
+  assert.equal(await h.app.reading.index(B.tenant), null);
   const sent = await send(h, { repository: "drill/beta", repository_id: "7001", run_number: "7", run_id: "40000000007" }, { mission: "drill-beta" });
   assert.equal(sent.status, 201);
+  assert.equal((await h.app.reading.index(B.tenant)).version, 2, "the next upload publishes a version after the erased one");
 
   // each tenant's note carries the head of its own journal before the loss (the drill found tenant A's in the three)
   for (const f of [A, B, C]) {
@@ -204,4 +210,96 @@ test("a tenant whose replay fails is rolled back whole by PostgreSQL and recorde
   assert.equal(again.some((r) => r.failed), false);
   assert.equal(await refusal(signIn("d-2")), "passkey-unknown");
   assert.ok((await signIn("d-1")).token);
+});
+
+// Review finding C22 of 2026-11-10: the erasure the retention job makes 30 days after a removal wrote no
+// security event, so a restore from a backup of before the pass had nothing to replay: the versions came
+// back whole and stayed so until the next daily pass, and an archive prepared meanwhile packed them.
+test("a restore from a backup of before the retention erasure: under rw_maint the pass writes its event, the archive on the restored base packs nothing whose bytes are gone, and the replay empties the versions again", async () => {
+  const MARK = "RETAINED-RUN-2";
+  const T = await tenant("ret", 2);
+  const repo = await pinnedRepository(h, T, { name: "drill/retained", mission: "drill-retained", claims: { repository_id: "7101", run_id: "397101" } });
+  assert.equal((await send(h, { repository: "drill/retained", repository_id: "7101", run_number: "2", run_id: "427101" }, { mission: "drill-retained", bytes: markedCheck(MARK) })).status, 201);
+  await gesture(h, T.session, null, null);
+  await h.app.repositories.remove(T.session, repo.id, {});
+  // 31 days pass: the removal is dated back by the server's superuser (the application's clock is the real one)
+  const asAdmin = async (fn) => { const u = new URL(ADMIN); u.pathname = `/${DB}`; const sql = postgres(u.toString(), { max: 1, onnotice: () => {} }); try { return await fn(sql); } finally { await sql.end(); } };
+  await asAdmin(async (sql) => {
+    await sql`update rw.repository set removed_at = removed_at - interval '31 days' where id = ${repo.id}`;
+    await sql`update rw.forge_repository set removed_at = removed_at - interval '31 days' where id = ${repo.id}`;
+  });
+  const whole = (versions) => versions.map((v) => [v.version, v.bytes.length > 0, v.erasedAt != null]);
+  const since = await backup();
+
+  // after T: the daily pass, as rw_maint
+  const before = (await store.tx(T.tenant, (tx) => tx.ledgerAll())).length;
+  const pass = await operator((op) => op.retention());
+  const mine = pass.find((r) => r.tenant === T.tenant);
+  assert.deepEqual([mine.failed ?? false, mine.erased, mine.indexVersions], [false, 2, 2], JSON.stringify(mine));
+  assert.deepEqual(whole(await rows(T.tenant, "fleet_index")), [[1, false, true], [2, false, true], [3, true, false]]);
+  // one entry, which names the repository, its digests and the versions emptied (C26)
+  const entries = await store.tx(T.tenant, (tx) => tx.ledgerAll());
+  assert.equal(entries.length, before + 1, "the pass wrote one entry in the tenant's journal");
+  const last = entries[entries.length - 1].body;
+  assert.deepEqual([last.who.type, last.what, last.object, last.detail.indexVersions, last.detail.reason, last.detail.digests.length], ["operator", "content-erased", repo.id, [1, 2], "retention", 2]);
+  assert.deepEqual(await contentLeft(h, T.tenant, [MARK]), [], "the pass left nothing of the content");
+
+  await restore();
+  // the control: the restored base holds the erased content again and counts uploads whose bytes are gone
+  assert.deepEqual(await contentLeft(h, T.tenant, [MARK]), [`fleet_index version 2 bytes: ${MARK}`]);
+  assert.equal((await rows(T.tenant, "upload")).filter((u) => !u.erasedAt).length, 2);
+
+  // before the replay: an archive prepared on the restored base brings none of it back
+  await gesture(h, T.session, "export", "");
+  const early = await h.app.reading.prepareExport(await h.app.identity.sessionFrom(T.token), {});
+  const names = untar(early.bytes).map((f) => f.name);
+  assert.deepEqual([1, 2, 3].map((n) => names.includes(`versions/${n}/index.json`)), [false, false, true], "no index.json for a version whose exports cannot be read");
+  assert.deepEqual((await contentLeft(h, T.tenant, [MARK], early.bytes)).filter((w) => !w.startsWith("fleet_index ")), [], "no file of the archive, and no object, holds the content");
+  const plan = JSON.parse(untar(early.bytes).find((f) => f.name === "replay.json").bytes.toString("utf8"));
+  assert.deepEqual(plan.versions.map((v) => [v.version, v.replayable, v.why ?? null, v.indexWithheld ?? false]), [[1, false, "bytes missing", true], [2, false, "bytes missing", true], [3, true, null, false]]);
+
+  const report = await operator((op) => op.restoreReplay({ since }));
+  const of = report.find((r) => r.tenant === T.tenant);
+  assert.deepEqual([of.failed ?? false, of.replayed], [false, 1], "the retention erasure is replayed, as an erasure on request is");
+  assert.deepEqual(whole(await rows(T.tenant, "fleet_index")), [[1, false, true], [2, false, true], [3, true, false]], "the versions built from the erased content are emptied again");
+  assert.deepEqual(await contentLeft(h, T.tenant, [MARK]), []);
+  assert.equal((await rows(T.tenant, "upload")).filter((u) => !u.erasedAt).length, 0, "the uploads are marked erased again");
+  assert.equal((await h.app.reading.index(T.tenant)).version, 3, "the index served is the one the removal published");
+});
+
+// Code review of 2026-11-10, C12, on real transactions under rw_maint: run again with an earlier `since`,
+// the note of each tenant says the range its first note said (it said fewer entries lost, or an open range).
+test("C12: run again with another `since`, each tenant's note says the same lost range and the same heads as its first", async () => {
+  const F = await tenant("f", 4), G = await tenant("g", 2);
+  await pause();
+  const earlier = ulid(Date.now()).slice(0, 10) + "0".repeat(16);
+  const since = await backup();
+  assert.notEqual(earlier, since, "the control: two different `since`");
+  // after T: F loses three entries, G one
+  for (const cred of ["f-2", "f-3", "f-4"]) await removePasskey(F, cred);
+  await removePasskey(G, "g-2");
+  await operator((op) => op.restoreReplay({ anchor: true }));
+  const heads = new Map();
+  for (const f of [F, G]) heads.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
+  await restore();
+  const restored = new Map();
+  for (const f of [F, G]) restored.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
+
+  const one = await operator((op) => op.restoreReplay({ since }));
+  await pause();
+  const two = await operator((op) => op.restoreReplay({ since: earlier }));
+  assert.equal([...one, ...two].some((r) => r.failed), false);
+  for (const [f, count] of [[F, 3], [G, 1]]) {
+    const [first] = await replayNotes(f.tenant, since);
+    const [second] = await replayNotes(f.tenant, earlier);
+    const from = restored.get(f.tenant).seq + 1, to = heads.get(f.tenant).seq;
+    assert.deepEqual(first.body.detail.lost, { from, to, count }, "the first note");
+    assert.deepEqual(second.body.detail.lost, { from, to, count }, "the second note, with another `since`, says the same range");
+    assert.deepEqual(second.body.detail.headAfterRestore, restored.get(f.tenant));
+    assert.deepEqual(second.body.detail.headBefore, first.body.detail.headBefore);
+    assert.equal(second.body.detail.rerunOf, first.seq);
+    assert.equal(two.find((r) => r.tenant === f.tenant).lost.count, count, "and so does the operator journal's row");
+  }
+  const chains = await operator((op) => op.verifyChains());
+  assert.equal(chains.every((c) => c.ok), true);
 });

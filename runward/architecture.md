@@ -36,7 +36,7 @@ Port contracts: `runward/contracts/index-assembler.md` (IndexAssembler) and `run
 | Single orchestrator | the application layer composes use cases; no agent | a genuinely parallelizable subtask (none known) |
 | Tool registry + middleware chain | no agent tools: the route table and one entry middleware hold the host list, request id, headers, same origin, session, in one place (`src/http/server.js`) | a second entry (an MCP read access) |
 | One core language, thin model SDK | no model SDK at all; Node.js because runward-fleet is JavaScript; three production dependencies | a measured need the table router cannot cover in under a hundred lines |
-| Mono-instance, scale 0 to 1, state outside the process | all durable state in PostgreSQL and S3; held per instance, by design at one instance: the rate windows (`src/http/limits.js`), the error window of `/api/health`, the issuer's key cache (`src/adapters/oidc/github.js`), the cookies that resolved in the last minute (bounded) and the circuits (`src/adapters/system/egress.js`), each lost on a restart | S2 or S6 fails at scale 0 (minimum scale 1), or a second instance: advisory locks already serialise per tenant; the per-instance windows, key cache and circuits then move to PostgreSQL, or an ADR keeps them per instance |
+| Mono-instance, scale 0 to 1, state outside the process | all durable state in PostgreSQL and S3; held per instance, by design at one instance: the rate windows and the 130 minutes of their overflow counts (`src/http/limits.js`), the error window of `/api/health`, the issuer's key cache (`src/adapters/oidc/github.js`), the cookies that resolved in the last minute (bounded) and the circuits (`src/adapters/system/egress.js`), each lost on a restart | S2 or S6 fails at scale 0 (minimum scale 1), or a second instance: advisory locks already serialise per tenant; the per-instance windows, key cache and circuits then move to PostgreSQL, or an ADR keeps them per instance |
 
 ## Rule conformance
 
@@ -76,7 +76,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Forced RLS, exact-key resolution | ADR-0006 |
 | The chained journal and the security log | ADR-0007 |
 | The deployment chain | ADR-0008 |
-| Consent, retention, erasure | ADR-0009 |
+| Consent, retention, erasure | ADR-0009, refined by ADR-0020 (erasure empties the index versions built from the erased content) |
 | Operating with one human | ADR-0010 |
 | Members, invitation at its trigger | ADR-0011 |
 | The witness reader | ADR-0012 |

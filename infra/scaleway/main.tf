@@ -303,6 +303,29 @@ resource "scaleway_rdb_user" "rw_maint" {
 #   rw_owner "all": CONNECT, CREATE (the migrations create the schemas rw and rw_meta, and own them);
 #   rw_app, rw_maint "readonly": the smallest level that carries CONNECT; its table rights apply to the
 #   schema public, which the service does not use. Everything in the schema rw comes from db/grants.sql.
+# For rw_app and rw_maint, `permission` is what OpenTofu sets when it CREATES the privilege, and nothing
+# after that (found on 2026-11-10, in the first plan after `roles` and `migrate`). Once db/grants.sql has
+# granted them their rights on the schema rw, the hoster reports their level as "custom" (the provider
+# 2.88.0 writes the level the API reports into `permission`), and the plan proposed "custom" -> "readonly":
+# the provider documents that apply as reapplying the preset "to all objects (existing and new)", which
+# would put the hoster's hand on rights that db/grants.sql and the isolation suite own. `ignore_changes`
+# leaves them alone. What it costs: a later change of the level of these two users (in the hoster's
+# console, or of `permission` in this file) no longer shows in a plan. What is checked instead, at each
+# deploy, through the operator's gateway, the deploy stopping before the service switches:
+#   - `roles` (rw_admin), before `migrate`: the two roles exist, log in, are no superuser, create no role
+#     or database, do not bypass row level security, and may CONNECT;
+#   - `roles` with grants (rw_admin), after `migrate`: what the two roles may do IN EFFECT (their own
+#     grants, PUBLIC's, a membership's) on every table of the schemas rw and rw_meta, USAGE and CREATE on
+#     those two schemas, CONNECT and CREATE on the database, is exactly the grant lines of
+#     db/schema.snapshot.txt, no more, no fewer (scripts/roles.mjs; test/pg/isolation.test.js plants each
+#     kind of drift);
+#   - `isolation` (rw_app), after the smoke: no row crosses between the two witness tenants.
+# What is NOT checked: their rights on the schema public and on any other schema (the service has nothing
+# there; the hoster's preset applies there), on functions and on sequences, and TEMPORARY on the database
+# (read and said by `roles`, not refused: it depends on what the hoster lets its administrator revoke).
+# Whether the hoster's preset reaches the tables of the schema rw at all has not been observed.
+# rw_owner keeps no such rule: it owns what the migrations create, its level stays "all", and a plan
+# that shows it otherwise is a signal to read.
 resource "scaleway_rdb_privilege" "rw_owner" {
   instance_id   = scaleway_rdb_instance.rw.id
   user_name     = scaleway_rdb_user.rw_owner.name
@@ -314,20 +337,30 @@ resource "scaleway_rdb_privilege" "rw_app" {
   instance_id   = scaleway_rdb_instance.rw.id
   user_name     = scaleway_rdb_user.rw_app.name
   database_name = scaleway_rdb_database.rw.name
-  permission    = "readonly"
+  permission    = "readonly" # at creation only: "custom" once db/grants.sql is applied (see above)
   depends_on    = [scaleway_rdb_privilege.rw_owner]
+  lifecycle {
+    ignore_changes = [permission]
+  }
 }
 resource "scaleway_rdb_privilege" "rw_maint" {
   instance_id   = scaleway_rdb_instance.rw.id
   user_name     = scaleway_rdb_user.rw_maint.name
   database_name = scaleway_rdb_database.rw.name
-  permission    = "readonly"
+  permission    = "readonly" # at creation only: "custom" once db/grants.sql is applied (see above)
   depends_on    = [scaleway_rdb_privilege.rw_app]
+  lifecycle {
+    ignore_changes = [permission]
+  }
 }
 
 # ---------------------------------------------------------------------------------------------- phase 2
-# The service: 0.25 vCPU, 512 MB, scale 0 to 1, public, in the private network. The CI deploys (image,
+# The service: 0.25 vCPU, 536 MB, scale 0 to 1, public, in the private network. The CI deploys (image,
 # RW_COMMIT, RW_IMAGE); OpenTofu owns the rest.
+# The memory is written as the hoster stores it. It counts in MB of 10^6 bytes: asked for 512 MiB
+# (536870912), it kept 536000000 (536 MB, about 511.2 MiB) and every plan proposed to change it back
+# (found on 2026-11-10). The stored value is the truth of what runs, and written here it is still
+# compared at each plan: a change of the memory, here or at the hoster, shows. Same for the gateway.
 resource "scaleway_container" "rw" {
   count                  = local.phase2 ? 1 : 0
   name                   = "runward-hosted"
@@ -335,7 +368,7 @@ resource "scaleway_container" "rw" {
   image                  = var.image
   port                   = 8080
   cpu_limit              = 250
-  memory_limit_bytes     = 536870912 # 512 MiB
+  memory_limit_bytes     = 536000000 # 536 MB as the hoster stores it (512 MiB asked)
   min_scale              = 0
   max_scale              = 1
   privacy                = "public"
@@ -385,7 +418,7 @@ resource "scaleway_container" "operator" {
   args                   = ["src/operator-gateway.js"]
   port                   = 8080
   cpu_limit              = 250
-  memory_limit_bytes     = 536870912 # 512 MiB
+  memory_limit_bytes     = 536000000 # 536 MB as the hoster stores it (512 MiB asked)
   min_scale              = 0
   max_scale              = 1   # one gesture at a time, in one process
   timeout                = 900 # above the longest gesture's own deadline (14 min), its kill and the note that follows (35 s)

@@ -44,4 +44,8 @@ grant select, insert on rw.tenant, rw.link to rw_maint;
 grant update on rw.link to rw_maint;
 grant select, update on rw.member, rw.passkey, rw.session, rw.upload, rw.blob, rw.archive, rw.repository, rw.forge_repository to rw_maint;
 grant select on rw.mission, rw.fleet_index, rw.reader to rw_maint;
+-- Erasure reaches the published versions of the index (0006): the retention job and the replay after a
+-- restore empty the bytes of a version built from erased content. The trigger fleet_index_written_once
+-- holds this UPDATE, and the service's, to that erasure: no other column moves, no byte is rewritten.
+grant update on rw.fleet_index to rw_maint;
 grant select, insert on rw.ledger to rw_maint;
