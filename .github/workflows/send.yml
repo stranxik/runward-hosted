@@ -14,6 +14,20 @@
 # installed outside the checkout without scripts, and `check` never passes --hooks. Its output is written
 # under $RUNNER_TEMP, never in the checkout, so a file committed by an agent never leaves as runward's.
 # Release v0.1 sends `check` only.
+#
+# `runner` (optional) says where the three jobs run, as JSON: '"ubuntu-24.04"' by default, or a list of
+# labels for a repository whose CI runs on its own runner:
+#
+#       with: { mission: dropyour, runner: '["self-hosted","nas"]' }
+#
+# It is read by fromJSON in runs-on, never by a shell; a value that is not JSON stops the run before a job
+# starts. The runner needs bash 4, curl, openssl, base64 and sha256sum (GNU coreutils), and reaches
+# registry.npmjs.org and the service. What it changes: on a runner GitHub does not host, the machine is the
+# caller's, and what an earlier job of the repository left on it (a tool cache, a hook, a changed binary)
+# runs in the send job too, next to the id-token; "sends only what `check` wrote" then holds as far as that
+# machine is clean. The token says so (runner_environment: self-hosted), and the service decides on that
+# claim: today it refuses it (runner-not-hosted, ADR-0003), so with a self-hosted `runner` the check and
+# its verdict run and the upload is answered "not accepted".
 name: runward hosted send
 on:
   workflow_call:
@@ -22,10 +36,11 @@ on:
       path: { type: string, default: ".", description: "the mission's directory in the repository, relative, without .." }
       send-strict: { type: boolean, default: false, description: "fail the run when the upload fails" }
       runward-version: { type: string, default: "0.46.0", description: "one of the closed list of this release" }
+      runner: { type: string, default: '"ubuntu-24.04"', description: "where the three jobs run, as JSON: a label or a list of labels" }
 permissions: {}
 jobs:
   check:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runner) }}
     permissions: { contents: read }
     outputs:
       exit: ${{ steps.check.outputs.exit }}
@@ -75,7 +90,7 @@ jobs:
   send:
     needs: check
     if: ${{ always() && needs.check.result == 'success' && github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runner) }}
     permissions: { id-token: write }
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
@@ -149,7 +164,7 @@ jobs:
   verdict:
     needs: [check, send]
     if: ${{ always() }}
-    runs-on: ubuntu-24.04
+    runs-on: ${{ fromJSON(inputs.runner) }}
     permissions: {}
     steps:
       - name: runward's verdict, given back to the run

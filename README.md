@@ -8,6 +8,41 @@ serves the fleet index that `runward-fleet` builds from them. People sign in wit
 Licence: FSL-1.1-MIT (`LICENSE`). Mission and decisions: `runward/` (the framing, the architecture, the
 ADRs, the runbook); the project is delivered with the runward method and its gate (`runward check --strict`).
 
+## Call the send workflow
+
+A declared repository's workflow calls `send.yml` at the commit of a release (the app writes this file
+for you, with the release's commit and your mission):
+
+    name: runward
+    on:
+      push: { branches: [main] }
+      pull_request:
+    permissions: {}
+    jobs:
+      runward:
+        permissions: { contents: read, id-token: write }
+        uses: stranxik/runward-hosted/.github/workflows/send.yml@<sha of the release>
+        with:
+          mission: <mission>
+
+Inputs: `mission` (required), `path` (the mission's directory, `.` by default), `send-strict` (fail the
+run when the upload fails, `false` by default), `runward-version` (`0.46.0`) and `runner`.
+
+`runner` says where the three jobs run, as a JSON string: `'"ubuntu-24.04"'` by default, or a list of
+labels for a repository whose CI runs on its own runner:
+
+        with:
+          mission: <mission>
+          runner: '["self-hosted","nas"]'
+
+- The runner needs bash 4, curl, openssl, base64 and sha256sum (GNU coreutils), and must reach
+  registry.npmjs.org and the service. Node.js 22 is installed by the workflow.
+- On a runner GitHub does not host, the machine is yours: whatever an earlier job of the repository left
+  on it runs in the send job too. Use it only for a private repository, on a runner whose jobs start clean.
+- The upload's token then says `runner_environment: self-hosted`. The service refuses that claim today
+  (`runner-not-hosted`, 403; `runward/adr/ADR-0003`): with a self-hosted `runner`, the check runs and the
+  run keeps runward's verdict, and the upload is reported "not accepted" in the run's summary.
+
 ## Run it locally
 
 Node.js 22 (`.nvmrc`). No Docker on a workstation is needed for the unit suite.
