@@ -21,7 +21,8 @@ spec:
             - { name: NODE_ENV, value: production }
             - { name: RW_ORIGIN, value: "https://app.runward.dev" }
             - { name: RW_STORE, value: postgres }
-            - { name: DATABASE_SSL, value: require }
+            - { name: DATABASE_SSL, value: verify-full }
+            - { name: DATABASE_CA, valueFrom: { configMapKeyRef: { name: runward-hosted-database-ca, key: ca.pem } } }
             - { name: DATABASE_URL, valueFrom: { secretKeyRef: { name: runward-hosted, key: database-url } } }
             - { name: S3_ENDPOINT, valueFrom: { secretKeyRef: { name: runward-hosted, key: s3-endpoint } } }
             - { name: S3_REGION, valueFrom: { secretKeyRef: { name: runward-hosted, key: s3-region } } }

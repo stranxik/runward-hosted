@@ -1,7 +1,12 @@
 node_modules/
 .env
 .env.*
+!.env.example
 coverage/
 captures/
 tmp/
 *.log
+infra/scaleway/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan

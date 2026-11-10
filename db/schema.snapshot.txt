@@ -1,0 +1,520 @@
+column rw.archive.contains jsonb null=NO default='[]'::jsonb
+column rw.archive.erased_at timestamp with time zone null=YES default=
+column rw.archive.id uuid null=NO default=
+column rw.archive.prepared_at timestamp with time zone null=NO default=now()
+column rw.archive.sha256 text null=NO default=
+column rw.archive.size bigint null=NO default=
+column rw.archive.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.blob.erased_at timestamp with time zone null=YES default=
+column rw.blob.refs integer null=NO default=0
+column rw.blob.sha256 text null=NO default=
+column rw.blob.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.fleet_index.bytes bytea null=NO default=
+column rw.fleet_index.fleet_archive_sha256 text null=NO default=
+column rw.fleet_index.fleet_version text null=NO default=
+column rw.fleet_index.manifest bytea null=NO default=
+column rw.fleet_index.manifest_sha256 text null=NO default=
+column rw.fleet_index.published_at timestamp with time zone null=NO default=now()
+column rw.fleet_index.seq bigint null=NO default=
+column rw.fleet_index.sha256 text null=NO default=
+column rw.fleet_index.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.fleet_index.version integer null=NO default=
+column rw.forge_repository.forge text null=NO default='github'::text
+column rw.forge_repository.id uuid null=NO default=
+column rw.forge_repository.name text null=NO default=
+column rw.forge_repository.name_key text null=NO default=
+column rw.forge_repository.owner_id text null=YES default=
+column rw.forge_repository.removed_at timestamp with time zone null=YES default=
+column rw.forge_repository.repository_id text null=YES default=
+column rw.forge_repository.state text null=NO default=
+column rw.forge_repository.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.ledger.at timestamp with time zone null=NO default=now()
+column rw.ledger.body jsonb null=NO default=
+column rw.ledger.hash text null=NO default=
+column rw.ledger.prev text null=NO default=
+column rw.ledger.seq bigint null=NO default=
+column rw.ledger.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.link.cancelled_at timestamp with time zone null=YES default=
+column rw.link.expires_at timestamp with time zone null=NO default=
+column rw.link.id uuid null=NO default=
+column rw.link.kind text null=NO default=
+column rw.link.member_id uuid null=YES default=
+column rw.link.meta jsonb null=NO default='{}'::jsonb
+column rw.link.opened_at timestamp with time zone null=NO default=now()
+column rw.link.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.link.token_hash text null=NO default=
+column rw.link.usable_from timestamp with time zone null=NO default=
+column rw.link.used_at timestamp with time zone null=YES default=
+column rw.member.added_at timestamp with time zone null=NO default=now()
+column rw.member.founder boolean null=NO default=false
+column rw.member.id uuid null=NO default=
+column rw.member.label text null=YES default=
+column rw.member.removed_at timestamp with time zone null=YES default=
+column rw.member.role text null=NO default=
+column rw.member.single_passkey_at timestamp with time zone null=YES default=
+column rw.member.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.mission.added_at timestamp with time zone null=NO default=now()
+column rw.mission.id text null=NO default=
+column rw.mission.path text null=NO default='.'::text
+column rw.mission.removed_at timestamp with time zone null=YES default=
+column rw.mission.repository_ref uuid null=NO default=
+column rw.mission.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.oidc_jti.expires_at timestamp with time zone null=NO default=
+column rw.oidc_jti.jti text null=NO default=
+column rw.operator_journal.at timestamp with time zone null=NO default=now()
+column rw.operator_journal.detail jsonb null=NO default='{}'::jsonb
+column rw.operator_journal.seq bigint null=NO default=nextval('rw.operator_journal_seq_seq'::regclass)
+column rw.operator_journal.what text null=NO default=
+column rw.passkey.aaguid text null=YES default=
+column rw.passkey.added_by_session uuid null=YES default=
+column rw.passkey.counter bigint null=NO default=0
+column rw.passkey.created_at timestamp with time zone null=NO default=now()
+column rw.passkey.credential_id text null=NO default=
+column rw.passkey.device text null=YES default=
+column rw.passkey.id uuid null=NO default=
+column rw.passkey.last_used_at timestamp with time zone null=YES default=
+column rw.passkey.lost boolean null=NO default=false
+column rw.passkey.member_id uuid null=NO default=
+column rw.passkey.public_key bytea null=NO default=
+column rw.passkey.removed_at timestamp with time zone null=YES default=
+column rw.passkey.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.passkey.transports jsonb null=NO default='[]'::jsonb
+column rw.passkey.via text null=YES default=
+column rw.rate_counter.bucket bigint null=NO default=
+column rw.rate_counter.repository_id text null=NO default=
+column rw.rate_counter.run_id text null=NO default=
+column rw.reader.authorized_at timestamp with time zone null=YES default=
+column rw.reader.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.reader.withdrawn_at timestamp with time zone null=YES default=
+column rw.refused_counter.bucket bigint null=NO default=
+column rw.refused_counter.n integer null=NO default=0
+column rw.refused_counter.repository_id text null=NO default=
+column rw.repository.confirmed_at timestamp with time zone null=YES default=
+column rw.repository.consent boolean null=NO default=false
+column rw.repository.consent_at timestamp with time zone null=YES default=
+column rw.repository.declared_at timestamp with time zone null=NO default=now()
+column rw.repository.default_branch text null=NO default='main'::text
+column rw.repository.epoch integer null=NO default=0
+column rw.repository.id uuid null=NO default=
+column rw.repository.name text null=NO default=
+column rw.repository.pending_send jsonb null=YES default=
+column rw.repository.removed_at timestamp with time zone null=YES default=
+column rw.repository.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.repository.workflow text null=NO default=
+column rw.service_state.id integer null=NO default=
+column rw.service_state.maintenance jsonb null=YES default=
+column rw.session.closed_at timestamp with time zone null=YES default=
+column rw.session.created_at timestamp with time zone null=NO default=now()
+column rw.session.device text null=YES default=
+column rw.session.fresh_at timestamp with time zone null=YES default=
+column rw.session.fresh_by uuid null=YES default=
+column rw.session.grant jsonb null=YES default=
+column rw.session.id uuid null=NO default=
+column rw.session.last_seen_at timestamp with time zone null=NO default=now()
+column rw.session.member_id uuid null=NO default=
+column rw.session.passkey_id uuid null=YES default=
+column rw.session.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.session.token_hash text null=NO default=
+column rw.tenant.created_at timestamp with time zone null=NO default=now()
+column rw.tenant.id uuid null=NO default=rw.rw_tenant()
+column rw.tenant.lang text null=NO default='fr'::text
+column rw.tenant.title text null=NO default='runward hébergé'::text
+column rw.tenant.witness boolean null=NO default=false
+column rw.upload.claims jsonb null=NO default=
+column rw.upload.commit text null=YES default=
+column rw.upload.epoch integer null=NO default=0
+column rw.upload.erased_at timestamp with time zone null=YES default=
+column rw.upload.id uuid null=NO default=
+column rw.upload.kind text null=NO default=
+column rw.upload.mission text null=NO default=
+column rw.upload.rank text null=NO default=
+column rw.upload.received_at timestamp with time zone null=NO default=now()
+column rw.upload.repository_ref uuid null=NO default=
+column rw.upload.run_attempt text null=NO default=
+column rw.upload.run_id text null=NO default=
+column rw.upload.run_number text null=NO default=
+column rw.upload.seq bigint null=YES default=
+column rw.upload.sha256 text null=NO default=
+column rw.upload.size integer null=NO default=
+column rw.upload.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.webauthn_challenge.challenge text null=NO default=
+column rw.webauthn_challenge.expires_at timestamp with time zone null=NO default=(now() + '00:05:00'::interval)
+column rw.webauthn_challenge.gesture text null=YES default=
+column rw.webauthn_challenge.id uuid null=NO default=
+column rw.webauthn_challenge.link_id uuid null=YES default=
+column rw.webauthn_challenge.object text null=YES default=
+column rw.webauthn_challenge.purpose text null=NO default=
+column rw.webauthn_challenge.session_id uuid null=YES default=
+column rw_meta.migration.applied_at timestamp with time zone null=NO default=now()
+column rw_meta.migration.name text null=NO default=
+column rw_meta.migration.sha256 text null=NO default=
+constraint rw.archive archive_pkey PRIMARY KEY (id)
+constraint rw.archive archive_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.blob blob_pkey PRIMARY KEY (tenant_id, sha256)
+constraint rw.blob blob_refs_check CHECK ((refs >= 0))
+constraint rw.blob blob_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.fleet_index fleet_index_pkey PRIMARY KEY (tenant_id, version)
+constraint rw.fleet_index fleet_index_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.forge_repository forge_repository_forge_check CHECK ((forge = 'github'::text))
+constraint rw.forge_repository forge_repository_pkey PRIMARY KEY (id)
+constraint rw.forge_repository forge_repository_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'pinned'::text])))
+constraint rw.forge_repository forge_repository_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.ledger ledger_pkey PRIMARY KEY (tenant_id, seq)
+constraint rw.ledger ledger_seq_check CHECK ((seq >= 1))
+constraint rw.ledger ledger_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.link link_kind_check CHECK ((kind = ANY (ARRAY['bootstrap'::text, 'recovery'::text, 'invitation'::text])))
+constraint rw.link link_pkey PRIMARY KEY (id)
+constraint rw.link link_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.link link_token_hash_key UNIQUE (token_hash)
+constraint rw.member member_pkey PRIMARY KEY (id)
+constraint rw.member member_role_check CHECK ((role = 'owner'::text))
+constraint rw.member member_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.mission mission_pkey PRIMARY KEY (tenant_id, id)
+constraint rw.mission mission_repository_ref_fkey FOREIGN KEY (repository_ref) REFERENCES rw.repository(id)
+constraint rw.mission mission_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.oidc_jti oidc_jti_pkey PRIMARY KEY (jti)
+constraint rw.operator_journal operator_journal_pkey PRIMARY KEY (seq)
+constraint rw.passkey passkey_credential_id_key UNIQUE (credential_id)
+constraint rw.passkey passkey_member_id_fkey FOREIGN KEY (member_id) REFERENCES rw.member(id)
+constraint rw.passkey passkey_pkey PRIMARY KEY (id)
+constraint rw.passkey passkey_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.rate_counter rate_counter_pkey PRIMARY KEY (repository_id, bucket, run_id)
+constraint rw.reader reader_pkey PRIMARY KEY (tenant_id)
+constraint rw.reader reader_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.refused_counter refused_counter_pkey PRIMARY KEY (repository_id, bucket)
+constraint rw.repository repository_id_fkey FOREIGN KEY (id) REFERENCES rw.forge_repository(id)
+constraint rw.repository repository_pkey PRIMARY KEY (id)
+constraint rw.repository repository_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.service_state service_state_id_check CHECK ((id = 1))
+constraint rw.service_state service_state_pkey PRIMARY KEY (id)
+constraint rw.session session_member_id_fkey FOREIGN KEY (member_id) REFERENCES rw.member(id)
+constraint rw.session session_passkey_id_fkey FOREIGN KEY (passkey_id) REFERENCES rw.passkey(id)
+constraint rw.session session_pkey PRIMARY KEY (id)
+constraint rw.session session_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.session session_token_hash_key UNIQUE (token_hash)
+constraint rw.tenant tenant_lang_check CHECK ((lang = ANY (ARRAY['fr'::text, 'en'::text])))
+constraint rw.tenant tenant_pkey PRIMARY KEY (id)
+constraint rw.upload upload_pkey PRIMARY KEY (id)
+constraint rw.upload upload_rank_check CHECK ((rank = ANY (ARRAY['current'::text, 'historical'::text, 'pending'::text, 'quarantine'::text, 'superseded'::text])))
+constraint rw.upload upload_repository_ref_fkey FOREIGN KEY (repository_ref) REFERENCES rw.repository(id)
+constraint rw.upload upload_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.webauthn_challenge webauthn_challenge_pkey PRIMARY KEY (id)
+constraint rw_meta.migration migration_pkey PRIMARY KEY (name)
+function rw.count_refused(p_repository_id text, p_bucket bigint) definer=t owner=rw_resolve
+function rw.ledger_refuse() definer=f owner=rw_owner
+function rw.link_dates() definer=f owner=rw_owner
+function rw.link_dates_frozen() definer=f owner=rw_owner
+function rw.maintenance() definer=t owner=rw_resolve
+function rw.name_taken(p_forge text, p_name_key text) definer=t owner=rw_resolve
+function rw.operator_note(p_what text, p_detail jsonb) definer=t owner=rw_resolve
+function rw.put_challenge(p_id uuid, p_challenge text, p_purpose text, p_session uuid, p_link uuid, p_gesture text, p_object text) definer=t owner=rw_resolve
+function rw.resolve_credential(p_credential_id text) definer=t owner=rw_resolve
+function rw.resolve_link(p_token_hash text) definer=t owner=rw_resolve
+function rw.resolve_repository(p_forge text, p_repository_id text, p_name_key text) definer=t owner=rw_resolve
+function rw.resolve_session(p_token_hash text) definer=t owner=rw_resolve
+function rw.rw_tenant() definer=f owner=rw_owner
+function rw.set_maintenance(p jsonb) definer=t owner=rw_resolve
+function rw.take_challenge(p_id uuid) definer=t owner=rw_resolve
+function rw.take_rate(p_repository_id text, p_bucket bigint, p_run_id text, p_limit integer) definer=t owner=rw_resolve
+function rw.tenant_ids() definer=t owner=rw_resolve
+function rw.use_jti(p_jti text, p_expires_at timestamp with time zone) definer=t owner=rw_resolve
+grant rw.archive rw_app INSERT
+grant rw.archive rw_app SELECT
+grant rw.archive rw_app UPDATE
+grant rw.archive rw_maint SELECT
+grant rw.archive rw_maint UPDATE
+grant rw.archive rw_owner DELETE
+grant rw.archive rw_owner INSERT
+grant rw.archive rw_owner REFERENCES
+grant rw.archive rw_owner SELECT
+grant rw.archive rw_owner TRIGGER
+grant rw.archive rw_owner TRUNCATE
+grant rw.archive rw_owner UPDATE
+grant rw.blob rw_app INSERT
+grant rw.blob rw_app SELECT
+grant rw.blob rw_app UPDATE
+grant rw.blob rw_maint SELECT
+grant rw.blob rw_maint UPDATE
+grant rw.blob rw_owner DELETE
+grant rw.blob rw_owner INSERT
+grant rw.blob rw_owner REFERENCES
+grant rw.blob rw_owner SELECT
+grant rw.blob rw_owner TRIGGER
+grant rw.blob rw_owner TRUNCATE
+grant rw.blob rw_owner UPDATE
+grant rw.fleet_index rw_app INSERT
+grant rw.fleet_index rw_app SELECT
+grant rw.fleet_index rw_app UPDATE
+grant rw.fleet_index rw_maint SELECT
+grant rw.fleet_index rw_owner DELETE
+grant rw.fleet_index rw_owner INSERT
+grant rw.fleet_index rw_owner REFERENCES
+grant rw.fleet_index rw_owner SELECT
+grant rw.fleet_index rw_owner TRIGGER
+grant rw.fleet_index rw_owner TRUNCATE
+grant rw.fleet_index rw_owner UPDATE
+grant rw.forge_repository rw_app INSERT
+grant rw.forge_repository rw_app SELECT
+grant rw.forge_repository rw_app UPDATE
+grant rw.forge_repository rw_maint SELECT
+grant rw.forge_repository rw_maint UPDATE
+grant rw.forge_repository rw_owner DELETE
+grant rw.forge_repository rw_owner INSERT
+grant rw.forge_repository rw_owner REFERENCES
+grant rw.forge_repository rw_owner SELECT
+grant rw.forge_repository rw_owner TRIGGER
+grant rw.forge_repository rw_owner TRUNCATE
+grant rw.forge_repository rw_owner UPDATE
+grant rw.forge_repository rw_resolve SELECT
+grant rw.ledger rw_app INSERT
+grant rw.ledger rw_app SELECT
+grant rw.ledger rw_maint INSERT
+grant rw.ledger rw_maint SELECT
+grant rw.ledger rw_owner DELETE
+grant rw.ledger rw_owner INSERT
+grant rw.ledger rw_owner REFERENCES
+grant rw.ledger rw_owner SELECT
+grant rw.ledger rw_owner TRIGGER
+grant rw.ledger rw_owner TRUNCATE
+grant rw.ledger rw_owner UPDATE
+grant rw.link rw_app SELECT
+grant rw.link rw_app UPDATE
+grant rw.link rw_maint INSERT
+grant rw.link rw_maint SELECT
+grant rw.link rw_maint UPDATE
+grant rw.link rw_owner DELETE
+grant rw.link rw_owner INSERT
+grant rw.link rw_owner REFERENCES
+grant rw.link rw_owner SELECT
+grant rw.link rw_owner TRIGGER
+grant rw.link rw_owner TRUNCATE
+grant rw.link rw_owner UPDATE
+grant rw.link rw_resolve SELECT
+grant rw.member rw_app INSERT
+grant rw.member rw_app SELECT
+grant rw.member rw_app UPDATE
+grant rw.member rw_maint SELECT
+grant rw.member rw_maint UPDATE
+grant rw.member rw_owner DELETE
+grant rw.member rw_owner INSERT
+grant rw.member rw_owner REFERENCES
+grant rw.member rw_owner SELECT
+grant rw.member rw_owner TRIGGER
+grant rw.member rw_owner TRUNCATE
+grant rw.member rw_owner UPDATE
+grant rw.mission rw_app INSERT
+grant rw.mission rw_app SELECT
+grant rw.mission rw_app UPDATE
+grant rw.mission rw_maint SELECT
+grant rw.mission rw_owner DELETE
+grant rw.mission rw_owner INSERT
+grant rw.mission rw_owner REFERENCES
+grant rw.mission rw_owner SELECT
+grant rw.mission rw_owner TRIGGER
+grant rw.mission rw_owner TRUNCATE
+grant rw.mission rw_owner UPDATE
+grant rw.oidc_jti rw_owner DELETE
+grant rw.oidc_jti rw_owner INSERT
+grant rw.oidc_jti rw_owner REFERENCES
+grant rw.oidc_jti rw_owner SELECT
+grant rw.oidc_jti rw_owner TRIGGER
+grant rw.oidc_jti rw_owner TRUNCATE
+grant rw.oidc_jti rw_owner UPDATE
+grant rw.oidc_jti rw_resolve DELETE
+grant rw.oidc_jti rw_resolve INSERT
+grant rw.oidc_jti rw_resolve SELECT
+grant rw.operator_journal rw_owner DELETE
+grant rw.operator_journal rw_owner INSERT
+grant rw.operator_journal rw_owner REFERENCES
+grant rw.operator_journal rw_owner SELECT
+grant rw.operator_journal rw_owner TRIGGER
+grant rw.operator_journal rw_owner TRUNCATE
+grant rw.operator_journal rw_owner UPDATE
+grant rw.operator_journal rw_resolve INSERT
+grant rw.operator_journal rw_resolve SELECT
+grant rw.passkey rw_app INSERT
+grant rw.passkey rw_app SELECT
+grant rw.passkey rw_app UPDATE
+grant rw.passkey rw_maint SELECT
+grant rw.passkey rw_maint UPDATE
+grant rw.passkey rw_owner DELETE
+grant rw.passkey rw_owner INSERT
+grant rw.passkey rw_owner REFERENCES
+grant rw.passkey rw_owner SELECT
+grant rw.passkey rw_owner TRIGGER
+grant rw.passkey rw_owner TRUNCATE
+grant rw.passkey rw_owner UPDATE
+grant rw.passkey rw_resolve SELECT
+grant rw.rate_counter rw_owner DELETE
+grant rw.rate_counter rw_owner INSERT
+grant rw.rate_counter rw_owner REFERENCES
+grant rw.rate_counter rw_owner SELECT
+grant rw.rate_counter rw_owner TRIGGER
+grant rw.rate_counter rw_owner TRUNCATE
+grant rw.rate_counter rw_owner UPDATE
+grant rw.rate_counter rw_resolve DELETE
+grant rw.rate_counter rw_resolve INSERT
+grant rw.rate_counter rw_resolve SELECT
+grant rw.reader rw_app INSERT
+grant rw.reader rw_app SELECT
+grant rw.reader rw_app UPDATE
+grant rw.reader rw_maint SELECT
+grant rw.reader rw_owner DELETE
+grant rw.reader rw_owner INSERT
+grant rw.reader rw_owner REFERENCES
+grant rw.reader rw_owner SELECT
+grant rw.reader rw_owner TRIGGER
+grant rw.reader rw_owner TRUNCATE
+grant rw.reader rw_owner UPDATE
+grant rw.refused_counter rw_owner DELETE
+grant rw.refused_counter rw_owner INSERT
+grant rw.refused_counter rw_owner REFERENCES
+grant rw.refused_counter rw_owner SELECT
+grant rw.refused_counter rw_owner TRIGGER
+grant rw.refused_counter rw_owner TRUNCATE
+grant rw.refused_counter rw_owner UPDATE
+grant rw.refused_counter rw_resolve INSERT
+grant rw.refused_counter rw_resolve SELECT
+grant rw.refused_counter rw_resolve UPDATE
+grant rw.repository rw_app INSERT
+grant rw.repository rw_app SELECT
+grant rw.repository rw_app UPDATE
+grant rw.repository rw_maint SELECT
+grant rw.repository rw_maint UPDATE
+grant rw.repository rw_owner DELETE
+grant rw.repository rw_owner INSERT
+grant rw.repository rw_owner REFERENCES
+grant rw.repository rw_owner SELECT
+grant rw.repository rw_owner TRIGGER
+grant rw.repository rw_owner TRUNCATE
+grant rw.repository rw_owner UPDATE
+grant rw.service_state rw_owner DELETE
+grant rw.service_state rw_owner INSERT
+grant rw.service_state rw_owner REFERENCES
+grant rw.service_state rw_owner SELECT
+grant rw.service_state rw_owner TRIGGER
+grant rw.service_state rw_owner TRUNCATE
+grant rw.service_state rw_owner UPDATE
+grant rw.service_state rw_resolve SELECT
+grant rw.service_state rw_resolve UPDATE
+grant rw.session rw_app INSERT
+grant rw.session rw_app SELECT
+grant rw.session rw_app UPDATE
+grant rw.session rw_maint SELECT
+grant rw.session rw_maint UPDATE
+grant rw.session rw_owner DELETE
+grant rw.session rw_owner INSERT
+grant rw.session rw_owner REFERENCES
+grant rw.session rw_owner SELECT
+grant rw.session rw_owner TRIGGER
+grant rw.session rw_owner TRUNCATE
+grant rw.session rw_owner UPDATE
+grant rw.session rw_resolve SELECT
+grant rw.tenant rw_app SELECT
+grant rw.tenant rw_app UPDATE
+grant rw.tenant rw_maint INSERT
+grant rw.tenant rw_maint SELECT
+grant rw.tenant rw_owner DELETE
+grant rw.tenant rw_owner INSERT
+grant rw.tenant rw_owner REFERENCES
+grant rw.tenant rw_owner SELECT
+grant rw.tenant rw_owner TRIGGER
+grant rw.tenant rw_owner TRUNCATE
+grant rw.tenant rw_owner UPDATE
+grant rw.tenant rw_resolve SELECT
+grant rw.upload rw_app INSERT
+grant rw.upload rw_app SELECT
+grant rw.upload rw_app UPDATE
+grant rw.upload rw_maint SELECT
+grant rw.upload rw_maint UPDATE
+grant rw.upload rw_owner DELETE
+grant rw.upload rw_owner INSERT
+grant rw.upload rw_owner REFERENCES
+grant rw.upload rw_owner SELECT
+grant rw.upload rw_owner TRIGGER
+grant rw.upload rw_owner TRUNCATE
+grant rw.upload rw_owner UPDATE
+grant rw.webauthn_challenge rw_owner DELETE
+grant rw.webauthn_challenge rw_owner INSERT
+grant rw.webauthn_challenge rw_owner REFERENCES
+grant rw.webauthn_challenge rw_owner SELECT
+grant rw.webauthn_challenge rw_owner TRIGGER
+grant rw.webauthn_challenge rw_owner TRUNCATE
+grant rw.webauthn_challenge rw_owner UPDATE
+grant rw.webauthn_challenge rw_resolve DELETE
+grant rw.webauthn_challenge rw_resolve INSERT
+grant rw.webauthn_challenge rw_resolve SELECT
+grant rw_meta.migration rw_owner DELETE
+grant rw_meta.migration rw_owner INSERT
+grant rw_meta.migration rw_owner REFERENCES
+grant rw_meta.migration rw_owner SELECT
+grant rw_meta.migration rw_owner TRIGGER
+grant rw_meta.migration rw_owner TRUNCATE
+grant rw_meta.migration rw_owner UPDATE
+index CREATE UNIQUE INDEX archive_pkey ON rw.archive USING btree (id)
+index CREATE UNIQUE INDEX blob_pkey ON rw.blob USING btree (tenant_id, sha256)
+index CREATE UNIQUE INDEX fleet_index_pkey ON rw.fleet_index USING btree (tenant_id, version)
+index CREATE UNIQUE INDEX forge_repository_pending_name ON rw.forge_repository USING btree (forge, name_key) WHERE ((state = 'pending'::text) AND (removed_at IS NULL))
+index CREATE UNIQUE INDEX forge_repository_pinned_id ON rw.forge_repository USING btree (forge, repository_id) WHERE (repository_id IS NOT NULL)
+index CREATE UNIQUE INDEX forge_repository_pkey ON rw.forge_repository USING btree (id)
+index CREATE UNIQUE INDEX ledger_pkey ON rw.ledger USING btree (tenant_id, seq)
+index CREATE UNIQUE INDEX link_pkey ON rw.link USING btree (id)
+index CREATE UNIQUE INDEX link_token_hash_key ON rw.link USING btree (token_hash)
+index CREATE UNIQUE INDEX member_one_founder ON rw.member USING btree (tenant_id) WHERE founder
+index CREATE UNIQUE INDEX member_pkey ON rw.member USING btree (id)
+index CREATE UNIQUE INDEX migration_pkey ON rw_meta.migration USING btree (name)
+index CREATE UNIQUE INDEX mission_pkey ON rw.mission USING btree (tenant_id, id)
+index CREATE UNIQUE INDEX oidc_jti_pkey ON rw.oidc_jti USING btree (jti)
+index CREATE UNIQUE INDEX operator_journal_pkey ON rw.operator_journal USING btree (seq)
+index CREATE UNIQUE INDEX passkey_credential_id_key ON rw.passkey USING btree (credential_id)
+index CREATE UNIQUE INDEX passkey_pkey ON rw.passkey USING btree (id)
+index CREATE UNIQUE INDEX rate_counter_pkey ON rw.rate_counter USING btree (repository_id, bucket, run_id)
+index CREATE UNIQUE INDEX reader_pkey ON rw.reader USING btree (tenant_id)
+index CREATE UNIQUE INDEX refused_counter_pkey ON rw.refused_counter USING btree (repository_id, bucket)
+index CREATE UNIQUE INDEX repository_pkey ON rw.repository USING btree (id)
+index CREATE UNIQUE INDEX service_state_pkey ON rw.service_state USING btree (id)
+index CREATE UNIQUE INDEX session_pkey ON rw.session USING btree (id)
+index CREATE UNIQUE INDEX session_token_hash_key ON rw.session USING btree (token_hash)
+index CREATE UNIQUE INDEX tenant_pkey ON rw.tenant USING btree (id)
+index CREATE UNIQUE INDEX upload_idempotence ON rw.upload USING btree (tenant_id, run_id, run_attempt, mission, kind)
+index CREATE UNIQUE INDEX upload_pkey ON rw.upload USING btree (id)
+index CREATE UNIQUE INDEX webauthn_challenge_pkey ON rw.webauthn_challenge USING btree (id)
+policy rw.archive archive_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.blob blob_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.fleet_index fleet_index_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.forge_repository forge_repository_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.ledger ledger_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.link link_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.member member_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.mission mission_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.passkey passkey_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.reader reader_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.repository repository_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.session session_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.tenant tenant_tenant ALL to={public} using=((id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(id = rw.rw_tenant())
+policy rw.upload upload_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+table rw.archive rls=t force=t
+table rw.blob rls=t force=t
+table rw.fleet_index rls=t force=t
+table rw.forge_repository rls=t force=t
+table rw.ledger rls=t force=t
+table rw.link rls=t force=t
+table rw.member rls=t force=t
+table rw.mission rls=t force=t
+table rw.oidc_jti rls=f force=f
+table rw.operator_journal rls=f force=f
+table rw.passkey rls=t force=t
+table rw.rate_counter rls=f force=f
+table rw.reader rls=t force=t
+table rw.refused_counter rls=f force=f
+table rw.repository rls=t force=t
+table rw.service_state rls=f force=f
+table rw.session rls=t force=t
+table rw.tenant rls=t force=t
+table rw.upload rls=t force=t
+table rw.webauthn_challenge rls=f force=f
+table rw_meta.migration rls=f force=f
+trigger CREATE TRIGGER ledger_no_truncate BEFORE TRUNCATE ON rw.ledger FOR EACH STATEMENT EXECUTE FUNCTION rw.ledger_refuse()
+trigger CREATE TRIGGER ledger_no_update BEFORE DELETE OR UPDATE ON rw.ledger FOR EACH ROW EXECUTE FUNCTION rw.ledger_refuse()
+trigger CREATE TRIGGER link_dates BEFORE INSERT ON rw.link FOR EACH ROW EXECUTE FUNCTION rw.link_dates()
+trigger CREATE TRIGGER link_dates_frozen BEFORE UPDATE ON rw.link FOR EACH ROW EXECUTE FUNCTION rw.link_dates_frozen()

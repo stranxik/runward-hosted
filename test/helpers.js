@@ -63,7 +63,7 @@ export function fakeAuthn() {
 export const sha = (b) => createHash("sha256").update(b).digest("hex");
 export const digestHeader = (b) => `sha-256=:${createHash("sha256").update(b).digest("base64")}:`;
 
-export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false } = {}) {
+export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false, config = {} } = {}) {
   const clock = realTime ? { now: () => Date.now(), set() {}, advance() { throw new Error("real time: cannot advance"); } } : manualClock(Date.parse("2026-11-06T12:00:00Z"));
   const store = given ?? memoryStore({ clock });
   const objects = memoryObjects();
@@ -71,7 +71,7 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] },
   const fetch = async (url) => { fetches.push(url); return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 }); };
   const verifier = githubVerifier({ fetch, clock });
   const assembler = fleetAssembler({ pin: fleetPin({ lockFile: LOCK }) });
-  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow });
+  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, ...config });
   return { app, clock, store, objects, fetches };
 }
 

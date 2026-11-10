@@ -4,7 +4,7 @@
 
 **Contract version**: v0
 **Port type**: secondary (driven by the application)
-**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at 2ab48025, pinned by ADR-0002)
+**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@5a9cdf08, pinned by ADR-0002)
 
 ## Business intent
 

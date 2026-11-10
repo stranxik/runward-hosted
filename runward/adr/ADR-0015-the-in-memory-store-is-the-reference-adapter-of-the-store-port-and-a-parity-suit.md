@@ -1,7 +1,7 @@
 # ADR-0015: The in-memory store is the reference adapter of the store port, and a parity suite runs on PostgreSQL
 
 **Date**: 2026-11-06
-**Status**: proposed (to ratify by the author)
+**Status**: accepted (2026-11-08), ratified on the author's delegation in chat ("ratifie pour moi", "ratify for me"), the session having recommended it; the author did not read this text again before delegating
 **Deciders**: proposed by an agent session; Thibault Souris (author) decides.
 **Method**: decision-loop
 

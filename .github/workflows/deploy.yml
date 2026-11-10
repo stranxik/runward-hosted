@@ -2,14 +2,21 @@
 # RW_DEPLOY_ENABLED is true, which the author sets after approving the paid resources (runward/runbook.md,
 # "Resources to create"). In order, each step blocking:
 #   1. the gate and the tests are green for this exact commit (the ci workflow's run for github.sha);
-#   2. the image is built here from a clean checkout at github.sha, pushed, and deployed BY DIGEST;
-#   3. the revision served, read from the hoster's API (not from /api/version), carries that digest (S5);
+#   2. the image is built here from a clean checkout at github.sha and pushed; it is deployed BY DIGEST,
+#      first to the operator's gateway (ADR-0016), which then runs `roles` (rw_admin) and `migrate`
+#      (rw_owner) on the private database, and only then to the service: the schema is ready before the
+#      service switches;
+#   3. the revision served, read from the hoster's API (not from /api/version), carries that digest (S5),
+#      and the container's environment was merged, not replaced (scripts/container-deploy.sh);
 #   4. /api/version says the same commit and image;
 #   5. smoke: health, version, sign-in options, the page, 421, the request budget;
 #   6. the real send workflow of this commit sends to the witness tenant (job smoke-send);
-#   7. the isolation suite on the deployed base, as a hoster job in the private network, under rw_app (S4);
-#   8. any failure after the deploy redeploys the last digest whose evidence folder is green.
-# The Scaleway key lives in the environment "production", reserved to main; no PR can read it.
+#   7. the isolation suite on the deployed base, through the gateway in the private network, under rw_app (S4);
+#   8. the registry keeps the 5 newest images and every digest still served or named for rollback;
+#   9. any failure after the deploy redeploys, on both containers, the digest served before.
+# The Scaleway key and the operator's token live in the environment "production", reserved to main; no PR
+# can read them. The first deploy needs the containers to exist: runward/runbook.md §12 (push-image.yml,
+# then OpenTofu phase 2 with that digest).
 name: deploy
 on:
   push: { branches: [main] }
@@ -41,16 +48,24 @@ jobs:
     runs-on: ubuntu-24.04
     environment: production
     permissions: { contents: read }
-    outputs: { digest: "${{ steps.push.outputs.digest }}", previous: "${{ steps.before.outputs.previous }}" }
+    outputs:
+      digest: "${{ steps.push.outputs.digest }}"
+      previous: "${{ steps.before.outputs.previous }}"
+      previous_commit: "${{ steps.before.outputs.previous_commit }}"
+      previous_operator: "${{ steps.before.outputs.previous_operator }}"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with: { persist-credentials: false }
-      - name: the digest served before this deploy (the rollback target)
+      - name: the digests served before this deploy (the rollback targets)
         id: before
-        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}" }
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}" }
         run: |
-          prev=$(curl -sSf -H "X-Auth-Token: $SCW_SECRET_KEY" "https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers/$CONTAINER" | jq -r .registry_image)
-          echo "previous=$prev" >> "$GITHUB_OUTPUT"
+          api="https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers"
+          svc=$(curl -sSf --max-time 30 -H "X-Auth-Token: $SCW_SECRET_KEY" "$api/$CONTAINER")
+          op=$(curl -sSf --max-time 30 -H "X-Auth-Token: $SCW_SECRET_KEY" "$api/$OPERATOR")
+          echo "previous=$(jq -r .registry_image <<<"$svc")" >> "$GITHUB_OUTPUT"
+          echo "previous_commit=$(jq -r '.environment_variables.RW_COMMIT // ""' <<<"$svc")" >> "$GITHUB_OUTPUT"
+          echo "previous_operator=$(jq -r .registry_image <<<"$op")" >> "$GITHUB_OUTPUT"
       - name: build at ${{ github.sha }} and push; the digest names what was built
         id: push
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}" }
@@ -60,21 +75,17 @@ jobs:
           docker push "$REGISTRY/runward-hosted:${{ github.sha }}"
           digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$REGISTRY/runward-hosted:${{ github.sha }}")
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-      - name: deploy the revision by digest, never by tag
-        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
+      - name: the operator's gateway serves the new digest (S5 on the gateway)
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
+        run: scripts/container-deploy.sh "$OPERATOR" "$DIGEST" "${{ github.sha }}"
+      - name: roles (rw_admin), then migrate (rw_owner), through the gateway, before the service switches
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", RW_OPERATOR_TOKEN: "${{ secrets.RW_OPERATOR_TOKEN }}", RW_OPERATOR_URL: "${{ vars.RW_OPERATOR_URL }}" }
         run: |
-          api="https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers/$CONTAINER"
-          curl -sSf -X PATCH -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api" \
-            -d "$(jq -n --arg img "$DIGEST" --arg c "${{ github.sha }}" '{registry_image: $img, environment_variables: {RW_COMMIT: $c, RW_IMAGE: $img}}')" >/dev/null
-          curl -sSf -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null
-      - name: S5, the revision served carries the built digest (read from the hoster, not from the service)
+          scripts/operator-call.sh roles
+          scripts/operator-call.sh migrate
+      - name: the service serves the new digest (S5, read from the hoster, not from the service)
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
-        run: |
-          for i in $(seq 1 60); do
-            c=$(curl -sSf -H "X-Auth-Token: $SCW_SECRET_KEY" "https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers/$CONTAINER")
-            [ "$(echo "$c" | jq -r .status)" = "ready" ] && [ "$(echo "$c" | jq -r .registry_image)" = "$DIGEST" ] && exit 0; sleep 10
-          done
-          echo "the revision served is not $DIGEST"; exit 1
+        run: scripts/container-deploy.sh "$CONTAINER" "$DIGEST" "${{ github.sha }}"
       - name: /api/version says the same commit and image
         env: { DIGEST: "${{ steps.push.outputs.digest }}" }
         run: |
@@ -102,29 +113,51 @@ jobs:
     if: ${{ vars.RW_DEPLOY_ENABLED == 'true' }}
     runs-on: ubuntu-24.04
     environment: production
-    permissions: {}
+    permissions: { contents: read }
     steps:
-      - name: S4, the isolation suite as a hoster job in the private network, under rw_app
-        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", JOB: "${{ vars.SCW_ISOLATION_JOB_ID }}" }
-        run: |
-          api="https://api.scaleway.com/serverless-jobs/v1alpha1/regions/$REGION"
-          run=$(curl -sSf -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api/job-definitions/$JOB/start" -d '{"command":"node scripts/isolation-deployed.mjs"}' | jq -r '.job_runs[0].id')
-          for i in $(seq 1 60); do
-            s=$(curl -sSf -H "X-Auth-Token: $SCW_SECRET_KEY" "$api/job-runs/$run" | jq -r .state)
-            [ "$s" = "succeeded" ] && exit 0; [ "$s" = "failed" ] && { echo "isolation suite failed"; exit 1; }; sleep 10
-          done; exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - name: S4, the isolation suite on the deployed base, through the gateway in the private network, under rw_app
+        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", RW_OPERATOR_TOKEN: "${{ secrets.RW_OPERATOR_TOKEN }}", RW_OPERATOR_URL: "${{ vars.RW_OPERATOR_URL }}" }
+        run: scripts/operator-call.sh isolation
+
+  purge:
+    # The registry keeps the 5 newest images; a digest served (the new one) or named for rollback (the one
+    # served before, on either container) is never deleted, whatever its age.
+    needs: [deploy, isolation]
+    if: ${{ vars.RW_DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with: { node-version: "22" }
+      - name: delete the images beyond the 5 newest
+        env:
+          SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}"
+          PROTECT: "${{ needs.deploy.outputs.digest }},${{ needs.deploy.outputs.previous }},${{ needs.deploy.outputs.previous_operator }}"
+        run: node scripts/registry-purge.mjs --keep 5 --protect "$PROTECT"
 
   rollback:
     needs: [deploy, smoke-send, isolation]
     if: ${{ failure() && vars.RW_DEPLOY_ENABLED == 'true' && needs.deploy.outputs.previous != '' }}
     runs-on: ubuntu-24.04
     environment: production
-    permissions: {}
+    permissions: { contents: read }
     steps:
-      - name: redeploy the last green digest, then wait for /api/version
-        env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", PREV: "${{ needs.deploy.outputs.previous }}" }
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with: { persist-credentials: false }
+      - name: redeploy the digests served before, on the service and on the gateway, then wait for /api/version
+        env:
+          SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}"
+          CONTAINER: "${{ vars.SCW_CONTAINER_ID }}"
+          OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}"
+          PREV: "${{ needs.deploy.outputs.previous }}"
+          PREV_COMMIT: "${{ needs.deploy.outputs.previous_commit }}"
+          PREV_OPERATOR: "${{ needs.deploy.outputs.previous_operator }}"
         run: |
-          api="https://api.scaleway.com/containers/v1beta1/regions/$REGION/containers/$CONTAINER"
-          curl -sSf -X PATCH -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api" -d "$(jq -n --arg img "$PREV" '{registry_image: $img, environment_variables: {RW_IMAGE: $img}}')" >/dev/null
-          curl -sSf -X POST -H "X-Auth-Token: $SCW_SECRET_KEY" -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null
-          for i in $(seq 1 60); do [ "$(curl -sf "$SERVICE/api/version" | jq -r .image)" = "$PREV" ] && exit 0; sleep 10; done; exit 1
+          scripts/container-deploy.sh "$CONTAINER" "$PREV" "$PREV_COMMIT"
+          [ -z "$PREV_OPERATOR" ] || scripts/container-deploy.sh "$OPERATOR" "$PREV_OPERATOR"
+          for i in $(seq 1 60); do [ "$(curl -sf --max-time 30 "$SERVICE/api/version" | jq -r .image)" = "$PREV" ] && exit 0; sleep 10; done; exit 1

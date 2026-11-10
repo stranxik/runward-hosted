@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "eslint",
+          "version": "10.13.0",
+          "informationUri": "https://eslint.org",
+          "rules": [
+            {
+              "id": "no-restricted-imports",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "no-restricted-properties",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-bidi-characters",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-buffer-noassert",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-child-process",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-eval-with-expression",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-invisible-characters",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-new-buffer",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-non-literal-require",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-pseudoRandomBytes",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            },
+            {
+              "id": "security/detect-unsafe-regex",
+              "defaultConfiguration": {
+                "level": "error"
+              }
+            }
+          ],
+          "properties": {
+            "config": "eslint.security.config.js",
+            "plugins": {
+              "eslint-plugin-security": "4.2.0"
+            },
+            "files": 33
+          }
+        }
+      },
+      "results": []
+    }
+  ]
+}

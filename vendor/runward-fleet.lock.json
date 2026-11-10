@@ -3,15 +3,16 @@
   "version": "0.46.0",
   "repository": "https://github.com/stranxik/runward",
   "path": "packages/runward-fleet",
-  "ref": "integration/2026-11-06-c",
-  "commit": "2ab48025a1afba94dfdf9f6d2e052bf2f00b5753",
-  "tarball": "vendor/runward-fleet-0.46.0-2ab48025.tgz",
+  "ref": "main",
+  "commit": "5a9cdf08a76977f9b671662f562e98d332ccc95e",
+  "tarball": "vendor/runward-fleet-0.46.0-5a9cdf08.tgz",
   "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
   "integrity": "sha512-TLCWar27gKb/POKM2wmxIvr3p61EQh6xe32IzS7h7YvKhk59bhpJLLvgXffgLcLyyKfzyhAiohPYWqXC4AH1aQ==",
   "how": "npm pack of packages/runward-fleet at commit; scripts/verify-runward-fleet.mjs proves each file of the tarball is the file at that commit",
   "previous": {
-    "commit": "da888958fbee6557338a5d3d12e7992c66cc13a9",
-    "tarballSha256": "1d8c1205f8f17ae4836a6437995798902857e2fafb12650ab37d9a292b52b07a",
-    "why": "ui/views.js only: level-not-met reads \"niveau non atteint\" / \"level not met\"; build.js unchanged, so every index built by the previous pin replays to the same bytes"
+    "commit": "2ab48025a1afba94dfdf9f6d2e052bf2f00b5753",
+    "ref": "integration/2026-11-06-c",
+    "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
+    "why": "PR #496 of runward merged into main at 5a9cdf08; packages/runward-fleet is identical at both commits (git diff empty), and npm pack at 5a9cdf08 gives the same tarball, sha256 and integrity unchanged: every index built by the previous pin replays to the same bytes"
   }
 }

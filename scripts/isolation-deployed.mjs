@@ -6,10 +6,11 @@
 // the other, checks the catalog it can see. Exit 0 when 0 rows cross, 1 otherwise, 2 when it cannot tell
 // (two witnesses with no row at all would prove nothing: the positive control).
 import postgres from "postgres";
+import { migrationTls } from "./migrate.mjs";
 const T = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
 const [a, b] = (process.env.RW_WITNESS_TENANTS ?? "").split(",");
 if (!a || !b) { console.error("RW_WITNESS_TENANTS must name two tenants"); process.exit(2); }
-const sql = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {}, ssl: process.env.DATABASE_SSL === "disable" ? false : "require" });
+const sql = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {}, ssl: migrationTls(process.env.DATABASE_URL) });
 const faults = []; let seen = 0;
 for (const [me, other] of [[a, b], [b, a]]) {
   for (const t of T) await sql.begin(async (q) => {

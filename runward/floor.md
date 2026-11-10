@@ -16,18 +16,18 @@
 | Rule | Status | Evidence |
 |---|---|---|
 | async-post-turn-pipeline | proposed:n/a | the service calls no model (architecture §1): deterministic end to end; no post-turn pipeline exists |
-| checklist-day-zero-project | proposed:applied | file:src/main.js#readConfig; file:src/adapters/system/log.js#jsonLog; file:.github/workflows/ci.yml; adr:0001 |
-| config-secrets-boundary | proposed:applied | file:src/main.js#readConfig (secrets read from the environment only, never logged; the vault is the hoster's secret environment and the GitHub environment production); adr:0008 |
-| data-migrations-forward-only | proposed:applied | file:scripts/migrate.mjs#migrate; file:db/migrations/0001_floor.sql |
+| checklist-day-zero-project | proposed:applied | test:reports/junit.xml::the service refuses to start half configured: exit 78, each missing variable named, no value echoed; test:reports/junit.xml::the schema the migrations build is the committed snapshot (no drift); test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; file:.github/workflows/ci.yml; adr:0001 |
+| config-secrets-boundary | proposed:applied | file:reports/eslint-security.sarif#no-restricted-properties; test:reports/junit.xml::the security scan refuses a read of the environment outside the composition roots, and eval; adr:0008 |
+| data-migrations-forward-only | proposed:applied | test:reports/junit.xml::migrations: a contracting statement is refused wherever it sits, in any spelling; test:reports/junit.xml::migrations: a gap, a duplicate number, a bad name, a reordering, a vanished or changed file are refused; test:reports/junit.xml::the migration is idempotent: a second run applies nothing |
 | frontier-deterministic-boundary | proposed:n/a | the service calls no model (architecture §1): deterministic end to end: every value shown is computed by runward-fleet from the exports, none comes from a model |
-| hexa-adapter-pattern | proposed:applied | file:src/application/app.js#PORTS; file:src/adapters/store/memory.js#memoryStore; file:src/adapters/store/postgres.js#postgresStore |
-| hexa-architecture | proposed:applied | test:test/unit/boundary.test.js; adr:0001 |
-| hexa-move-deterministic-out | proposed:applied | file:src/domain/workload.js#placeUpload; file:src/domain/identity.js#linkState; file:src/domain/ledger.js#verifyChain |
+| hexa-adapter-pattern | proposed:applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; adr:0015 |
+| hexa-architecture | proposed:applied | file:reports/eslint.json#src/domain/identity.js; file:reports/eslint.json#src/application/app.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error |
+| hexa-move-deterministic-out | proposed:n/a | the service calls no model (architecture §1): every value is computed by deterministic code; there is no model call to move work out of |
 | provider-llm-auto-detection | proposed:n/a | the service calls no model (architecture §1): deterministic end to end |
-| provider-no-crash-missing-env | proposed:applied | file:src/main.js#readConfig (the service refuses to start half configured and names what is missing, never a value) |
-| scaling-state-externalization | proposed:applied | file:src/adapters/store/postgres.js#postgresStore; adr:0006 (challenges, sessions, links and counters are in the database; nothing in memory outlives a request) |
+| provider-no-crash-missing-env | proposed:applied | test:reports/junit.xml::the service refuses to start half configured: exit 78, each missing variable named, no value echoed; test:reports/junit.xml::database TLS in production: verify-full with the authority, or the service does not start |
+| scaling-state-externalization | proposed:applied | test:reports/junit.xml::two instances on one PostgreSQL share every state: a session, a challenge, a token already used; adr:0006 |
 | security-prompt-injection | proposed:n/a | the service calls no model (architecture §1): deterministic end to end; untrusted claims and exports are data, bounded and escaped (file:src/domain/workload.js#cleanClaim) |
-| state-event-sourcing | proposed:applied | file:src/domain/ledger.js#nextEntry; file:src/application/context.js#append; adr:0007 |
+| state-event-sourcing | proposed:n/a | the service calls no model (architecture §1): there is no agent state to rebuild from events; the tenant journal is append only and chained (adr:0007), a record beside the state |
 | tools-registry-pattern | proposed:n/a | no agent and no tool registry in the service; the route table is the closed list of gestures (file:src/http/server.js#routes) |
 | tools-scope-atomicity | proposed:n/a | no agent tools; each route is one gesture (file:src/http/server.js#routes) |
 
