@@ -669,3 +669,49 @@ test("C12: run again with a `since` that no longer reaches the anchor, the note 
   assert.deepEqual([second.body.detail.lost, second.body.detail.headAfterRestore, second.body.detail.rerunOf], [range, restored, first.seq]);
   assert.deepEqual(second.body.detail.headBefore, first.body.detail.headBefore, "the head before the loss is the one the first note read");
 });
+
+// Code review of 2026-11-10 (of d569c95), C19: no test pinned the bound restoredHead takes from the anchors
+// of lost entries. With `ulidTime(since)` alone the file stayed green, because the test above gives a
+// `since` that is already after the earlier restore's note. Here `since` precedes that note, as an operator
+// who reaches back for missed gestures gives it, and this loss is anchored: the anchor was taken after the
+// earlier note, so that note is not this restore's first.
+test("C19: with a `since` that precedes an earlier restore's note, an anchored loss is still read from the restored head, not from that note", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 4, prefix: "p" });
+  const early = mark(h); // before the earlier restore, its replay and its note
+  const earlyAt = h.clock.now();
+  const b0 = backup(h);
+  await removePasskey(h, f, "p-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  restore(h, b0);
+  await h.app.operator.restoreReplay({ since: b0.since });
+  const earlierNote = (await journal(h, f.tenant)).pop();
+  assert.equal(earlierNote.body.what, "restore-replayed");
+
+  // this restore: two entries lost, anchored after the earlier note
+  tick(h);
+  const g = { ...f, session: await h.app.identity.sessionFrom((await signIn(h, "p-1")).token) };
+  const b = backup(h);
+  await removePasskey(h, g, "p-3");
+  await removePasskey(h, g, "p-4");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = await head(h, f.tenant);
+  restore(h, b);
+  const restored = await head(h, f.tenant);
+  assert.ok(restored.seq > earlierNote.seq, "the control: the earlier restore's note came back with the backup, and the journal went on after it");
+  assert.ok(early < b0.since && Date.parse(earlierNote.body.dates.received.at) > earlyAt, "the control: this `since` precedes the earlier restore's note");
+
+  await h.app.operator.restoreReplay({ since: early });
+  const note = (await journal(h, f.tenant)).pop();
+  assert.equal(note.body.what, "restore-replayed");
+  assert.equal(note.body.detail.since, early);
+  // without the bound, the earlier note is taken for this replay's first: the head is the entry before
+  // it, the range is the earlier restore's, and the note calls itself a rerun
+  assert.deepEqual(note.body.detail.headAfterRestore, restored, "the restored head is the journal's last entry, not the entry before the earlier note");
+  assert.deepEqual(note.body.detail.lost, { from: restored.seq + 1, to: before.seq, count: 2 });
+  assert.deepEqual({ seq: note.body.detail.headBefore.seq, hash: note.body.detail.headBefore.hash }, before);
+  assert.equal(note.body.detail.rerunOf, undefined, "and it is not a rerun of the earlier restore's replay");
+  assert.equal(note.seq, restored.seq + 1);
+});
