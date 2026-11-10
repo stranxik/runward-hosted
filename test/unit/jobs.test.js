@@ -76,9 +76,12 @@ test("the retention job is idempotent: a second pass erases nothing and journals
 });
 
 test("the operator's run of a daily job ends non-zero when a tenant failed or a chain is broken", async () => {
-  const { jobIncomplete } = await import("../../src/operator.js");
+  const { jobIncomplete, gestureStatus } = await import("../../src/operator.js");
   assert.equal(jobIncomplete([{ tenant: "a", erased: 0, attempts: 1 }]), false);
   assert.equal(jobIncomplete([{ tenant: "a", erased: 0 }, { tenant: "b", failed: true, error: "x", attempts: 3 }]), true);
   assert.equal(jobIncomplete([{ tenant: "a", ok: false, at: 3, why: "hash" }]), true);
   assert.equal(jobIncomplete({ opened: true }), false, "a gesture that is not a daily job");
+  // what a run prints is its status, never its result (the result is in the operator journal)
+  assert.deepEqual(gestureStatus("verify-chains", [{ tenant: "a", ok: false, head: "h", why: "hash" }]), { gesture: "verify-chains", ok: false });
+  assert.deepEqual(gestureStatus("open-bootstrap", { tenant: "t", link: "l", expiresAt: "x" }), { gesture: "open-bootstrap", ok: true });
 });

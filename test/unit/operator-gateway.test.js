@@ -1,12 +1,21 @@
 // The operator's gateway (ADR-0016): the two barriers' own half (the token), one role per gesture, the
-// deadline, the journal. Each child here is a real Node process; only the script it runs is replaced by a
-// stand-in that reports what it received, so the environment crossing the process boundary is the one
-// measured, not a mock's.
-import { test } from "node:test";
+// deadline, the journal, and what leaves the private network (a status and a code, review finding of
+// 2026-11-10). Each child here is a real Node process; only the script it runs is replaced by a stand-in
+// that reports what it received, in a file of its own, so the environment crossing the process boundary
+// is the one measured, not a mock's.
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { createServer } from "node:http";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createGateway, gatewayProblems, argvOf, childEnv, GESTURES } from "../../src/operator-gateway.js";
+
+const CALL = new URL("../../scripts/operator-call.sh", import.meta.url).pathname;
+const DIR = mkdtempSync(join(tmpdir(), "rw-gateway-"));
+after(() => rmSync(DIR, { recursive: true, force: true }));
 
 const TOKEN = "op-token-for-tests-only-7f3a";
 // Fake credentials, assembled at run time so no line of the repository reads as a connection string with a
@@ -27,7 +36,9 @@ const ENV = {
 
 /** A spawn that runs `script` (Node source) in a real child, with the argv and environment given by the gateway. */
 const standIn = (script, seen = []) => (exe, argv, opts) => { seen.push({ argv, env: opts.env }); return spawn(exe, ["-e", script, ...argv], opts); };
-const REPORT = "process.stdout.write(JSON.stringify({ argv: process.argv.slice(1), env: process.env }))";
+const REPORT_FILE = join(DIR, "report.json");
+const REPORT = `require("node:fs").writeFileSync(${JSON.stringify(REPORT_FILE)}, JSON.stringify({ argv: process.argv.slice(1), env: process.env }))`;
+const reported = () => JSON.parse(readFileSync(REPORT_FILE, "utf8"));
 
 async function gateway(opts) {
   const lines = [];
@@ -70,24 +81,23 @@ test("each gesture runs under its own role: the child receives that role's URL a
       "verify-chains": ["DATABASE_URL", URLS.RW_OPERATOR_URL_MAINT, true],
     };
     for (const [name, [as, url, s3]] of Object.entries(expect)) {
+      rmSync(REPORT_FILE, { force: true }); // each report is this child's own, never the previous one's
       const r = await t.call(`/gestures/${name}`);
       assert.equal(r.status, 200, name);
-      const out = await r.json();
-      assert.equal(out.role, GESTURES[name].role);
-      // the child's report passes through the redactor: the URL itself never comes back to the caller
-      assert.doesNotMatch(out.stdout, /pw-\d/, `${name}: no password in the response`);
-      const raw = JSON.parse(out.stdout.replace(/"postgres:\/\/\[redacted\]/g, '"R"').replace(/\[redacted\]/g, "R"));
-      assert.ok(raw.env[as], `${name} reads ${as}`);
+      assert.deepEqual(await r.json(), { gesture: name, ok: true, exit: 0 }, `${name}: a status and a code, nothing of the child's output`);
+      const raw = reported();
+      assert.equal(raw.env[as], url, `${name} reads ${as}, the URL of ${GESTURES[name].role}`);
       const creds = Object.keys(raw.env).filter((k) => /URL$|S3_ACCESS_KEY_ID|S3_SECRET_ACCESS_KEY/.test(k));
       assert.deepEqual(creds.sort(), [as, ...(s3 ? ["S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] : [])].sort(), `${name}: exactly its credentials`);
       assert.ok(!Object.keys(raw.env).some((k) => k.startsWith("RW_OPERATOR_")), `${name}: no gateway variable crosses`);
       assert.equal(childEnv(name, ENV)[as], url, `${name}: the URL of ${GESTURES[name].role}`);
     }
     // the scheduled path runs the same gesture, under the same role, without the token
+    rmSync(REPORT_FILE, { force: true });
     const s = await t.call("/scheduled/retention", { token: null });
     assert.equal(s.status, 200);
-    assert.equal((await s.json()).role, "rw_maint");
-    assert.ok(t.lines.some((l) => l.event === "operator.gesture" && l.detail.scheduled && l.detail.gesture === "retention"));
+    assert.equal(reported().env.DATABASE_URL, URLS.RW_OPERATOR_URL_MAINT);
+    assert.ok(t.lines.some((l) => l.event === "operator.gesture" && l.detail.scheduled && l.detail.gesture === "retention" && l.detail.role === "rw_maint"));
   } finally { await t.close(); }
 });
 
@@ -97,9 +107,7 @@ test("a failing gesture is journalled with its exit and its last line, secrets r
   try {
     const r = await t.call("/gestures/migrate");
     assert.equal(r.status, 500);
-    const out = await r.json();
-    assert.deepEqual({ ok: out.ok, exit: out.exit, timedOut: out.timedOut }, { ok: false, exit: 1, timedOut: false });
-    assert.doesNotMatch(out.stderr, /own-pw-2/);
+    assert.deepEqual(await r.json(), { gesture: "migrate", ok: false, exit: 1 }, "the reason stays in the gateway's log line");
     const [line] = t.lines.filter((l) => l.event === "operator.gesture");
     assert.equal(line.level, "error");
     assert.equal(line.status, 500);
@@ -114,7 +122,7 @@ test("a gesture past its deadline is killed, answered 504 and journalled; the ne
   try {
     const r = await t.call("/gestures/roles");
     assert.equal(r.status, 504);
-    assert.equal((await r.json()).timedOut, true);
+    assert.deepEqual(await r.json(), { gesture: "roles", ok: false, exit: null });
     const [line] = t.lines.filter((l) => l.event === "operator.gesture");
     assert.match(line.error, /deadline of 300 ms reached, killed/);
     assert.equal((await t.call("/gestures/roles")).status, 504, "the lock was released");
@@ -126,7 +134,9 @@ test("one gesture at a time: a second call while one runs is refused 409", async
   try {
     const first = t.call("/gestures/retention");
     await new Promise((r) => setTimeout(r, 100));
-    assert.equal((await t.call("/gestures/verify-chains")).status, 409);
+    const second = await t.call("/gestures/verify-chains");
+    assert.equal(second.status, 409);
+    assert.deepEqual(await second.json(), { error: "busy" });
     assert.equal((await first).status, 200);
   } finally { await t.close(); }
 });
@@ -145,7 +155,10 @@ test("arguments: a closed list per gesture, each checked, passed as argv (never 
   const seen = [];
   const t = await gateway({ spawn: standIn(REPORT, seen) });
   try {
-    assert.equal((await t.call("/gestures/open-bootstrap", { body: { args: { hash: "nope" } } })).status, 400);
+    const bad = await t.call("/gestures/open-bootstrap", { body: { args: { hash: "nope" } } });
+    assert.equal(bad.status, 400);
+    assert.deepEqual(await bad.json(), { error: "arguments" }, "a code; the reason is in the gateway's log");
+    assert.match(t.lines.find((l) => l.event === "operator.refused").detail.reason, /hash is not in the expected form/);
     assert.equal(seen.length, 0);
     const r = await t.call("/gestures/reset-access", { body: { args: { hash, tenant } } });
     assert.equal(r.status, 200);
@@ -162,4 +175,64 @@ test("the gateway refuses to start without the token's hash, a role's URL or the
   ]);
   assert.throws(() => createGateway({ env: { ...ENV, RW_OPERATOR_TOKEN_SHA256: TOKEN } }), /refused to start/);
   assert.deepEqual(gatewayProblems(ENV), []);
+});
+
+
+// What a gesture's child can print: identifiers of a tenant, a member and a link, a chain head, an error
+// message that names them. None of it may leave the private network.
+const TENANT = "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70", MEMBER = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f", HEAD = "e".repeat(64);
+const CHATTY = `console.log(JSON.stringify({ result: { tenant: "${TENANT}", link: "${MEMBER}", head: "${HEAD}" } })); console.error("no such member ${MEMBER} in tenant ${TENANT}"); process.exit(Number(process.argv.includes("--fail")))`;
+
+/** scripts/operator-call.sh, run for real (bash, curl, jq) against `url`; its output is a runner's log. */
+function operatorCall(url, gesture, args) {
+  return new Promise((resolve) => {
+    const env = { PATH: process.env.PATH, SCW_SECRET_KEY: ["stand", "in"].join("-"), RW_OPERATOR_TOKEN: TOKEN, RW_OPERATOR_URL: url };
+    const child = spawn("bash", [CALL, gesture, ...(args ? [JSON.stringify(args)] : [])], { env });
+    let out = "";
+    child.stdout.on("data", (c) => (out += c)); child.stderr.on("data", (c) => (out += c));
+    child.on("close", (code) => resolve({ code, out }));
+  });
+}
+
+test("what leaves the private network is a status and a code: no identifier, no head, no message, in the answer or in the runner's log", async () => {
+  const t = await gateway({ spawn: standIn(CHATTY) });
+  try {
+    for (const [name, status] of [["verify-chains", 200], ["retention", 200]]) {
+      const r = await t.call(`/gestures/${name}`);
+      const text = await r.text();
+      assert.equal(r.status, status);
+      assert.deepEqual(JSON.parse(text), { gesture: name, ok: true, exit: 0 });
+      for (const id of [TENANT, MEMBER, HEAD]) assert.ok(!text.includes(id), `${name}: ${id} left in the answer`);
+    }
+    const call = await operatorCall(t.base, "verify-chains");
+    assert.equal(call.code, 0);
+    assert.equal(call.out.trim(), "operator-call: verify-chains answered HTTP 200 (gesture=verify-chains ok=true exit=0)");
+    const failed = await operatorCall(t.base, "restore-replay", { since: "01JC0000000000000000000000" });
+    assert.equal(failed.code, 0, "the stand-in succeeds without --fail");
+    // the reason of a failure stays in the gateway's log line at the hoster
+    const t2 = await gateway({ spawn: (exe, argv, opts) => spawn(exe, ["-e", CHATTY, ...argv, "--fail"], opts) });
+    try {
+      const f = await operatorCall(t2.base, "open-recovery", { hash: "a".repeat(64), tenant: TENANT, member: MEMBER });
+      assert.equal(f.code, 1);
+      assert.equal(f.out.trim(), "operator-call: open-recovery answered HTTP 500 (gesture=open-recovery ok=false exit=1)");
+      assert.match(t2.lines.find((l) => l.event === "operator.gesture").error, /no such member/);
+    } finally { await t2.close(); }
+  } finally { await t.close(); }
+});
+
+test("operator-call.sh prints only the closed fields, even from a gateway that answers more (an older image after a rollback)", async () => {
+  const older = createServer((req, res) => {
+    req.resume();
+    req.on("end", () => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ gesture: "open-bootstrap", role: "rw_maint", ok: true, exit: 0, stdout: `{"tenant":"${TENANT}","link":"${MEMBER}"}`, stderr: `head ${HEAD}`, error: `tenant ${TENANT}` }));
+    });
+  });
+  await new Promise((r) => older.listen(0, "127.0.0.1", r));
+  try {
+    const r = await operatorCall(`http://127.0.0.1:${older.address().port}`, "open-bootstrap", { hash: "a".repeat(64), tenant: TENANT, witness: true });
+    assert.equal(r.code, 0);
+    assert.equal(r.out.trim(), "operator-call: open-bootstrap answered HTTP 200 (gesture=open-bootstrap ok=true exit=0)");
+    for (const id of [TENANT, MEMBER, HEAD]) assert.ok(!r.out.includes(id), `${id} reached the runner's log`);
+  } finally { await new Promise((r) => older.close(r)); }
 });

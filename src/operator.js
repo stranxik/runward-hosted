@@ -17,6 +17,9 @@ export const GESTURES = ["open-bootstrap", "open-recovery", "reset-access", "mai
  *  it; the failure itself is already in the operator journal (operatorCases#eachTenant). */
 export const jobIncomplete = (r) => Array.isArray(r) && r.some((x) => x.failed === true || x.ok === false);
 
+/** What a run prints: the gesture and whether it completed, nothing of its result. */
+export const gestureStatus = (gesture, r) => ({ gesture, ok: !jobIncomplete(r) });
+
 export function parse(argv) {
   const [gesture, ...rest] = argv;
   if (!GESTURES.includes(gesture)) throw new Error(`gesture must be one of: ${GESTURES.join(", ")}`);
@@ -45,6 +48,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     "verify-chains": () => op.verifyChains(),
     "restore-replay": () => op.restoreReplay({ since: o.since, headBefore: o.headBefore ?? null, recoveryHash: o.recoveryHash ?? null }),
   }[gesture];
-  run().then((r) => { console.log(JSON.stringify({ gesture, result: r }, null, 2)); return c.store.close().then(() => { if (jobIncomplete(r)) process.exit(1); }); })
+  // A status, never the result (review finding of 2026-11-10): the result names tenants, members, links and
+  // chain heads, and each gesture already writes it to the operator journal in the database. The gateway
+  // keeps this output inside the private network; the reason of a refusal goes to stderr, which only its
+  // log line at the hoster reads.
+  run().then((r) => { console.log(JSON.stringify(gestureStatus(gesture, r))); return c.store.close().then(() => { if (jobIncomplete(r)) process.exit(1); }); })
     .catch((e) => { console.error(`operator: ${gesture} refused: ${e.message}`); c.store.close().finally(() => process.exit(1)); });
 }

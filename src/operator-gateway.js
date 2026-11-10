@@ -14,7 +14,12 @@
 // it does not keep in clear: POST /scheduled/retention and /scheduled/verify-chains take no token, no
 // argument, and run idempotent gestures; nothing else is reachable without the token.
 // One gesture at a time (409 otherwise), each bounded by its own deadline (killed, 504), each outcome one
-// JSON log line (never a header, a body, a token or a URL).
+// JSON log line at the hoster (never a header, a body, a token or a URL).
+// What leaves the private network is a status and a code (review finding of 2026-11-10: the answer carried
+// the child's output, tenant, member and link identifiers, chain heads and error messages included, and
+// scripts/operator-call.sh printed it in a GitHub runner's log): the HTTP status and { gesture, ok, exit }
+// for a gesture that ran, { error: <code> } for one that did not. The child's output stays here: its last
+// error line goes to the gateway's own log line, every result is in the operator journal of the database.
 import { createServer } from "node:http";
 import { spawn as nodeSpawn } from "node:child_process";
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -164,7 +169,7 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
     const url = new URL(req.url, "http://gateway");
     if (req.method === "GET" && url.pathname === "/health") return send(200, { ok: true });
     const m = /^\/(gestures|scheduled)\/([a-z-]+)$/.exec(url.pathname);
-    if (req.method !== "POST" || !m) return send(404, { error: "not found" });
+    if (req.method !== "POST" || !m) return send(404, { error: "not-found" });
     const [, kind, name] = m;
     const route = `/${kind}/${name}`;
     const scheduled = kind === "scheduled";
@@ -172,7 +177,7 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
       log.warn("operator.refused", { route, method: req.method, status: 401, detail: { reason: scheduled ? "not a scheduled gesture" : "no valid operator token" } });
       return send(401, { error: "refused" });
     }
-    if (!GESTURES[name]) return send(404, { error: "no such gesture" });
+    if (!GESTURES[name]) return send(404, { error: "not-found" });
     let argv;
     try {
       const text = scheduled ? "" : await readBody(req);
@@ -180,12 +185,15 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
       argv = argvOf(name, scheduled ? {} : body.args ?? {});
     } catch (e) {
       const status = e.status ?? 400;
+      const code = e instanceof SyntaxError ? "not-json" : status === 413 ? "too-large" : "arguments";
+      // the reason (which argument, which form) is said here, in the gateway's log at the hoster; the caller
+      // reads the forms in runward/runbook.md §8
       log.warn("operator.refused", { route, method: req.method, status, detail: { gesture: name, reason: e instanceof SyntaxError ? "body is not JSON" : redact(e.message) } });
-      return send(status, { error: e instanceof SyntaxError ? "body is not JSON" : redact(e.message) });
+      return send(status, { error: code });
     }
     if (busy) {
       log.warn("operator.busy", { route, method: req.method, status: 409, detail: { gesture: name, running: busy } });
-      return send(409, { error: `${busy} is running: one gesture at a time` });
+      return send(409, { error: "busy" });
     }
     busy = name;
     const g = GESTURES[name];
@@ -197,14 +205,14 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
       const detail = { gesture: name, role: g.role, scheduled, exit: r.code, signal: r.signal, timedOut: r.timedOut };
       if (ok) log.info("operator.gesture", { route, method: req.method, status, ms: r.ms, detail });
       else log.error("operator.gesture", { route, method: req.method, status, ms: r.ms, detail, error: r.timedOut ? `deadline of ${timeouts[name] ?? g.timeoutMs} ms reached, killed` : lastLine || `exit ${r.code}` });
-      return send(status, { gesture: name, role: g.role, ok, exit: r.code, signal: r.signal, timedOut: r.timedOut, ms: r.ms, stdout: redact(tail(r.stdout, 16384)), stderr: redact(tail(r.stderr, 4096)) });
+      return send(status, { gesture: name, ok, exit: r.code });
     } finally { busy = null; }
   }
 
   const server = createServer((req, res) => {
     handle(req, res).catch((e) => {
       log.error("operator.gateway", { route: req.url?.split("?")[0], method: req.method, status: 500, error: redact(e.message).slice(0, 300) });
-      if (!res.headersSent) { res.writeHead(500, { "content-type": "application/json" }); res.end('{"error":"gateway error"}'); }
+      if (!res.headersSent) { res.writeHead(500, { "content-type": "application/json" }); res.end('{"error":"gateway-error"}'); }
     });
   });
   server.requestTimeout = 0; // a gesture's own deadline bounds the request (the hoster's timeout is above all of them)
