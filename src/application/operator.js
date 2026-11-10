@@ -147,7 +147,8 @@ function ulidTime(id) {
   for (const ch of id.slice(0, 10)) t = t * 32 + "0123456789ABCDEFGHJKMNPQRSTVWXYZ".indexOf(ch);
   return t;
 }
-const anchors = (events) => events.filter(({ event: e }) => e.what === "journal-anchored" && Number.isSafeInteger(e.seq) && HEX64.test(String(e.hash)));
+const isAnchor = (e) => e.what === "journal-anchored" && Number.isSafeInteger(e.seq) && HEX64.test(String(e.hash));
+const anchors = (events) => events.filter(({ event: e }) => isAnchor(e));
 
 /**
  * The head of a tenant's journal as the restore left it: the entry before the first note of the replay of
@@ -386,14 +387,15 @@ export function operatorCases(ctx) {
     catch (e) { await store.tx(null, (tx) => tx.operatorNote(what, { ...detail, report: [], failed: 1, error: why(e), stage: "tenant list" })); throw e; }
   }
 
-  /** `fn` on each tenant, retried as a daily job's (eachTenant): one row per tenant, its result or its failure. */
+  /** `fn` on each tenant, retried as a daily job's (eachTenant): one row per tenant, its result or its
+   *  failure, with the `stage` the error names when it names one. */
   async function perTenant(tenants, fn) {
     const report = [];
     for (const tenant of tenants) {
       for (let attempt = 1; ; attempt++) {
         try { report.push({ tenant, ...(await fn(tenant)), attempts: attempt }); break; }
         catch (e) {
-          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), attempts: attempt }); break; }
+          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), ...(e?.stage ? { stage: e.stage } : {}), attempts: attempt }); break; }
           await sleep(waits[attempt - 1]);
         }
       }
@@ -417,20 +419,33 @@ export function operatorCases(ctx) {
     // and say that nothing was lost (code review of 2026-11-10, C17: anchor at 8, restore to 5, `--anchor`
     // again by mistake, then the replay: a permanent note of 0 entries lost, where three were). A log
     // that cannot be read refuses too: nothing says then that no restore is waiting for its replay.
-    const pending = [], unread = [];
-    for (const tenant of tenants) {
+    // A replay counts when it was noted after that anchor was taken: the note of an earlier restore's
+    // replay, which a later backup brings back with the journal, says nothing of this loss (C36).
+    // The limit (C36): the refusal needs an anchor taken before the loss. A loss no anchor preceded leaves
+    // nothing here to compare the journal with, and an anchor taken after it is of the restored head.
+    // Each tenant's check reads its log from the newest object back to its latest anchor, and is tried as
+    // a daily job's step is (perTenant): a read that fails for good is noted in the operator journal with
+    // the others, and nothing is anchored (C37: the journal's read was neither retried nor noted).
+    const checks = await perTenant(tenants, async (tenant) => {
       let last = null;
-      try { last = anchors(await objects.securitySince(tenant, "")).pop() ?? null; }
-      catch (e) { unread.push({ tenant, failed: true, error: why(e) }); continue; }
-      if (!last) continue;
+      try { last = await objects.securityLatest(tenant, isAnchor); }
+      catch (e) { throw Object.assign(e, { stage: "security log" }); }
+      if (!last) return {};
       const entries = await store.tx(tenant, (tx) => tx.ledgerAll());
       const held = entries.some((x) => x.seq === last.event.seq && x.hash === last.event.hash);
       const replayed = entries.some((x) => x.body.what === "restore-replayed" && Date.parse(x.body.dates?.received?.at) >= when(last.event));
-      if (!held && !replayed) pending.push({ tenant, anchor: last.id, anchored: last.event.seq, head: entries[entries.length - 1]?.seq ?? 0 });
-    }
+      return !held && !replayed ? { pending: { anchor: last.id, anchored: last.event.seq, head: entries[entries.length - 1]?.seq ?? 0 } } : {};
+    });
+    const failed = checks.filter((r) => r.failed);
+    const unread = failed.filter((r) => r.stage === "security log");
+    const pending = checks.filter((r) => r.pending).map((r) => ({ tenant: r.tenant, ...r.pending }));
     if (unread.length) {
       await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: SECURITY_LOG_UNREADABLE, report: unread, failed: unread.length }));
       throw Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: the security log of ${unread.length} tenant(s) out of ${tenants.length} cannot be read; nothing was anchored; first reason: ${unread[0].error}`), { code: SECURITY_LOG_UNREADABLE });
+    }
+    if (failed.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { stage: "the check before the anchors", report: failed, failed: failed.length }));
+      throw new Error(`the journal of ${failed.length} tenant(s) out of ${tenants.length} could not be read to check that no restore is waiting for its replay; nothing was anchored; first reason: ${failed[0].error}`);
     }
     if (pending.length) {
       await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: RESTORE_NOT_REPLAYED, report: pending, failed: pending.length }));

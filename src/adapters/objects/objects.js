@@ -25,6 +25,18 @@ export const keys = {
 };
 
 function api(raw) {
+  /** The ULIDs of a tenant's security log, oldest first. */
+  const securityIds = async (tenant) => (await raw.list(keys.securityPrefix(tenant))).map((k) => k.slice(keys.securityPrefix(tenant).length, -5)).filter((id) => ULID.test(id)).sort();
+  /** One event of the log. A listed object that cannot be read, or is not an event, is a refusal with a
+   *  code, never a TypeError on null: the caller must not act on a log it read in part (restore drill of
+   *  2026-11-10). */
+  const securityEvent = async (tenant, id) => {
+    const bytes = await raw.get(keys.security(tenant, id));
+    let event = null;
+    try { event = bytes === null ? null : JSON.parse(bytes.toString("utf8")); } catch { event = null; }
+    if (event === null || typeof event !== "object" || Array.isArray(event)) throw unreadable(`object ${id} is listed and ${bytes === null ? "cannot be read" : "is not an event"}`);
+    return event;
+  };
   return {
     kind: raw.kind,
     async putBytes(tenant, sha256, bytes) {
@@ -35,19 +47,20 @@ function api(raw) {
     removeBytes: (tenant, sha256) => raw.del(keys.bytes(tenant, sha256)),
     async writeSecurity(tenant, id, event) { await raw.put(keys.security(tenant, id), Buffer.from(`${JSON.stringify(event)}\n`), "application/json"); },
     async securitySince(tenant, afterUlid = "") {
-      const list = await raw.list(keys.securityPrefix(tenant));
-      const ids = list.map((k) => k.slice(keys.securityPrefix(tenant).length, -5)).filter((id) => ULID.test(id) && id > afterUlid).sort();
       const out = [];
-      for (const id of ids) {
-        // a listed object that cannot be read, or is not an event, is a refusal with a code, never a
-        // TypeError on null: the caller must not replay a log it read in part (restore drill of 2026-11-10)
-        const bytes = await raw.get(keys.security(tenant, id));
-        let event = null;
-        try { event = bytes === null ? null : JSON.parse(bytes.toString("utf8")); } catch { event = null; }
-        if (event === null || typeof event !== "object" || Array.isArray(event)) throw unreadable(`object ${id} is listed and ${bytes === null ? "cannot be read" : "is not an event"}`);
-        out.push({ id, event });
-      }
+      for (const id of (await securityIds(tenant)).filter((x) => x > afterUlid)) out.push({ id, event: await securityEvent(tenant, id) });
       return out;
+    },
+    /** The newest event `match` accepts, as { id, event }, or null: the log is read from its newest object
+     *  back and the reading stops there, so what is read is what was written since that event, not the
+     *  whole log (code review of 2026-11-10 on 144211b, C37; the keys are still listed whole). An object
+     *  that cannot be read on the way is the refusal of securitySince; one older than the match is not read. */
+    async securityLatest(tenant, match) {
+      for (const id of (await securityIds(tenant)).reverse()) {
+        const event = await securityEvent(tenant, id);
+        if (match(event)) return { id, event };
+      }
+      return null;
     },
     putArchive: (tenant, id, bytes) => raw.put(keys.archive(tenant, id), bytes, "application/x-tar"),
     getArchive: (tenant, id) => raw.get(keys.archive(tenant, id)),
