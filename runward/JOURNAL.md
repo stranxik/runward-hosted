@@ -63,3 +63,8 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Done: a second agent session that did not build this repository redid runbook §13 and §16 from those sections alone, at `79544c7`, without reading the first record: 12 of 12 and 17 of 17 steps as written, step 11 answered blind and right (ADR-0016, Decision and What would settle it). Its gaps are folded back into the runbook: bounded waits on the service instead of a fixed second, §13's server at the digest of `ci.yml`, §13's clean-up checked and complete. The first record stays as `runward/redone-task-1.md`.
 - Decided: nothing structural.
 - Next: the independent review of the refused rows and of the corrected code, then the ratification.
+
+## 2026-11-10 - the app's own design layer
+
+- Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
+- Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.

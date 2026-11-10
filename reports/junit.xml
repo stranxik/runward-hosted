@@ -24,6 +24,12 @@
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
 	<testcase name="a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed" classname="test"/>
+	<testcase name="planted control: an unfilled slot of the page is seen" classname="test"/>
+	<testcase name="every slot of the page is filled, and every file it names is served with its media type" classname="test"/>
+	<testcase name="the app's layer is served byte for byte, and the old tokens file is gone" classname="test"/>
+	<testcase name="the fonts of the closed list are served from web/fonts with their media type, byte for byte" classname="test"/>
+	<testcase name="a path off the list is answered 404: another file name, the fonts of the fleet package, the source folders" classname="test"/>
+	<testcase name="the content security policy is unchanged: fonts and stylesheets from this origin only, nothing inline" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
 	<testcase name="the charter: every script it names exists and can be run, and its shell scripts parse" classname="test"/>
@@ -216,15 +222,19 @@
 	<testcase name="database TLS: the store refuses a mode string, and the TLS options never skip the check" classname="test"/>
 	<testcase name="database TLS in production: verify-full with the authority, or the service does not start" classname="test"/>
 	<testcase name="database TLS: every PostgreSQL client of the tree goes through the verifying configuration" classname="test"/>
-	<testcase name="no literal colour outside web/tokens.css" classname="test"/>
+	<testcase name="no literal colour outside web/couche-runward-app.css" classname="test"/>
 	<testcase name="planted control: a literal colour is seen" classname="test"/>
-	<testcase name="every custom property used is defined by the family structure or the runward layer" classname="test"/>
-	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
+	<testcase name="every custom property used is defined by the family structure or the app's layer" classname="test"/>
+	<testcase name="the layer fills the family's contract in both themes, with the contrasts measured, no banned value and no green" classname="test"/>
+	<testcase name="light is the default theme: the page starts light and the layer does not follow the system's dark preference" classname="test"/>
+	<testcase name="planted controls: the audit refuses a layer broken on purpose, for the reason planted" classname="test"/>
+	<testcase name="planted control: the contrast measure is the WCAG one" classname="test"/>
+	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
-	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 221 -->
+	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
+	<!-- tests 231 -->
 	<!-- suites 0 -->
-	<!-- pass 221 -->
+	<!-- pass 231 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
