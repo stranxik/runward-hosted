@@ -2,8 +2,11 @@
 // challenge; of 2026-11-10: none on the requests of the other routes that are not authenticated yet). A
 // fixed window per minute, counted per client address and for the whole instance; the window state is per
 // instance and is lost on a restart, which reopens at most one window (the service runs one instance,
-// max_scale 1). The table of addresses is bounded: past `maxAddresses` in one window, new addresses share
-// one counter, so a flood of addresses cannot grow memory.
+// max_scale 1). An address is counted under its key (addressKey): an IPv4 address as it is, an IPv6 address
+// by its /64, the unit one subscriber is given, so one /64 is one caller and not 2^64 of them. The table
+// of addresses is bounded, so a flood of addresses cannot grow memory: past `maxAddresses` in one window,
+// the public routes' limiter (rateLimiter) counts the new addresses on one shared counter, and the budgets
+// of failures (failureLimiter) do not: see below.
 //   writes, reads  the public routes, each call, before anything is read (rateLimiter);
 //   machine        the machine routes (an upload, the witness reader): each call is counted for its address
 //                  before its token's RSA signature is checked, none of them being authenticated before
@@ -18,6 +21,15 @@
 // of someone else's traffic. What a flood of addresses can then cost is one failure each, and the table of
 // addresses is bounded. A session cookie that resolved a moment ago is not asked at all (recentlyValid),
 // so a signed-in person is not refused either for the failures of whoever shares their address.
+// Past the bound of the table, an address that is not in it is served untracked, at the cost of one lookup
+// (code review of 2026-11-10, C11: the addresses past the bound shared one counter, spent after 30
+// failures, so 10,030 dead cookies a minute, one per address, refused every valid session that came from
+// an address not yet in the table, and 10,060 junk uploads every upload). Nothing is known against such an
+// address, so nothing is held against it: the budgets of failures refuse an address for what it did, never
+// for what the others did. What is given up is said: past 10,000 keys in one minute, a caller that is not
+// in the table is no longer bounded by these two budgets (each of its calls still costs it a request, and
+// costs the service one RSA check or one read), which a caller holding that many addresses already was
+// not: 10,000 keys already buy 300,000 dead cookies or 600,000 junk uploads a minute.
 export const RATE_LIMITS = {
   writes: { perAddress: 30, global: 600 },
   reads: { perAddress: 120, global: 3000 },
@@ -25,10 +37,51 @@ export const RATE_LIMITS = {
   signedOut: { perAddress: 30, global: 600 },
 };
 
+/** The four hextets of an IPv6 address's /64 from its text, or null when the text is not one. */
+function hextets(text) {
+  let t = text;
+  // a dotted quad at the end (::ffff:192.0.2.1) is two hextets
+  const quad = /^(.*:)(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(t);
+  if (quad) {
+    const b = quad.slice(2).map(Number);
+    if (b.some((x) => x > 255)) return null;
+    t = `${quad[1]}${((b[0] << 8) | b[1]).toString(16)}:${((b[2] << 8) | b[3]).toString(16)}`;
+  }
+  const halves = t.split("::");
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(":") : [], tail = halves[1] ? halves[1].split(":") : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 1 ? missing !== 0 : missing < 1) return null;
+  const all = [...head, ...Array(halves.length === 2 ? missing : 0).fill("0"), ...tail];
+  if (!all.every((h) => /^[0-9a-f]{1,4}$/i.test(h))) return null;
+  return all.map((h) => parseInt(h, 16));
+}
+
+/** The key an address is counted under: an IPv6 address by its /64 (`2001:db8:1:2::/64`), an IPv4 address
+ *  as it is, and so is an IPv4 address written as IPv6 (`::ffff:192.0.2.1`, as a dual-stack socket names
+ *  its peer): it is that IPv4 address, never one of a /64 every IPv4 caller would share. A zone (`%eth0`)
+ *  and the brackets with a port (`[2001:db8::1]:443`) are not part of the address. What is not an IP
+ *  address is its own key. */
+export function addressKey(address) {
+  const text = String(address);
+  if (!text.includes(":")) return text;
+  let bare = text;
+  if (text.startsWith("[")) {
+    const close = text.indexOf("]"), port = text.slice(close + 1);
+    if (close < 0 || (port && !/^:\d+$/.test(port))) return text;
+    bare = text.slice(1, close);
+  }
+  const h = hextets(bare.split("%")[0]);
+  if (!h) return text;
+  if (h.slice(0, 5).every((x) => x === 0) && h[5] === 0xffff) return `${h[6] >> 8}.${h[6] & 255}.${h[7] >> 8}.${h[7] & 255}`;
+  return `${h.slice(0, 4).map((x) => x.toString(16)).join(":")}::/64`;
+}
+
 export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
   let window = -1, counts = new Map(), total = 0;
   /** Where `address` stands in this window, without counting it. */
-  const look = (address) => {
+  const look = (from) => {
+    const address = addressKey(from);
     const t = now();
     const w = Math.floor(t / windowMs);
     if (w !== window) { window = w; counts = new Map(); total = 0; }
@@ -57,41 +110,54 @@ export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresse
  *  counts each of its calls (the machine routes); without it, its failures only (the session cookies),
  *  and the calls that entered and are not settled yet count as failures until they are (review finding of
  *  2026-11-10: the budget was looked at, the session awaited, the failure counted after, so a burst of
- *  dead cookies sent at once all passed before any was counted). */
+ *  dead cookies sent at once all passed before any was counted).
+ *  The table holds `maxAddresses` keys a window. A key that is not in it once it is full is served and not
+ *  tracked (`tracked: false`): its failure counts for the instance and against no one (C11, above). */
 export function failureLimiter({ perAddress, global, everyCall = false, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
-  let window = -1, calls = new Map(), fails = new Map(), totalFails = 0;
+  let window = -1, calls = new Map(), fails = new Map(), totalFails = 0, untracked = 0;
   const flying = new Map(); let totalFlying = 0; // entered, not settled yet: they outlive a window
   const roll = () => {
     const t = now();
     const w = Math.floor(t / windowMs);
-    if (w !== window) { window = w; calls = new Map(); fails = new Map(); totalFails = 0; }
+    if (w !== window) { window = w; calls = new Map(); fails = new Map(); totalFails = 0; untracked = 0; }
     return Math.max(1, Math.ceil(((w + 1) * windowMs - t) / 1000));
   };
-  const keyOf = (address) => (calls.has(address) || calls.size < maxAddresses ? address : "(overflow)");
+  /** Is `key` in the table, or is there room to put it there? */
+  const holds = (key) => calls.has(key) || calls.size < maxAddresses;
   return {
     enter(address) {
       const retryAfter = roll();
-      const key = keyOf(address);
+      const key = addressKey(address);
+      let settled = false;
+      if (!holds(key)) {
+        untracked++;
+        return { ok: true, tracked: false, settle(didFail) { if (settled) return; settled = true; if (didFail) { roll(); totalFails++; } } };
+      }
       const failed = fails.get(key) ?? 0;
       if ((everyCall ? calls.get(key) ?? 0 : failed + (flying.get(key) ?? 0)) >= perAddress) return { ok: false, scope: "address", retryAfter };
       if (totalFails + totalFlying >= global && failed > 0) return { ok: false, scope: "global", retryAfter };
       calls.set(key, (calls.get(key) ?? 0) + 1);
       if (!everyCall) { flying.set(key, (flying.get(key) ?? 0) + 1); totalFlying++; }
-      let settled = false;
       return {
         ok: true,
+        tracked: true,
         settle(didFail) {
           if (settled) return; settled = true;
           if (!everyCall) { const n = flying.get(key) - 1; if (n > 0) flying.set(key, n); else flying.delete(key); totalFlying--; }
           if (!didFail) return;
           roll();
-          const k = keyOf(address);
-          if (!calls.has(k)) calls.set(k, 0);
-          fails.set(k, (fails.get(k) ?? 0) + 1); totalFails++;
+          totalFails++;
+          // the window may have turned while the call ran, and its table be full: the failure then counts
+          // for the instance only
+          if (!holds(key)) return;
+          if (!calls.has(key)) calls.set(key, 0);
+          fails.set(key, (fails.get(key) ?? 0) + 1);
         },
       };
     },
     size: () => calls.size,
+    /** The calls of this window served without a place in the table. */
+    untracked: () => { roll(); return untracked; },
   };
 }
 
