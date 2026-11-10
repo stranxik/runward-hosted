@@ -5,12 +5,16 @@
 // Usage: node scripts/replay-export.mjs <archive.tar> [--json]
 // Exit 0 every replayable index matches, 1 a mismatch, 2 cannot tell. The runward-fleet version used is
 // the one installed here; an entry naming another version is reported "other-version", never matched.
+// A version does not name one build (ADR-0021: 0.46.0 is two archives, whose indexes differ): an entry
+// whose recorded archive digest is not the one pinned here (vendor/runward-fleet.lock.json) is reported
+// "other-archive", never matched and never said different. It replays with the runward-fleet packed at
+// the commit that digest names.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { buildIndex } from "runward-fleet";
 import { untar } from "../src/adapters/archive/tar.js";
 
-export function replay(archiveBytes, installedVersion) {
+export function replay(archiveBytes, installedVersion, installedArchiveSha256 = null) {
   const files = new Map(untar(archiveBytes).map((f) => [f.name, f.bytes]));
   const plan = JSON.parse(files.get("replay.json")?.toString("utf8") ?? "null");
   if (!plan || plan.format !== "runward-hosted-replay/0") return { ok: false, cannotTell: "no replay.json" };
@@ -18,6 +22,7 @@ export function replay(archiveBytes, installedVersion) {
   for (const v of plan.versions) {
     if (!v.replayable) { results.push({ version: v.version, state: "not-replayable", why: v.why }); continue; }
     if (v.runwardFleet !== installedVersion) { results.push({ version: v.version, state: "other-version", runwardFleet: v.runwardFleet }); continue; }
+    if (installedArchiveSha256 !== null && v.runwardFleetArchiveSha256 !== installedArchiveSha256) { results.push({ version: v.version, state: "other-archive", runwardFleet: v.runwardFleet, runwardFleetArchiveSha256: v.runwardFleetArchiveSha256 ?? null }); continue; }
     const manifest = files.get(`versions/${v.version}/fleet.json`);
     const index = buildIndex({ manifest: { name: "fleet.json", bytes: manifest }, read: (p) => files.get(p) ?? null, version: installedVersion });
     const bytes = Buffer.from(`${JSON.stringify(index, null, 2)}\n`);
@@ -32,8 +37,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const [file, flag] = process.argv.slice(2);
   if (!file) { console.error("usage: replay-export.mjs <archive.tar> [--json]"); process.exit(2); }
   const version = JSON.parse(readFileSync(new URL("../node_modules/runward-fleet/package.json", import.meta.url), "utf8")).version;
-  const r = replay(readFileSync(file), version);
+  const pinned = JSON.parse(readFileSync(new URL("../vendor/runward-fleet.lock.json", import.meta.url), "utf8")).tarballSha256;
+  const r = replay(readFileSync(file), version, pinned);
   if (flag === "--json") console.log(JSON.stringify(r, null, 2));
-  else for (const x of r.results ?? []) console.log(`version ${x.version}: ${x.state}${x.got ? ` ${x.got.slice(0, 12)}` : ""}`);
-  process.exit(r.cannotTell ? 2 : r.ok ? 0 : 1);
+  else for (const x of r.results ?? []) console.log(`version ${x.version}: ${x.state}${x.got ? ` ${x.got.slice(0, 12)}` : ""}${x.state === "other-archive" ? ` (built by the runward-fleet archive ${String(x.runwardFleetArchiveSha256).slice(0, 12)}, not the one pinned here)` : ""}`);
+  // Nothing rebuilt here (every entry another version's or another archive's, or none): cannot tell, never a mismatch.
+  const checked = (r.results ?? []).some((x) => x.state === "same" || x.state === "different");
+  process.exit(r.cannotTell || !checked ? 2 : r.ok ? 0 : 1);
 }

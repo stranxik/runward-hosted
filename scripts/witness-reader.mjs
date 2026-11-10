@@ -5,13 +5,15 @@
 // its last accepted upload (T26). Writes $RUNNER_TEMP/witness/<fleet>.json and the job summary.
 // Limit, said: the head of a private repository needs a read token of that repository, which this public
 // job does not hold; such a line reads "not compared".
-import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { replay } from "./replay-export.mjs";
 
 const { FLEETS = "", SERVICE, RUNNER_TEMP, GITHUB_STEP_SUMMARY, GH_TOKEN, ACTIONS_ID_TOKEN_REQUEST_URL: TU, ACTIONS_ID_TOKEN_REQUEST_TOKEN: TT } = process.env;
 const out = join(RUNNER_TEMP, "witness"); mkdirSync(out, { recursive: true });
 const token = async () => (await (await fetch(`${TU}&audience=${encodeURIComponent(`${SERVICE}/read`)}`, { headers: { authorization: `Bearer ${TT}` } })).json()).value;
+// The archive pinned here: an index another archive built is not replayed by this one (ADR-0021).
+const PINNED = JSON.parse(readFileSync(new URL("../vendor/runward-fleet.lock.json", import.meta.url), "utf8")).tarballSha256;
 const lines = ["### witness reader", ""];
 let bad = 0;
 for (const fleet of FLEETS.split(",").map((s) => s.trim()).filter(Boolean)) {
@@ -19,7 +21,7 @@ for (const fleet of FLEETS.split(",").map((s) => s.trim()).filter(Boolean)) {
   const idx = await (await fetch(`${SERVICE}/api/v0/reader/index`, { headers: h })).json();
   const tarRes = await fetch(`${SERVICE}/api/v0/reader/export`, { method: "POST", headers: { ...h, authorization: `Bearer ${await token()}` } });
   const archive = Buffer.from(await tarRes.arrayBuffer());
-  const r = replay(archive, "0.46.0");
+  const r = replay(archive, "0.46.0", PINNED);
   const served = idx.index?.sha256 ?? null;
   const lastSame = [...(r.results ?? [])].reverse().find((x) => x.state === "same");
   const drift = [];
