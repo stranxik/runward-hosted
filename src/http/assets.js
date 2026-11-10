@@ -60,8 +60,18 @@ export const MODULES = Object.freeze([
   "views/panne.js",
   "views/legal.js",
   "views/introuvable.js",
-  // ---- Accès
+  // ---- Accès: the screen, its sections, its sub-screens
   "views/acces.js",
+  "views/acces/passkeys.js",
+  "views/acces/sessions.js",
+  "views/acces/depots.js",
+  "views/acces/reglages.js",
+  "views/acces/membres.js",
+  "views/acces/donnees.js",
+  "views/acces/limites.js",
+  "views/acces/ajout.js",
+  "views/acces/export.js",
+  "views/acces/effacer.js",
 ]);
 const SCRIPT = "text/javascript; charset=utf-8";
 
