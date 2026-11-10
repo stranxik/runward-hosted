@@ -1,0 +1,150 @@
+// T24 against a real PostgreSQL: the restore drill of runbook §16, as a test. Three tenants are made
+// through the application (the service under rw_app, the operator's gestures under rw_maint), a backup is
+// taken at T (a copy of the database), gestures happen after T, the database is dropped and replaced by the
+// backup, then `restoreReplay` runs under rw_maint and the accesses are read as a person meets them. What
+// the in-memory suite (test/unit/restore-replay.test.js) cannot show is shown here: the gesture holds
+// within rw_maint's grants and the forced row level security, on real transactions.
+// Needs PG_ADMIN_URL (a superuser of a throwaway server). Run on the NAS, never against a real base.
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
+import postgres from "postgres";
+import { migrate } from "../../scripts/migrate.mjs";
+import { postgresStore } from "../../src/adapters/store/postgres.js";
+import { ulid } from "../../src/adapters/system/ulid.js";
+import { harness, founder, gesture, pinnedRepository, send, sha } from "../helpers.js";
+
+const ADMIN = process.env.PG_ADMIN_URL;
+if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
+const DB = `rw_restore_${randomBytes(4).toString("hex")}`;
+const BACKUP = `${DB}_backup`;
+const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.password = ""; u.pathname = `/${DB}`; return u.toString(); };
+const refusal = async (p) => { try { await p; return null; } catch (e) { return e.code ?? e.message; } };
+const tok = () => randomBytes(32).toString("base64url");
+const pause = (ms = 5) => new Promise((r) => setTimeout(r, ms));
+
+// One application on one object store, as in production; its store follows the database through its
+// replacement and connects as the role of who acts: rw_app for the service, rw_maint for the operator.
+let admin, h, role = "rw_app";
+const open = new Map();
+const pool = () => { if (!open.has(role)) open.set(role, postgresStore({ url: urlAs(role), ssl: false })); return open.get(role); };
+const closeAll = async () => { for (const s of open.values()) await s.close(); open.clear(); };
+const store = { kind: "postgres", tx: (tenant, fn) => pool().tx(tenant, fn), newId: () => randomUUID(), ping: () => pool().ping(), close: closeAll };
+/** An operator's gesture: under rw_maint, as src/operator.js runs it. */
+async function operator(fn) { role = "rw_maint"; try { return await fn(h.app.operator); } finally { role = "rw_app"; } }
+
+const grants = () => admin.unsafe(`grant create, connect on database ${DB} to rw_owner; grant connect on database ${DB} to rw_app, rw_maint`);
+/** T: the backup (a copy of the database, every connection closed), and the ULID of its instant. */
+async function backup() {
+  await pause();
+  const since = ulid(Date.now()).slice(0, 10) + "0".repeat(16);
+  await pause();
+  await closeAll();
+  await admin.unsafe(`drop database if exists ${BACKUP}`);
+  await admin.unsafe(`create database ${BACKUP} template ${DB}`);
+  return since;
+}
+/** The loss: the database is dropped and replaced by the backup. The object store is untouched. */
+async function restore() {
+  await closeAll();
+  await admin.unsafe(`drop database ${DB} with (force)`);
+  await admin.unsafe(`create database ${DB} template ${BACKUP}`);
+  await grants();
+}
+
+before(async () => {
+  if (!ADMIN) return;
+  admin = postgres(ADMIN, { max: 1, onnotice: () => {} });
+  await admin.unsafe(`create database ${DB}`);
+  for (const r of ["rw_owner login", "rw_resolve nologin", "rw_app login nobypassrls", "rw_maint login nobypassrls"]) {
+    const [name] = r.split(" ");
+    const [x] = await admin`select 1 from pg_roles where rolname = ${name}`;
+    if (!x) await admin.unsafe(`create role ${r}`);
+  }
+  await admin.unsafe("grant rw_resolve to rw_owner");
+  await grants();
+  process.env.DATABASE_SSL = "disable";
+  await migrate(urlAs("rw_owner"), { log: () => {} });
+  h = harness({ store, realTime: true, config: { jobRetryWaits: [0, 0] } });
+});
+after(async () => {
+  if (!ADMIN) return;
+  await closeAll();
+  await admin.unsafe(`drop database if exists ${DB} with (force)`);
+  await admin.unsafe(`drop database if exists ${BACKUP} with (force)`);
+  await admin.end();
+});
+
+async function tenant(prefix, passkeys) {
+  const t = tok();
+  const o = await operator((op) => op.openBootstrap({ hash: sha(Buffer.from(t)) }));
+  return founder(h, { prefix, passkeys, token: t, tenant: o.tenant });
+}
+async function signIn(cred) {
+  const o = await h.app.identity.signInOptions();
+  return h.app.identity.signIn({ challengeId: o.challengeId, response: { id: cred, challenge: o.options.challenge } });
+}
+const rows = (t, table, where = {}) => store.tx(t, (tx) => tx.list(table, where));
+const passkey = async (t, cred) => (await rows(t, "passkey")).find((p) => p.credentialId === cred);
+const live = async (t, table) => (await rows(t, table)).filter((r) => !r.removedAt).length;
+async function removePasskey(f, cred) {
+  await pause();
+  const p = await passkey(f.tenant, cred);
+  await gesture(h, f.session, "passkey-remove", p.id);
+  await h.app.identity.passkeyRemove(f.session, p.id, {});
+}
+
+test("the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint", async () => {
+  const A = await tenant("a", 3), B = await tenant("b", 2), C = await tenant("c", 1);
+  const second = await signIn("a-2");
+  const repo = await pinnedRepository(h, B, { name: "drill/beta", mission: "drill-beta", claims: { repository_id: "7001" } });
+  const since = await backup();
+
+  // after T. A: a-2 removed (its session closes with it) then restored, a-3 removed for good. B: the
+  // content of its repository erased. C: its access reset by the operator (the intruder).
+  await removePasskey(A, "a-2");
+  await pause();
+  await gesture(h, A.session, null, null);
+  await h.app.identity.passkeyRestore(A.session, (await passkey(A.tenant, "a-2")).id, {});
+  await removePasskey(A, "a-3");
+  await gesture(h, B.session, "content-erase", repo.id);
+  await h.app.repositories.eraseContent(B.session, repo.id, {});
+  await operator((op) => op.resetAccess({ hash: sha(Buffer.from(tok())), tenant: C.tenant }));
+  assert.equal(await refusal(signIn("c-1")), "passkey-unknown", "before the loss: the reset withdrew C's passkey");
+  assert.equal(await refusal(signIn("a-3")), "passkey-unknown", "before the loss: a-3 opens nothing");
+
+  await restore();
+  // the control (what the drill found at 7f00128): the restore alone gives the withdrawn accesses back
+  assert.deepEqual([await live(C.tenant, "member"), await live(C.tenant, "passkey")], [1, 1], "the restore gave C's member and passkey back");
+  assert.ok(await h.app.identity.sessionFrom(second.token), "and the session closed with a-2");
+  assert.equal((await rows(B.tenant, "upload")).filter((u) => !u.erasedAt).length, 1, "and counts bytes the object store no longer has");
+
+  const report = await operator((op) => op.restoreReplay({ since }));
+  const of = (f) => report.find((r) => r.tenant === f.tenant);
+
+  // tenant C: the passkey the reset withdrew opens no session (T24, the intruder's case)
+  assert.equal(await refusal(signIn("c-1")), "passkey-unknown", "the passkey withdrawn by the reset after the backup must open no session");
+  assert.deepEqual([await live(C.tenant, "member"), await live(C.tenant, "passkey")], [0, 0], "no member, no passkey");
+  assert.equal(await h.app.identity.sessionFrom(C.token), null);
+  assert.deepEqual({ closed: of(C).closed, replayed: of(C).replayed, memberless: of(C).memberless }, { closed: 1, replayed: 1, memberless: true });
+  // tenant A: the order of the log, and the sessions of before the loss
+  assert.deepEqual({ closed: of(A).closed, replayed: of(A).replayed, memberless: of(A).memberless }, { closed: 2, replayed: 3, memberless: false });
+  assert.equal(await h.app.identity.sessionFrom(A.token), null, "a session of before the loss opens nothing");
+  assert.equal(await h.app.identity.sessionFrom(second.token), null);
+  assert.equal(await refusal(signIn("a-3")), "passkey-unknown", "removed for good");
+  assert.ok((await signIn("a-2")).token, "removed then restored: it signs in");
+  // tenant B: the erased content is erased again, and the next upload is assembled without it
+  assert.deepEqual({ closed: of(B).closed, replayed: of(B).replayed }, { closed: 1, replayed: 1 });
+  assert.equal((await rows(B.tenant, "upload")).filter((u) => !u.erasedAt).length, 0);
+  const sent = await send(h, { repository: "drill/beta", repository_id: "7001", run_number: "7", run_id: "40000000007" }, { mission: "drill-beta" });
+  assert.equal(sent.status, 201);
+
+  // every chain holds, from its first entry to the note
+  const chains = await operator((op) => op.verifyChains());
+  assert.deepEqual(chains.map((c) => c.ok), [true, true, true]);
+  // the bootstrap the reset opened is gone with the restore: the operator opens one again, a founder arrives
+  const t = tok();
+  await operator((op) => op.openBootstrap({ hash: sha(Buffer.from(t)), tenant: C.tenant }));
+  const again = await founder(h, { prefix: "c2", passkeys: 1, token: t, tenant: C.tenant });
+  assert.ok(again.session, "C is opened again by its rightful founder");
+});

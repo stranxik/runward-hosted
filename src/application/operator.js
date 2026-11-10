@@ -11,6 +11,130 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const operator = { type: "operator", id: "operateur" };
 
+// ---------------------------------------------------------------- the replay of the security log (T24)
+// What `restoreReplay` does with each kind of event the security log holds. The rule of every line: after
+// the replay, what exists in the restored database is where the log, read to its end, says it was. So a
+// gesture replayed twice changes nothing (the backup's instant is known with a margin: a gesture between
+// `since` and the dump's snapshot is in both the backup and the replay), and a gesture on something the
+// restore lost (a passkey added after the backup, then removed) applies to nothing. Each returns whether
+// it found something to act on.
+const when = (e) => Date.parse(e.at);
+
+/** What the events create: a reset or a recovery withdraws what existed before it, never what the log creates after it. */
+function created(events) {
+  const members = new Set(), passkeys = new Set(), links = new Set();
+  for (const { event: e } of events) {
+    if (e.what === "member-founded") members.add(e.member);
+    if (e.what === "member-founded" || e.what === "member-recovered" || e.what === "passkey-added") passkeys.add(e.passkey);
+    if (e.what === "recovery-opened" || e.what === "access-reset") links.add(e.link);
+  }
+  return { members, passkeys, links };
+}
+
+/** A link the log says was redeemed is single use: the restore must not make it usable again. */
+async function consumeLink(tx, e) {
+  const l = e.link ? await tx.get("link", { id: e.link }) : null;
+  if (!l || l.usedAt) return false;
+  await tx.update("link", { id: l.id }, { usedAt: when(e) });
+  return true;
+}
+
+const REPLAY = new Map([
+  ["passkey-removed", async (tx, e) => {
+    const p = await tx.get("passkey", { id: e.passkey });
+    if (p) await tx.update("passkey", { id: p.id }, { removedAt: when(e) });
+    return Boolean(p);
+  }],
+  ["passkey-restored", async (tx, e) => {
+    const p = await tx.get("passkey", { id: e.passkey });
+    if (p) await tx.update("passkey", { id: p.id }, { removedAt: null });
+    return Boolean(p);
+  }],
+  ["consent-given", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) await tx.update("repository", { id: r.id }, { consent: true });
+    return Boolean(r);
+  }],
+  ["consent-withdrawn", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) await tx.update("repository", { id: r.id }, { consent: false });
+    return Boolean(r);
+  }],
+  ["repository-removed", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) { await tx.update("repository", { id: r.id }, { removedAt: when(e) }); await tx.update("forge_repository", { id: r.id }, { removedAt: when(e) }); }
+    return Boolean(r);
+  }],
+  ["repository-restored", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) { await tx.update("repository", { id: r.id }, { removedAt: null }); await tx.update("forge_repository", { id: r.id }, { removedAt: null }); }
+    return Boolean(r);
+  }],
+  ["recovery-cancelled", async (tx, e) => {
+    const l = e.link ? await tx.get("link", { id: e.link }) : null;
+    if (l) await tx.update("link", { id: l.id }, { cancelledAt: when(e) });
+    return Boolean(l);
+  }],
+  // The operator reset the tenant's access (the intruder who won the bootstrap): every member, passkey and
+  // open link of before the reset is withdrawn again. The bootstrap the reset opened is gone with the
+  // restore when it happened after the backup (only its digest's row held it): the tenant is then left
+  // without a member and the operator opens a bootstrap again (the report says `memberless`).
+  ["access-reset", async (tx, e, { later }) => {
+    for (const p of await tx.list("passkey")) if (!p.removedAt && !later.passkeys.has(p.id)) await tx.update("passkey", { id: p.id }, { removedAt: when(e), lost: true });
+    for (const m of await tx.list("member")) if (!m.removedAt && !later.members.has(m.id)) await tx.update("member", { id: m.id }, { removedAt: when(e), founder: false });
+    // a bootstrap opened later writes no event: the link's date tells it apart (a clock that disagrees cancels too much, never too little)
+    for (const l of await tx.list("link")) if (!l.usedAt && !l.cancelledAt && l.id !== e.link && !later.links.has(l.id) && l.openedAt <= when(e)) await tx.update("link", { id: l.id }, { cancelledAt: when(e) });
+    return true;
+  }],
+  // A recovery was redeemed: the member's passkeys of before it are lost for good. The passkey the
+  // recovery registered is gone with the restore when it happened after the backup: the member is then
+  // left without a passkey (the report says `stranded`) and a recovery is opened again.
+  ["member-recovered", async (tx, e, { later }) => {
+    let found = false;
+    for (const p of await tx.list("passkey", { memberId: e.member })) {
+      if (p.removedAt || p.id === e.passkey || later.passkeys.has(p.id)) continue;
+      await tx.update("passkey", { id: p.id }, { removedAt: when(e), lost: true });
+      found = true;
+    }
+    return (await consumeLink(tx, e)) || found;
+  }],
+  // A bootstrap (or an invitation) was redeemed: the member it made is gone with the restore when it
+  // happened after the backup, and the link must not open the tenant a second time.
+  ["member-founded", (tx, e) => consumeLink(tx, e)],
+  // Content was erased: its bytes left the object store, which the restore does not bring back, and the
+  // restored database still counts them. The uploads are marked erased again, so that the next assembly
+  // leaves them out instead of failing on bytes that are gone. The index itself is republished by the
+  // service's next gesture or upload: rw_maint cannot write rw.fleet_index.
+  ["content-erased", async (tx, e, { tenant, objects }) => {
+    const digests = Array.isArray(e.digests) ? e.digests : [];
+    const ups = (await tx.list("upload", { repositoryRef: e.repository })).filter((u) => !u.erasedAt && digests.includes(u.sha256) && u.receivedAt <= when(e));
+    for (const u of ups) await tx.update("upload", { id: u.id }, { erasedAt: when(e) });
+    for (const d of new Set(ups.map((u) => u.sha256))) {
+      const b = await tx.get("blob", { sha256: d });
+      const n = ups.filter((u) => u.sha256 === d).length;
+      const refs = Math.max(0, (b?.refs ?? n) - n);
+      await tx.update("blob", { sha256: d }, { refs, ...(refs === 0 ? { erasedAt: when(e) } : {}) });
+      if (refs === 0) await objects.removeBytes(tenant, d);
+    }
+    for (const a of await tx.list("archive", { erasedAt: null })) {
+      if (!(a.contains ?? []).some((d) => digests.includes(d))) continue;
+      await objects.removeArchive(tenant, a.id);
+      await tx.update("archive", { id: a.id }, { erasedAt: when(e) });
+    }
+    return ups.length > 0;
+  }],
+]);
+
+/** The kinds of the security log the replay acts on. */
+export const SECURITY_REPLAYED = [...REPLAY.keys()];
+/** The kinds it leaves, each with its reason: a kind of the security log is in one list or the other (test/unit/restore-replay.test.js). */
+export const SECURITY_NOT_REPLAYED = {
+  "passkey-added": "a passkey added after the backup is gone with the restore: nothing is given back",
+  "recovery-opened": "a recovery opened after the backup is gone with the restore: nothing is given back",
+  "session-closed": "the replay closes every session",
+  "sessions-closed-others": "the replay closes every session",
+};
+
 /** Waits between the attempts of a daily job on one tenant: three attempts in all. */
 export const JOB_RETRY_WAITS = [1000, 4000];
 
@@ -143,8 +267,9 @@ export function operatorCases(ctx) {
 
   /**
    * After a database restore (PADR-0014 note, T24): close every session of every tenant, replay from the
-   * object store the access gestures after `since` (ULID order), and say so in each tenant's journal.
-   * A member left with no passkey gets a recovery opened at once.
+   * object store the gestures after `since` (ULID order, the REPLAY table above), and say so in each
+   * tenant's journal. A member left with no passkey gets a recovery opened at once; a tenant left with no
+   * member is reported `memberless`: the operator opens its bootstrap again.
    */
   async function restoreReplay({ since, headBefore = null, recoveryHash = null }) {
     const report = [];
@@ -153,27 +278,19 @@ export function operatorCases(ctx) {
       const r = await store.tx(tenant, async (tx) => {
         let closed = 0, replayed = 0;
         for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
-        for (const { event } of events) {
-          if (event.what === "passkey-removed" || event.what === "passkey-restored") {
-            const p = await tx.get("passkey", { id: event.passkey });
-            if (p) { await tx.update("passkey", { id: p.id }, { removedAt: event.what === "passkey-removed" ? Date.parse(event.at) : null }); replayed++; }
-          } else if (event.what === "consent-withdrawn" || event.what === "consent-given") {
-            if (await tx.get("repository", { id: event.repository })) { await tx.update("repository", { id: event.repository }, { consent: event.what === "consent-given" }); replayed++; }
-          } else if (event.what === "repository-removed" || event.what === "repository-restored") {
-            const at = event.what === "repository-removed" ? Date.parse(event.at) : null;
-            if (await tx.get("repository", { id: event.repository })) { await tx.update("repository", { id: event.repository }, { removedAt: at }); await tx.update("forge_repository", { id: event.repository }, { removedAt: at }); replayed++; }
-          } else if (event.what === "recovery-cancelled" && event.link) {
-            if (await tx.get("link", { id: event.link })) { await tx.update("link", { id: event.link }, { cancelledAt: Date.parse(event.at) }); replayed++; }
-          }
+        for (let i = 0; i < events.length; i++) {
+          const act = REPLAY.get(events[i].event.what);
+          if (act && await act(tx, events[i].event, { tenant, objects, later: created(events.slice(i + 1)) })) replayed++;
         }
         const stranded = [];
         for (const m of (await tx.list("member")).filter((x) => !x.removedAt)) {
           if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
         }
+        const memberless = !(await tx.list("member")).some((x) => !x.removedAt);
         if (stranded.length && recoveryHash) await tx.insert("link", { id: store.newId(), tokenHash: recoveryHash, kind: "recovery", memberId: stranded[0] });
         const head = await tx.ledgerHead();
         const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: headBefore ?? "", headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
-        return { tenant, closed, replayed, stranded, seq: e.seq };
+        return { tenant, closed, replayed, stranded, memberless, seq: e.seq };
       });
       report.push(r);
     }

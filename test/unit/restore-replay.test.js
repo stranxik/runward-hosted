@@ -6,22 +6,31 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { harness, founder, gesture, sha } from "../helpers.js";
+import { readFileSync, readdirSync } from "node:fs";
+import { harness, founder, gesture, pinnedRepository, send, sha } from "../helpers.js";
 import { verifyChain } from "../../src/domain/ledger.js";
 import { ulid } from "../../src/adapters/system/ulid.js";
+import { DAY } from "../../src/domain/identity.js";
+import { SECURITY_REPLAYED, SECURITY_NOT_REPLAYED } from "../../src/application/operator.js";
 
 const refusal = async (p) => { try { await p; return null; } catch (e) { return e.code ?? e.message; } };
 const tok = () => randomBytes(32).toString("base64url");
 const tick = (h) => h.clock.advance(1000);
 
-/** T: what the database holds, and the ULID every gesture written from T on sorts after (runbook §16 step 7). */
-function backup(h) {
+/** The ULID every gesture written from now on sorts after (runbook §16 step 7). */
+function mark(h) {
   tick(h);
-  const s = h.store._state;
   const since = ulid(h.clock.now()).slice(0, 10) + "0".repeat(16);
   tick(h);
-  return { since, rows: { ...s.rows }, ledger: s.ledger, operator: [...s.operator] };
+  return since;
 }
+/** What the database holds now. */
+function snapshot(h) {
+  const s = h.store._state;
+  return { rows: { ...s.rows }, ledger: s.ledger, operator: [...s.operator] };
+}
+/** T: the backup, and the ULID of its instant. */
+const backup = (h) => ({ since: mark(h), ...snapshot(h) });
 /** The loss: the database is replaced by the backup. The object store is untouched. */
 function restore(h, b) {
   const s = h.store._state;
@@ -60,7 +69,7 @@ test("T24: the gestures after the backup are replayed in ULID order, every sessi
   await gesture(h, a.session, "declare-with-consent", "drill/alpha");
   const repo = await h.app.repositories.declare(a.session, { name: "drill/alpha", consent: true }, {});
   const rec = await h.app.operator.openRecovery({ hash: sha(Buffer.from(tok())), tenant: a.tenant, member: a.session.memberId });
-  const b = await backup(h);
+  const b = backup(h);
 
   // after T: a-2 removed (its session closes with it) then restored, a-3 removed for good, the consent
   // withdrawn, the repository removed, the recovery cancelled, a third session opened
@@ -121,7 +130,7 @@ test("T24: a gesture on something the restore lost is not replayed, and each ten
   const h = harness();
   const a = await founder(h, { passkeys: 2, prefix: "a" });
   const bt = await founder(h, { passkeys: 2, prefix: "b" });
-  const b = await backup(h);
+  const b = backup(h);
   // after T, in A: a third passkey added then removed (neither is in the backup); in B: b-2 removed
   tick(h);
   await gesture(h, a.session, "passkey-add", "");
@@ -139,4 +148,151 @@ test("T24: a gesture on something the restore lost is not replayed, and each ten
   assert.ok((await passkey(h, bt.tenant, "b-2")).removedAt, "B's removal is replayed in B");
   assert.equal(await refusal(signIn(h, "b-2")), "passkey-unknown");
   for (const t of [a.tenant, bt.tenant]) assert.equal((await journal(h, t)).filter((e) => e.body.what === "restore-replayed").length, 1, "one note per tenant");
+});
+
+// ---------------------------------------------------------------- defect 1: what the replay did not read
+
+test("T24: an access reset after the backup is replayed: the withdrawn passkey opens nothing, the tenant waits for its bootstrap", async () => {
+  const h = harness();
+  const a = await founder(h, { passkeys: 2, prefix: "a" });
+  const c = await founder(h, { passkeys: 1, prefix: "c" });
+  const b = backup(h);
+  // after T: the operator resets C's access (the intruder who won the bootstrap)
+  await h.app.operator.resetAccess({ hash: sha(Buffer.from(tok())), tenant: c.tenant });
+  assert.equal(await refusal(signIn(h, "c-1")), "passkey-unknown", "before the loss: the reset withdrew the passkey");
+  restore(h, b);
+  assert.equal((await passkey(h, c.tenant, "c-1")).removedAt, null, "the control: the restore gave the passkey back");
+
+  const report = await h.app.operator.restoreReplay({ since: b.since });
+  const rc = report.find((r) => r.tenant === c.tenant), ra = report.find((r) => r.tenant === a.tenant);
+  assert.equal(await refusal(signIn(h, "c-1")), "passkey-unknown", "the passkey the reset withdrew after the backup must open no session");
+  assert.deepEqual({ closed: rc.closed, replayed: rc.replayed, memberless: rc.memberless }, { closed: 1, replayed: 1, memberless: true });
+  assert.equal(ra.memberless, false);
+  assert.equal((await rows(h, c.tenant, "member")).filter((m) => !m.removedAt).length, 0, "no member left");
+  const pk = await passkey(h, c.tenant, "c-1");
+  assert.ok(pk.removedAt && pk.lost, "the passkey is lost, never restorable");
+  assert.ok((await signIn(h, "a-1")).token, "the other tenant is untouched");
+  // the bootstrap the reset opened is gone with the restore: the operator opens one again, a founder arrives
+  const t = tok();
+  await h.app.operator.openBootstrap({ hash: sha(Buffer.from(t)), tenant: c.tenant });
+  const again = await founder(h, { passkeys: 1, prefix: "c2", token: t, tenant: c.tenant });
+  assert.ok(again.session, "the tenant is opened again by its rightful founder");
+});
+
+test("T24: a reset inside the backup's margin is replayed without withdrawing the founder who arrived after it", async () => {
+  const h = harness();
+  const c = await founder(h, { passkeys: 1, prefix: "c" });
+  const stale = await h.app.operator.openRecovery({ hash: sha(Buffer.from(tok())), tenant: c.tenant, member: c.session.memberId });
+  // `since` is taken with a margin: the reset and the new founder are both in the backup AND in the replay
+  const since = mark(h);
+  const t = tok();
+  const reset = await h.app.operator.resetAccess({ hash: sha(Buffer.from(t)), tenant: c.tenant });
+  tick(h);
+  const next = await founder(h, { passkeys: 2, prefix: "n", token: t, tenant: c.tenant });
+  tick(h);
+  const b = snapshot(h);
+  await removePasskey(h, next, "n-2");
+  restore(h, b);
+
+  const [r] = await h.app.operator.restoreReplay({ since });
+  assert.equal(r.memberless, false, "the founder who arrived after the reset is still the tenant's member");
+  assert.deepEqual(r.stranded, []);
+  assert.ok((await signIn(h, "n-1")).token, "and signs in");
+  assert.equal(await refusal(signIn(h, "n-2")), "passkey-unknown", "the removal after the backup is replayed");
+  assert.equal(await refusal(signIn(h, "c-1")), "passkey-unknown", "the access of before the reset stays withdrawn");
+  const links = await rows(h, c.tenant, "link");
+  assert.ok(links.find((l) => l.id === stale.link).cancelledAt, "the recovery of before the reset stays cancelled");
+  assert.ok(links.find((l) => l.id === reset.link).usedAt, "the bootstrap the reset opened was redeemed, not cancelled");
+});
+
+test("T24: a recovery redeemed after the backup is replayed: the passkeys it replaced open nothing, its link is used", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 2 });
+  const t = tok();
+  await h.app.operator.openRecovery({ hash: sha(Buffer.from(t)), tenant: f.tenant, member: f.session.memberId });
+  h.clock.advance(DAY);
+  const b = backup(h);
+  // after T: the member arrives by the recovery; the two passkeys of before are lost
+  const o = await h.app.identity.linkOptions({ token: t });
+  await h.app.identity.redeemLink({ token: t, challengeId: o.challengeId, response: { id: "cred-new", challenge: o.options.challenge } });
+  assert.equal(await refusal(signIn(h, "cred-1")), "passkey-unknown", "before the loss: the recovery withdrew the old passkey");
+  restore(h, b);
+  assert.equal((await passkey(h, f.tenant, "cred-1")).removedAt, null, "the control: the restore gave the lost passkey back");
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-live", "the control: and the redeemed link");
+
+  const [r] = await h.app.operator.restoreReplay({ since: b.since });
+  for (const cred of ["cred-1", "cred-2"]) {
+    assert.equal(await refusal(signIn(h, cred)), "passkey-unknown", `${cred}, replaced by the recovery after the backup, must open no session`);
+    const p = await passkey(h, f.tenant, cred);
+    assert.ok(p.removedAt && p.lost, "lost, never restorable");
+  }
+  assert.equal(r.replayed, 1);
+  assert.deepEqual(r.stranded, [f.session.memberId], "the passkey the recovery registered is gone with the restore: the member is stranded");
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-used", "the redeemed link is single use");
+});
+
+test("T24: a bootstrap redeemed after the backup does not open the tenant a second time", async () => {
+  const h = harness();
+  const t = tok();
+  const { tenant } = await h.app.operator.openBootstrap({ hash: sha(Buffer.from(t)) });
+  const b = backup(h);
+  await founder(h, { passkeys: 1, token: t, tenant });
+  restore(h, b);
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-live", "the control: the restore gave the redeemed link back");
+
+  const [r] = await h.app.operator.restoreReplay({ since: b.since });
+  assert.equal(r.memberless, true, "the founder is gone with the restore: the operator opens a bootstrap again");
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-used");
+  assert.equal(await refusal(h.app.identity.linkOptions({ token: t })), "link-used");
+});
+
+test("T24: content erased after the backup is erased again: the uploads are out of the next assembly, which no longer fails", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const repo = await pinnedRepository(h, f);
+  const b = backup(h);
+  await gesture(h, f.session, "content-erase", repo.id);
+  await h.app.repositories.eraseContent(f.session, repo.id, {});
+  tick(h);
+  const bytes = () => [...h.objects._map.keys()].filter((k) => k.includes("/sha256/")).length;
+  assert.equal(bytes(), 0, "before the loss: the bytes left the object store");
+  restore(h, b);
+  // the control: the restored database still counts bytes the object store no longer has
+  assert.equal((await rows(h, f.tenant, "upload")).filter((u) => !u.erasedAt).length, 1);
+  await gesture(h, f.session, null, null);
+  assert.equal(await refusal(h.app.repositories.settings(f.session, { lang: "en" }, {})), "service-unavailable", "the control: the next assembly fails on them");
+
+  const [r] = await h.app.operator.restoreReplay({ since: b.since });
+  const ups = await rows(h, f.tenant, "upload");
+  assert.equal(ups.filter((u) => !u.erasedAt).length, 0, "the uploads erased after the backup must be erased again");
+  assert.equal(r.replayed, 1);
+  const [blob] = await rows(h, f.tenant, "blob");
+  assert.deepEqual({ refs: blob.refs, erased: Boolean(blob.erasedAt) }, { refs: 0, erased: true });
+  const sent = await send(h, { run_number: "6", run_id: "40000000006" });
+  assert.equal(sent.status, 201, "the next upload is accepted and the index is assembled without the erased content");
+  assert.equal(bytes(), 1, "only the new upload's bytes are kept");
+  // replayed a second time (the margin of the backup's instant), the erasure touches nothing: the new upload stays
+  await h.app.operator.restoreReplay({ since: b.since });
+  assert.equal((await rows(h, f.tenant, "upload")).filter((u) => !u.erasedAt).length, 1);
+  assert.equal(bytes(), 1);
+});
+
+test("every kind the security log receives is replayed, or left with its reason (the class of defect 1)", () => {
+  const dir = new URL("../../src/application/", import.meta.url);
+  const kinds = new Set();
+  for (const name of readdirSync(dir).filter((f) => f.endsWith(".js"))) {
+    const text = readFileSync(new URL(name, dir), "utf8");
+    const calls = [...text.matchAll(/(?<!function )\bsecurity\(tx, (?:\{ what(?:: "([a-z-]+)")?)?/g)];
+    for (const m of calls) {
+      assert.ok(m[0].includes("{ what"), `${name}: a call of security() whose kind this test cannot read: ${m[0]}`);
+      if (m[1]) kinds.add(m[1]);
+      // `{ what, … }`: the kind is a variable, assigned from literals in the same file
+      else for (const v of text.matchAll(/\bwhat = "([a-z-]+)"/g)) kinds.add(v[1]);
+    }
+  }
+  assert.ok(kinds.has("access-reset") && kinds.has("member-recovered") && kinds.has("content-erased") && kinds.size >= 14, `the scan reads the kinds (${kinds.size})`);
+  const decided = [...SECURITY_REPLAYED, ...Object.keys(SECURITY_NOT_REPLAYED)];
+  assert.equal(new Set(decided).size, decided.length, "a kind is replayed or left, never both");
+  assert.deepEqual([...kinds].filter((k) => !decided.includes(k)).sort(), [], "a kind the security log receives and the replay neither applies nor leaves with a reason");
+  assert.deepEqual(decided.filter((k) => !kinds.has(k)).sort(), [], "a kind the replay names and nothing writes");
 });
