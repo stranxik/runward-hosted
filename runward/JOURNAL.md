@@ -38,3 +38,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Done: an agent session that did not build this repository redid runbook §13 from §13 alone, on the author's home server: 12 of 12 steps as written, on the first run (`runward/redone-task.md`). Its six gaps are folded back into §13: the key to step 11 after step 12, step 2's check in its block, what step 8's `exit=0` covers, the full verdict lines of steps 7 and 8, the steps run inside a container, the record's destination said one way. `runward/handover.md` §2 holds the record.
 - Decided: nothing structural.
 - Next: the third independent review, then the ratification.
+
+## 2026-11-10 - the code review and the third review: seven rows refused, the kit told as it is
+
+- Done: the adversarial code review of `0d94dc2` (one blocking finding, five to fix, three notes) and the third independent review of the 46 rows (39 hold, 7 refused) are in `runward/governance/reviews/`. The places of the secret class are written as they are, the encrypted OpenTofu state among them; the usage registry names the deploy chain, the author's workstation and the private operator repository; that repository is said to be empty, as it is on 2026-11-10, and the gestures to run from the author's workstation; the per-instance state is named in the architecture note; the rehearsal keeps no key to its step 11, and its claim to be real backlog is qualified.
+- Correction to the entry of 2026-11-06, which lists ADR-0001 to ADR-0015 as proposed: ADR-0001 and ADR-0003 to ADR-0013 were committed as accepted (`5660736`), restating decisions the author had recorded in his private product decision records, which are not in this repository; only ADR-0002, ADR-0014 and ADR-0015 were proposed, then accepted on 2026-11-08.
+- Decided: nothing structural.
+- Blocked / to dig: the code fixes of both reviews; the restore drill that runbook §3 promised before the floor and that was never done; the task redone again, its step 11 blind; then a fresh reading of the refused rows.
