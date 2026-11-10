@@ -15,6 +15,12 @@
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
+	<testcase name="container-deploy: the tools it runs with are here (bash, curl, jq, as on the deploy runner ubuntu-24.04)" classname="test"/>
+	<testcase name="container-deploy: a deploy keeps every variable of the container, sets RW_IMAGE and RW_COMMIT, sends no secret" classname="test"/>
+	<testcase name="container-deploy: a rollback without a commit removes RW_COMMIT (the image's own applies) and keeps the rest" classname="test"/>
+	<testcase name="container-deploy: planted control, a variable lost by the update fails the deploy and names it" classname="test"/>
+	<testcase name="container-deploy: an environment that reads empty is never sent back, and nothing is patched" classname="test"/>
+	<testcase name="container-deploy: a tag, another registry, or an API other than the hoster's or the loopback is refused before any call" classname="test"/>
 	<testcase name="the API contract served is the committed one: same routes, same refusals, same digest" classname="test"/>
 	<testcase name="planted control: one more route, or a route opened to the public, changes the digest" classname="test"/>
 	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
@@ -133,9 +139,9 @@
 	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 132 -->
+	<!-- tests 138 -->
 	<!-- suites 0 -->
-	<!-- pass 132 -->
+	<!-- pass 138 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
