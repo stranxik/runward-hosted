@@ -68,3 +68,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 
 - Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
 - Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.
+
+## 2026-11-10 - two defects of the deployment chain, found at the first deploy
+
+- Done: on `fix/deploy-smoke-tls-and-privilege-drift`. The smoke's refused-host check could not pass behind the hoster: Node took the TLS server name from the `Host` header, and the hoster's router answers 404 itself for a host it does not know. The smoke now keeps the server name on the origin, sends as `Host` the container's default hostname at the hoster (`RW_SERVICE_HOST`), and accepts only the app's own 421 `host-not-allowed`; an https origin without that host is refused, and `deploy.yml` refuses before it builds (`test/unit/smoke.test.js`, a local TLS stand-in; `scripts/check-workflows.mjs`). In `infra/scaleway/main.tf`, the privileges of `rw_app` and `rw_maint` are set at creation and ignored afterwards, and the containers' memory is the value the hoster stores (`test/unit/infra.test.js`; runbook §7, §11, §12).
+- Decided: nothing structural. A later change of the level of `rw_app` or `rw_maint` at the hoster no longer shows in a plan; `roles` and the isolation suite of each deploy check their rights.
+- Next: the author sets the repository variable `RW_SERVICE_HOST`, then reads a plan against the real state: it must propose nothing.
