@@ -1,6 +1,6 @@
 // Human identity as pure rules (PADR-0012, its accepted amendment and its note of 2026-11-06):
 // links that open an access, sessions, fresh and per-gesture verification, passkeys.
-import { Refusal } from "./refusals.js";
+import { Refusal } from "./refusals/index.js";
 
 export const MIN = 60_000;
 export const HOUR = 60 * MIN;

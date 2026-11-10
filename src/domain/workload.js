@@ -4,7 +4,7 @@
 // claims. What is decided here: which claims an upload must carry, against which pins, in which order
 // (headers and token, then the repository, then the body: T18), and which upload is the current one
 // (PADR-0011 note 1 bis).
-import { Refusal } from "./refusals.js";
+import { Refusal } from "./refusals/index.js";
 
 export const SEND_WORKFLOW_PATH = ".github/workflows/send.yml";
 export const PRODUCT_REPOSITORY = "stranxik/runward-hosted";

@@ -1,13 +1,13 @@
-// The named refusals: one meaning per code (architecture note §3.2, C8). Every refusal the service
-// returns is { refusal, message, action }, in French and English, and is written to the journal with
-// its reason (rule R5). The ingestion says "not accepted"; "refused" stays the verdict of runward.
+// The refusals of the floor (H0): the upload, humans, links, repositories and access. One meaning per code
+// (architecture note §3.2, C8). src/domain/refusals/index.js merges this file with the others of this folder
+// into the one catalogue the service reads; a code declared twice is refused at start.
 //
 // Pure data: no import, no clock, no I/O.
 
 /** @typedef {{ status: number, fr: [string, string], en: [string, string], retry?: boolean }} RefusalDef */
 
 /** @type {Record<string, RefusalDef>} */
-export const REFUSALS = {
+export const FLOOR = {
   // ---- the upload (PADR-0010)
   "token-missing": { status: 401, fr: ["Aucun jeton d'identité de charge n'accompagne l'envoi.", "Appeler le workflow d'envoi avec id-token: write sur le job appelant."], en: ["No workload identity token came with the upload.", "Call the send workflow with id-token: write on the calling job."] },
   "token-unreadable": { status: 401, fr: ["Le jeton d'identité de charge est illisible.", "Appeler le workflow d'envoi avec id-token: write sur le job appelant."], en: ["The workload identity token cannot be read.", "Call the send workflow with id-token: write on the calling job."] },
@@ -78,27 +78,3 @@ export const REFUSALS = {
   "export-too-large": { status: 413, fr: ["L'archive dépasserait 512 Mo.", "Écrire au contact sécurité : l'export par morceaux n'est pas encore là."], en: ["The archive would exceed 512 MB.", "Write to the security contact: chunked export is not there yet."] },
   "reader-not-authorized": { status: 403, fr: ["Ce lecteur n'est pas autorisé pour cette flotte.", "L'autoriser dans Accès."], en: ["This reader is not authorized for this fleet.", "Authorize it in Access."] },
 };
-
-/** A refusal object as the API returns it, in one language. Unknown codes are a programming error. */
-export function refusal(code, lang = "fr", extra = {}) {
-  const def = REFUSALS[code];
-  if (!def) throw new Error(`unknown refusal code: ${code}`);
-  const [message, action] = lang === "en" ? def.en : def.fr;
-  return { refusal: code, message, action, ...extra };
-}
-
-export function statusOf(code) {
-  const def = REFUSALS[code];
-  if (!def) throw new Error(`unknown refusal code: ${code}`);
-  return def.status;
-}
-
-/** A refusal as a value the application layer returns (never thrown across a port). */
-export class Refusal extends Error {
-  constructor(code, extra = {}) {
-    super(code);
-    if (!REFUSALS[code]) throw new Error(`unknown refusal code: ${code}`);
-    this.code = code;
-    this.extra = extra;
-  }
-}

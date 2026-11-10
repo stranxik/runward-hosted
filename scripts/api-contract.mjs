@@ -6,7 +6,7 @@
 //   node scripts/api-contract.mjs --write  write runward/contracts/api-contract.json
 import { writeFileSync } from "node:fs";
 import { routes, apiContract } from "../src/http/server.js";
-import { REFUSALS, statusOf } from "../src/domain/refusals.js";
+import { REFUSALS, statusOf } from "../src/domain/refusals/index.js";
 
 export const CONTRACT_FILE = new URL("../runward/contracts/api-contract.json", import.meta.url).pathname;
 

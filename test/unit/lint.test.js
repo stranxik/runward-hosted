@@ -18,7 +18,9 @@ test("the hexagon is refused by the linter: each forbidden arrow, planted in its
     ["src/domain/planted.js", 'import postgres from "postgres";'],
     ["src/domain/planted.js", 'import { readFileSync } from "node:fs";'],
     ["src/domain/planted.js", 'export { StoreConflict } from "../ports/errors.js";'],
-    ["src/ports/planted.js", 'import { Refusal } from "../domain/refusals.js";'],
+    ["src/domain/refusals/planted.js", 'import { StoreConflict } from "../../ports/errors.js";'],
+    ["src/domain/refusals/planted.js", 'import { MAX_EXPORT_BYTES } from "../workload.js";'],
+    ["src/ports/planted.js", 'import { Refusal } from "../domain/refusals/index.js";'],
     ["src/application/planted.js", 'import { postgresStore } from "../adapters/store/postgres.js";'],
     ["src/application/planted.js", 'import { AwsClient } from "aws4fetch";'],
     ["src/application/planted.js", 'import { createHttp } from "../http/server.js";'],
@@ -33,8 +35,9 @@ test("the hexagon is refused by the linter: each forbidden arrow, planted in its
 
 test("the hexagon's allowed arrows pass, and the tree as it is lints clean", async () => {
   for (const [file, code] of [
-    ["src/domain/planted.js", 'import { createHash } from "node:crypto";\nimport { Refusal } from "./refusals.js";\nexport const x = [createHash, Refusal];'],
-    ["src/application/planted.js", 'import { Refusal } from "../domain/refusals.js";\nimport { StoreConflict } from "../ports/errors.js";\nimport { randomBytes } from "node:crypto";\nexport const x = [Refusal, StoreConflict, randomBytes];'],
+    ["src/domain/planted.js", 'import { createHash } from "node:crypto";\nimport { Refusal } from "./refusals/index.js";\nexport const x = [createHash, Refusal];'],
+    ["src/domain/refusals/planted.js", 'import { FLOOR } from "./floor.js";\nexport const x = [FLOOR];'],
+    ["src/application/planted.js", 'import { Refusal } from "../domain/refusals/index.js";\nimport { StoreConflict } from "../ports/errors.js";\nimport { randomBytes } from "node:crypto";\nexport const x = [Refusal, StoreConflict, randomBytes];'],
     ["src/adapters/store/planted.js", 'import { LINK_DURATIONS } from "../../domain/identity.js";\nimport postgres from "postgres";\nexport const x = [LINK_DURATIONS, postgres];'],
     ["src/main.js", 'import { createApp } from "./application/app.js";\nimport { memoryStore } from "./adapters/store/memory.js";\nexport const x = [createApp, memoryStore];'],
   ]) assert.deepEqual(await rules(boundary, file, `${code}\n`), [], file);

@@ -2,7 +2,7 @@
 // PADR-0018 point 7). They have no HTTP route: they run as `node src/operator.js <gesture>` inside the
 // hoster's private network, started by an approved workflow of the private operator repository or by
 // the hoster's schedule. Only digests of link tokens ever reach them; the database writes link dates.
-import { Refusal } from "../domain/refusals.js";
+import { Refusal } from "../domain/refusals/index.js";
 import { verifyChain, GENESIS } from "../domain/ledger.js";
 import { bytesExpired, archiveExpired, PENDING_LIFE } from "../domain/repository.js";
 import { iso } from "./context.js";

@@ -5,7 +5,7 @@
 // token instead of a session and are exempt from the same-origin check, never from their own.
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
-import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
+import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals/index.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
 import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
 

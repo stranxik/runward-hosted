@@ -4,7 +4,8 @@
 // forbidden import and requires this configuration to refuse it. Read by `npm run lint` and committed as
 // reports/eslint.json (scripts/eslint-committable.mjs), which the manifest rows cite file by file.
 //
-//   domain       imports only the domain and node:crypto: no port, adapter, application, entry or package;
+//   domain       imports only the domain and node:crypto: no port, adapter, application, entry or package
+//                (a file of the domain, or of a folder of the domain one level down: src/domain/refusals/);
 //   ports        import nothing but other ports;
 //   application  imports only the domain, the ports, itself and node:*; never an adapter or a package;
 //   adapters     never import the application, the HTTP entry or a composition root;
@@ -24,9 +25,9 @@ export default [
     linterOptions: { reportUnusedDisableDirectives: "error" },
     rules: { "no-unused-vars": ["error", { args: "none", caughtErrors: "none", ignoreRestSiblings: true }], "no-undef": "off" },
   },
-  { files: ["src/domain/**/*.js"], rules: { "no-restricted-imports": only("\\./[a-z-]+\\.js$|node:crypto$", "the domain", "it imports only the domain and node:crypto") } },
+  { files: ["src/domain/**/*.js"], rules: { "no-restricted-imports": only("\\./([a-z-]+/)?[a-z-]+\\.js$|node:crypto$", "the domain", "it imports only the domain and node:crypto") } },
   { files: ["src/ports/**/*.js"], rules: { "no-restricted-imports": only("\\./[a-z-]+\\.js$", "the ports", "they import nothing but other ports") } },
-  { files: ["src/application/**/*.js"], rules: { "no-restricted-imports": only("\\./[a-z-]+\\.js$|\\.\\./(domain|ports)/[a-z-]+\\.js$|node:", "the application", "it imports only the domain, the ports, itself and node:*") } },
+  { files: ["src/application/**/*.js"], rules: { "no-restricted-imports": only("\\./[a-z-]+\\.js$|\\.\\./(domain|ports)/([a-z-]+/)?[a-z-]+\\.js$|node:", "the application", "it imports only the domain, the ports, itself and node:*") } },
   { files: ["src/adapters/**/*.js"], rules: { "no-restricted-imports": never(["**/application/**", "**/http/**", "**/main.js", "**/operator.js", "**/operator-gateway.js"], "an adapter", "it never imports the application, the HTTP entry or a composition root") } },
   { files: ["src/http/**/*.js"], rules: { "no-restricted-imports": never(["**/adapters/**", "**/application/**", "**/main.js", "**/operator.js", "**/operator-gateway.js"], "the HTTP entry", "it never imports an adapter, the application or a composition root") } },
 ];
