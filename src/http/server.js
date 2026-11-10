@@ -160,7 +160,12 @@ export function createHttp({ app, config, assets, version, health, log, clock })
     };
     try {
       if (!allowed.has(host) && !allowed.has(host.replace(/:\d+$/, ""))) return fail("host-not-allowed");
-      const url = new URL(req.url, origin);
+      // the request target is a path of this origin. One that does not parse (`//`, `/\`), or that names an
+      // authority of its own (`//host/...`), is the caller's fault: 404, never a server error (review
+      // finding of 2026-11-10: `GET //` threw "Invalid URL" here, was answered 503 and counted as one)
+      let url = null;
+      if (!String(req.url).startsWith("//")) { try { url = new URL(req.url, origin); } catch { /* not a path */ } }
+      if (!url || url.origin !== origin) { route = "unparsable"; return fail("not-found"); }
       const path = url.pathname;
 
       // ---- static files and the shell

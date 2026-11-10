@@ -160,3 +160,25 @@ test("the served views say « niveau non atteint » and \"level not met\" for le
   assert.ok(js.includes('"level-not-met": "level not met"'));
   assert.equal(/non franchi|not crossed/.test(js), false);
 });
+
+// Review finding of 2026-11-10 (independent review): `GET //` threw "Invalid URL" before any limiter, was
+// answered 503 and counted as a server error; with the unreadable token, anyone could raise the error-rate
+// alert. A request target that is not a path of this origin is the caller's fault.
+test("a request target that does not parse, or names its own authority, is answered 404 and is not a server error", async () => {
+  const { request } = await import("node:http");
+  const port = new URL(base).port;
+  const raw = (path, method = "GET") => new Promise((resolve, reject) => {
+    const q = request({ host: "127.0.0.1", port, path, method }, (res) => { let b = ""; res.on("data", (d) => { b += d; }); res.on("end", () => resolve({ status: res.statusCode, body: b })); });
+    q.on("error", reject); q.end();
+  });
+  const errorsBefore = (await (await call("GET", "/api/health")).json()).errors.serverErrors;
+  for (const [path, method] of [["//", "GET"], ["///", "GET"], ["/\\\\", "GET"], ["//", "POST"], ["//evil.example/api/health", "GET"], ["//evil.example/", "GET"]]) {
+    const r = await raw(path, method);
+    assert.equal(r.status, 404, `${method} ${path}`);
+    assert.equal(JSON.parse(r.body).refusal, "not-found", `${method} ${path}`);
+  }
+  assert.equal((await (await call("GET", "/api/health")).json()).errors.serverErrors, errorsBefore, "none of them counted as a server error");
+  // controls: the paths of this origin answer as before
+  assert.equal((await raw("/api/version")).status, 200);
+  assert.equal((await raw("/api/version?x=//y")).status, 200);
+});
