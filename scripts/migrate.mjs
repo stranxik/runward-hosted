@@ -107,7 +107,8 @@ const CONTRACTING = [
   ["drop", /\bdrop\s+(?!not\s+null\b|default\b)/i],
   ["rename", /\brename\b/i],
   ["truncate", /(?<!\b(?:before|after|or|of)\s+)\btruncate\b/i],
-  ["type change", /\balter\s+(?:column\s+)?(?:"[^"]+"|\w+)\s+(?:set\s+data\s+)?type\b/i],
+  // the column's name as the lexer reads a word (letters of any script, digits, _, $), or a quoted name
+  ["type change", /\balter\s+(?:column\s+)?(?:"[^"]+"|[A-Za-z_\u0080-￿][\w$\u0080-￿]*)\s+(?:set\s+data\s+)?type\b/i],
 ];
 
 /** The first contracting statement of a migration, as "<kind>: <statement>", or null. A file that names

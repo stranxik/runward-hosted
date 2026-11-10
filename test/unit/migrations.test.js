@@ -103,6 +103,19 @@ test("migrations: an escape string continued after a newline is read whole, so t
   ]) assert.equal(contracting(sql), null, `refused, but the contracting words are data: ${sql}`);
 });
 
+// Review finding of 2026-11-10 (code review C9): the type-change pattern matched the column's name with
+// ASCII word characters only.
+test("migrations: a type change is refused whatever the column's name: non-ASCII, with a $, quoted", () => {
+  for (const sql of [
+    "alter table rw.x alter column café type integer using 1;",
+    "alter table rw.x alter café set data type integer;",
+    "alter table rw.x alter column prix$ type integer;",
+    "alter table rw.x alter column \"le prix\" type integer;",
+    "alter table rw.x alter column a type integer;",
+  ]) assert.match(contracting(sql) ?? "", /^type change/, `not refused: ${sql}`);
+  assert.equal(contracting("alter table rw.x alter column café set default 1;"), null);
+});
+
 test("migrations: comments and quoted strings are not statements, and expansion passes", () => {
   for (const sql of [
     "-- drop table rw.ledger\ncreate table rw.y (id int);",
