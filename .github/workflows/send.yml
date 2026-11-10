@@ -31,7 +31,9 @@
 # runs in the send job too, next to the id-token; "sends only what `check` wrote" then holds as far as that
 # machine is clean. The token says so (runner_environment: self-hosted), and the service decides on that
 # claim: today it refuses it (runner-not-hosted, ADR-0003), so with a self-hosted `runner` the check and
-# its verdict run and the upload is answered "not accepted".
+# its verdict run and the upload is answered "not accepted". A larger runner GitHub hosts from an image
+# the caller made is the caller's machine in the same sense, and its token is not known to say so: GitHub
+# documents two values for that claim and no claim of the image (threat model, T41).
 name: runward hosted send
 on:
   workflow_call:
