@@ -9,7 +9,13 @@
 // gave at least one usable key; a failed read is retried at most once every RETRY_MS; and while the keys
 // cannot be read the verifier throws an error without a refusal code, which the upload answers 503
 // `service-unavailable`, the answer the send workflow retries.
+//
+// And a token that cannot be read is the token's fault, never the service's (review finding of 2026-11-10:
+// a header that decodes to JSON `null` threw a TypeError with no code, answered 503 and counted as a server
+// error, so anyone could raise the error-rate alert). A header or claims that are not a JSON object are
+// refused `token-unreadable`; only KeysUnavailable, a VerifierUnavailable of the port, says 503.
 import { createPublicKey, createVerify } from "node:crypto";
+import { VerifierUnavailable } from "../../ports/errors.js";
 
 export const GITHUB_ISSUER = "https://token.actions.githubusercontent.com";
 const SKEW_S = 60;
@@ -21,9 +27,11 @@ export class TokenRefused extends Error {
 }
 
 /** The issuer's keys could not be read: no refusal code, so the caller answers service-unavailable. */
-export class KeysUnavailable extends Error {
+export class KeysUnavailable extends VerifierUnavailable {
   constructor(why) { super(`oidc keys unavailable: ${why}`); }
 }
+
+const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 const b64url = (s) => Buffer.from(s.replace(/-/g, "+").replace(/_/g, "/"), "base64");
 
@@ -72,6 +80,7 @@ export function githubVerifier({ issuer = GITHUB_ISSUER, jwksUrl = `${issuer}/.w
       let header, claims;
       try { header = JSON.parse(b64url(parts[0]).toString("utf8")); claims = JSON.parse(b64url(parts[1]).toString("utf8")); }
       catch { throw new TokenRefused("token-unreadable", "not JSON"); }
+      if (!isObject(header) || !isObject(claims)) throw new TokenRefused("token-unreadable", "header or claims not an object");
       if (header.alg !== "RS256" || typeof header.kid !== "string") throw new TokenRefused("token-unreadable", "alg or kid");
       if (!keys.has(header.kid)) await refresh();
       const key = keys.get(header.kid);

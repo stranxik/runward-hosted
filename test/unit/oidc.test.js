@@ -12,7 +12,13 @@ import { pathToFileURL } from "node:url";
 import { githubVerifier, KeysUnavailable, KEYS_RETRY_MS, KEYS_REFRESH_MS } from "../../src/adapters/oidc/github.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
 import { statusOf, REFUSALS } from "../../src/domain/refusals.js";
-import { harness, send, token, claimsFor, testJwk, ORIGIN } from "../helpers.js";
+import { harness, send, token, claimsFor, testJwk, ORIGIN, SEND_SHA, fakeAuthn } from "../helpers.js";
+import { readConfig, compose } from "../../src/main.js";
+import { memoryStore } from "../../src/adapters/store/memory.js";
+import { memoryObjects } from "../../src/adapters/objects/objects.js";
+import { silentLog } from "../../src/adapters/system/log.js";
+import { VerifierUnavailable } from "../../src/ports/errors.js";
+import { probeVerdict } from "../../scripts/probe-verdict.mjs";
 
 const SOURCE = new URL("../../src/adapters/oidc/github.js", import.meta.url);
 const keySet = () => new Response(JSON.stringify({ keys: [testJwk()] }));
@@ -43,7 +49,10 @@ test("planted control: with the refresh time stamped before the read (the defect
   const dir = mkdtempSync(join(tmpdir(), "rw-oidc-planted-"));
   try {
     const file = join(dir, "github-planted.mjs");
-    writeFileSync(file, src.replace(anchor, `${anchor}    fetchedAt = now; // planted: stamped before the read\n`));
+    // the copy lives outside the tree: its one relative import (the port's errors) is given its real address
+    const port = '"../../ports/errors.js"';
+    assert.equal(src.split(port).length, 2, "the adapter imports the port's errors once");
+    writeFileSync(file, src.replace(port, JSON.stringify(new URL("../../src/ports/errors.js", import.meta.url).href)).replace(anchor, `${anchor}    fetchedAt = now; // planted: stamped before the read\n`));
     const { githubVerifier: planted } = await import(pathToFileURL(file).href);
     assert.deepEqual(await failThenSucceed(planted), { first: "no refusal code", second: "token-unreadable", reads: 1 }, "the scenario sees the defect");
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -71,4 +80,52 @@ test("an upload while the issuer's keys cannot be read is answered service-unava
   h.clock.advance(KEYS_RETRY_MS);
   assert.equal((await send(h, { run_id: "40000000082" })).refusal, "repository-not-declared", "the token was read with the keys of the second read, not refused token-unreadable");
   assert.equal(h.fetches.length, 2);
+});
+
+// Review finding of 2026-11-10 (code review C5, reproduced by the independent review): a token whose header
+// decodes to JSON `null` threw a TypeError without a code; the upload answered 503 and counted it as a server
+// error, so 25 anonymous requests gave an error rate of 96 % and a failing probe. The caller's fault was
+// charged to the service.
+test("a token whose header or claims are not a JSON object is the token's fault: refused token-unreadable, never a server error", async () => {
+  const clock = manualClock(Date.parse("2026-11-10T09:00:00Z"));
+  let reads = 0;
+  const v = githubVerifier({ fetch: async () => { reads++; return keySet(); }, clock });
+  const b64 = (text) => Buffer.from(text).toString("base64url");
+  for (const [head, claims] of [["null", "null"], ["null", "{}"], ["[]", "{}"], ["7", "{}"], ['"x"', "{}"], ['{"alg":"RS256","kid":"test-key"}', "null"], ['{"alg":"RS256","kid":"test-key"}', "[]"]]) {
+    await assert.rejects(v.verify(`${b64(head)}.${b64(claims)}.AAAA`, { audience: ORIGIN }), (e) => e.code === "token-unreadable", `${head}.${claims}`);
+  }
+  assert.equal(reads, 0, "no key read was made for them");
+});
+
+test("uploads with an unreadable token are answered 401 and leave the error rate at zero; only a verifier that says it is unavailable is answered 503", async () => {
+  const servers = [];
+  try {
+    const serve = async (verifier) => {
+      const clock = manualClock(Date.parse("2026-11-10T09:00:00Z"));
+      const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: ORIGIN, RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
+      const c = compose(config, { clock, log: silentLog, store: memoryStore({ clock }), objects: memoryObjects(), authn: fakeAuthn(), verifier: verifier(clock) });
+      await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
+      servers.push(c.http.server);
+      const base = `http://127.0.0.1:${c.http.server.address().port}`;
+      return {
+        upload: (bearer) => fetch(`${base}/api/v0/exports`, { method: "POST", headers: { authorization: `Bearer ${bearer}`, "runward-mission": "m", "runward-export-kind": "check" } }),
+        health: async () => (await fetch(`${base}/api/health`)).json(),
+      };
+    };
+    // the finding's token, 25 times, through the real verifier
+    const real = await serve((clock) => githubVerifier({ fetch: async () => keySet(), clock }));
+    const answers = {};
+    for (let i = 0; i < 25; i++) { const r = await real.upload("bnVsbA.bnVsbA.x"); const b = await r.json(); const k = `${r.status} ${b.refusal}`; answers[k] = (answers[k] ?? 0) + 1; }
+    assert.deepEqual(answers, { "401 token-unreadable": 25 });
+    const health = await real.health();
+    assert.equal(health.errors.serverErrors, 0);
+    assert.equal(probeVerdict({ healthStatus: 200, health, version: { commit: "c0ffee" } }).ok, true, "the probe does not alert on them");
+    // a verifier that throws something else on a token: still the token's
+    const odd = await serve(() => ({ async verify() { throw new TypeError("Cannot read properties of null"); } }));
+    assert.equal((await odd.upload("a.b.c")).status, 401);
+    // the control: the port's VerifierUnavailable is the service's failure
+    const down = await serve(() => ({ async verify() { throw new VerifierUnavailable("planted"); } }));
+    const r = await down.upload("a.b.c");
+    assert.deepEqual([r.status, (await r.json()).refusal], [503, "service-unavailable"]);
+  } finally { await Promise.all(servers.map((s) => new Promise((r) => s.close(r)))); }
 });
