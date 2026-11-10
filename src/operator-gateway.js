@@ -15,6 +15,12 @@
 // argument, and run idempotent gestures; nothing else is reachable without the token.
 // One gesture at a time (409 otherwise), each bounded by its own deadline (killed, 504), each outcome one
 // JSON log line at the hoster (never a header, a body, a token or a URL).
+// A daily job that ends without having written its own note (killed at its deadline, ended before it could
+// write, refused because another gesture was running) gets one from the gateway: a second, short child
+// (src/operator.js job-note, under rw_maint) writes "did not complete" to the operator journal, which
+// /api/health reads and the hourly probe alerts on (review finding of 2026-11-10: such a job wrote nothing
+// and was seen only a day later). If that note cannot be written either, the gateway's log line says so
+// and the rule on a job that has not run for a day still applies; the answer to the caller never changes.
 // What leaves the private network is a status and a code (review finding of 2026-11-10: the answer carried
 // the child's output, tenant, member and link identifiers, chain heads and error messages included, and
 // scripts/operator-call.sh printed it in a GitHub runner's log): the HTTP status and { gesture, ok, exit }
@@ -103,6 +109,10 @@ export function childEnv(name, env) {
 }
 
 const tail = (s, n) => (s.length > n ? s.slice(-n) : s);
+export const NOTE_TIMEOUT_MS = 30_000;
+/** Did the child say how its run ended? src/operator.js prints one status line once its gesture has run
+ *  (and, for a daily job, has written its note); a child killed or ended before that printed none. */
+const saidItsStatus = (stdout, name) => stdout.split("\n").some((l) => { try { return JSON.parse(l).gesture === name; } catch { return false; } });
 
 /** Removes every secret value of the environment (and any connection URL) from a text. */
 export function redactor(env) {
@@ -164,6 +174,17 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
     return timingSafeEqual(createHash("sha256").update(t).digest(), expected);
   };
 
+  /** Writes the note of a daily job that ended without its own. Never throws, never changes an answer. */
+  async function noteIncomplete(name, why, route) {
+    try {
+      const r = await runChild({ spawn, argv: ["src/operator.js", "job-note", "--job", name, "--why", why], env: childEnv(name, env), timeoutMs: timeouts["job-note"] ?? NOTE_TIMEOUT_MS, killGraceMs });
+      const ok = r.code === 0 && !r.timedOut;
+      const detail = { gesture: name, why, exit: r.code, timedOut: r.timedOut };
+      if (ok) log.info("operator.job-note", { route, status: 200, ms: r.ms, detail });
+      else log.error("operator.job-note", { route, status: 500, ms: r.ms, detail, error: redact(r.error ?? r.stderr.trim().split("\n").pop() ?? "").slice(0, 300) || `exit ${r.code}` });
+    } catch (e) { log.error("operator.job-note", { route, status: 500, detail: { gesture: name, why }, error: redact(String(e?.message ?? e)).slice(0, 300) }); }
+  }
+
   async function handle(req, res) {
     const send = (status, body) => { res.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify(body)); };
     const url = new URL(req.url, "http://gateway");
@@ -193,6 +214,7 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
     }
     if (busy) {
       log.warn("operator.busy", { route, method: req.method, status: 409, detail: { gesture: name, running: busy } });
+      if (GESTURES[name].scheduled) await noteIncomplete(name, "busy", route);
       return send(409, { error: "busy" });
     }
     busy = name;
@@ -205,6 +227,7 @@ export function createGateway({ env, log = jsonLog(), spawn = nodeSpawn, killGra
       const detail = { gesture: name, role: g.role, scheduled, exit: r.code, signal: r.signal, timedOut: r.timedOut };
       if (ok) log.info("operator.gesture", { route, method: req.method, status, ms: r.ms, detail });
       else log.error("operator.gesture", { route, method: req.method, status, ms: r.ms, detail, error: r.timedOut ? `deadline of ${timeouts[name] ?? g.timeoutMs} ms reached, killed` : lastLine || `exit ${r.code}` });
+      if (!ok && g.scheduled && (r.timedOut || !saidItsStatus(r.stdout, name))) await noteIncomplete(name, r.timedOut ? "deadline" : "exit", route);
       return send(status, { gesture: name, ok, exit: r.code });
     } finally { busy = null; }
   }

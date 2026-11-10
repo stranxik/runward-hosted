@@ -9,6 +9,8 @@
 //   node src/operator.js maintenance    --on [--until <iso>] [--reason <text>] | --off
 //   node src/operator.js retention | verify-chains
 //   node src/operator.js restore-replay --since <ulid> [--head-before <hash>] [--recovery-hash <sha256>]
+//   node src/operator.js job-note --job retention|verify-chains --why deadline|exit|busy
+//                        (the gateway's own call, never a route: a daily job that ended without its note)
 import { readConfig, compose } from "./main.js";
 
 export const GESTURES = ["open-bootstrap", "open-recovery", "reset-access", "maintenance", "retention", "verify-chains", "restore-replay"];
@@ -30,6 +32,18 @@ export function incompleteReason(gesture, r) {
   return `operator: ${gesture} did not complete: ${bad.length} tenant(s) failed or broken; first reason: ${String(why ?? "unknown").slice(0, 200)}`;
 }
 
+/** The note of a daily job that did not run to its own note (review finding of 2026-11-10: a job killed at
+ *  its deadline, or refused because another gesture was running, wrote nothing, and was seen only a day
+ *  later by the rule on a job that has not run). It reads as a run that did not complete: /api/health says
+ *  ok false for the job, and the hourly probe alerts. Written by the gateway, through this entry point,
+ *  under rw_maint; it names no tenant. */
+export const JOB_NOTE = { jobs: ["retention", "verify-chains"], whys: ["deadline", "exit", "busy"] };
+export async function noteIncomplete(store, job, why) {
+  if (!JOB_NOTE.jobs.includes(job)) throw new Error(`job-note: --job must be one of: ${JOB_NOTE.jobs.join(", ")}`);
+  if (!JOB_NOTE.whys.includes(why)) throw new Error(`job-note: --why must be one of: ${JOB_NOTE.whys.join(", ")}`);
+  return store.tx(null, (tx) => tx.operatorNote(job, { report: [], failed: 1, incomplete: why }));
+}
+
 export function parse(argv) {
   const [gesture, ...rest] = argv;
   if (!GESTURES.includes(gesture)) throw new Error(`gesture must be one of: ${GESTURES.join(", ")}`);
@@ -43,7 +57,14 @@ export function parse(argv) {
   return { gesture, o };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url === `file://${process.argv[1]}` && process.argv[2] === "job-note") {
+  const a = process.argv.slice(3);
+  const get = (k) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : undefined; };
+  const c = compose(readConfig({ ...process.env, RW_SEND_WORKFLOW_SHAS: process.env.RW_SEND_WORKFLOW_SHAS ?? "" }));
+  noteIncomplete(c.store, get("--job"), get("--why"))
+    .then(() => { console.log(JSON.stringify({ gesture: "job-note", ok: true })); return c.store.close(); })
+    .catch((e) => { console.error(`operator: job-note refused: ${e.message}`); c.store.close().finally(() => process.exit(1)); });
+} else if (import.meta.url === `file://${process.argv[1]}`) {
   let parsed;
   try { parsed = parse(process.argv.slice(2)); } catch (e) { console.error(`operator: ${e.message}`); process.exit(2); }
   const { gesture, o } = parsed;

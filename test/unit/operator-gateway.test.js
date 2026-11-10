@@ -236,3 +236,80 @@ test("operator-call.sh prints only the closed fields, even from a gateway that a
     for (const id of [TENANT, MEMBER, HEAD]) assert.ok(!r.out.includes(id), `${id} reached the runner's log`);
   } finally { await new Promise((r) => older.close(r)); }
 });
+
+// Review finding of 2026-11-10 (independent review, async-job-guardrails): a daily job killed at its
+// deadline, or one that ended before it could write, wrote no note; a job refused 409 because the other
+// still ran wrote none either. Each was seen only a day later, by the rule on a job that has not run.
+// The gateway now has the note written by a second, short child; the answer to the caller does not change.
+const NOTES = (seen) => seen.filter((s) => s.argv[1] === "job-note").map((s) => s.argv.slice(2).join(" "));
+// a stand-in that hangs as a job, and ends at once as the note's child
+const HANG = `if (process.argv.includes("job-note")) process.exit(0); setInterval(() => {}, 1000)`;
+
+test("a daily job killed at its deadline gets its note from the gateway, written under rw_maint; the answer is still 504", async () => {
+  const seen = [];
+  const t = await gateway({ spawn: standIn(HANG, seen), timeouts: { retention: 300, roles: 300 } });
+  try {
+    const r = await t.call("/scheduled/retention", { token: null });
+    assert.equal(r.status, 504);
+    assert.deepEqual(await r.json(), { gesture: "retention", ok: false, exit: null }, "the answer is the one of a killed gesture");
+    assert.deepEqual(NOTES(seen), ["--job retention --why deadline"]);
+    const note = seen.find((s) => s.argv[1] === "job-note");
+    assert.equal(note.env.DATABASE_URL, URLS.RW_OPERATOR_URL_MAINT, "the note's child holds rw_maint's URL");
+    for (const k of ["ADMIN_URL", "MIGRATE_URL", "RW_OPERATOR_TOKEN_SHA256"]) assert.equal(k in note.env, false, k);
+    assert.deepEqual(t.lines.filter((l) => l.event === "operator.job-note").map((l) => [l.level, l.detail.gesture, l.detail.why]), [["info", "retention", "deadline"]]);
+    // control: a gesture that is not a daily job is killed without a note
+    assert.equal((await t.call("/gestures/roles")).status, 504);
+    assert.equal(NOTES(seen).length, 1);
+  } finally { await t.close(); }
+});
+
+test("a daily job that ended without saying its status gets the note; one that said it wrote its own, and gets none", async () => {
+  const seen = [];
+  const crash = `if (process.argv.includes("job-note")) process.exit(0); console.error("operator: verify-chains refused: connect ECONNREFUSED"); process.exit(1)`;
+  const t = await gateway({ spawn: standIn(crash, seen) });
+  try {
+    assert.equal((await t.call("/scheduled/verify-chains", { token: null })).status, 500);
+    assert.deepEqual(NOTES(seen), ["--job verify-chains --why exit"]);
+  } finally { await t.close(); }
+  const seen2 = [];
+  const said = `console.log(JSON.stringify({ gesture: "retention", ok: false })); console.error("operator: retention did not complete: 1 tenant(s) failed or broken"); process.exit(1)`;
+  const t2 = await gateway({ spawn: standIn(said, seen2) });
+  try {
+    assert.equal((await t2.call("/scheduled/retention", { token: null })).status, 500);
+    assert.deepEqual(NOTES(seen2), [], "the job wrote its own note, with the tenants that failed: the gateway adds nothing");
+    assert.equal((await t2.call("/gestures/retention")).status, 500);
+    assert.deepEqual(NOTES(seen2), []);
+  } finally { await t2.close(); }
+});
+
+test("a daily job refused because another gesture runs gets its note; the note that cannot be written is journalled and changes no answer", async () => {
+  const seen = [];
+  const slow = `if (process.argv.includes("job-note")) process.exit(0); setTimeout(() => { console.log(JSON.stringify({ gesture: process.argv[2], ok: true })); }, 400)`;
+  const t = await gateway({ spawn: standIn(slow, seen) });
+  try {
+    const first = t.call("/scheduled/retention", { token: null });
+    await new Promise((r) => setTimeout(r, 100));
+    const second = await t.call("/scheduled/verify-chains", { token: null });
+    assert.equal(second.status, 409);
+    assert.deepEqual(await second.json(), { error: "busy" });
+    assert.deepEqual(NOTES(seen), ["--job verify-chains --why busy"]);
+    assert.equal((await first).status, 200);
+    // a gesture that is not a daily job, refused busy, gets none
+    const again = t.call("/scheduled/retention", { token: null });
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal((await t.call("/gestures/roles")).status, 409);
+    await again;
+    assert.equal(NOTES(seen).length, 1);
+  } finally { await t.close(); }
+  // the note's child fails (the database cannot be reached): said in the gateway's log, the answer unchanged
+  const failing = `if (process.argv.includes("job-note")) { console.error("operator: job-note refused: connect ECONNREFUSED " + process.env.DATABASE_URL); process.exit(1); } setInterval(() => {}, 1000)`;
+  const t2 = await gateway({ spawn: standIn(failing), timeouts: { retention: 300 } });
+  try {
+    const r = await t2.call("/scheduled/retention", { token: null });
+    assert.deepEqual([r.status, await r.json()], [504, { gesture: "retention", ok: false, exit: null }]);
+    const [line] = t2.lines.filter((l) => l.event === "operator.job-note");
+    assert.deepEqual([line.level, line.detail.why, line.detail.exit], ["error", "deadline", 1]);
+    assert.match(line.error, /job-note refused/);
+    assert.doesNotMatch(JSON.stringify(t2.lines), /pw-\d/, "no password in the journal");
+  } finally { await t2.close(); }
+});

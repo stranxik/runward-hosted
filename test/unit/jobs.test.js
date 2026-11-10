@@ -167,3 +167,49 @@ test("the daily jobs' outcome that cannot be read raises the probe's alert: null
   assert.equal(probeVerdict({ healthStatus: second.status, health: second.health, version: { commit: "c0ffee" }, now: h.clock.now() }).ok, true);
   assert.deepEqual(probeVerdict({ healthStatus: 503, health: { ok: false, db: "down", objectStore: "ok", dailyJobs: null }, version: { commit: "c0ffee" } }).reasons, ["health answered 503 (db down, objects ok)"]);
 });
+
+// Review finding of 2026-11-10 (independent review): a daily job killed at its deadline wrote no note, and
+// verify-chains was scheduled at the very minute retention's deadline ended. The note the gateway has
+// written (src/operator.js job-note) reads as a run that did not complete; the schedule leaves the gap.
+test("the note of a daily job that did not run to its end is read by /api/health as a run that did not complete, and raises the probe's alert", async () => {
+  const { noteIncomplete, JOB_NOTE } = await import("../../src/operator.js");
+  const h = harness();
+  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
+  const c = compose(config, { clock: h.clock, log: silentLog, store: h.store, objects: memoryObjects(), authn: fakeAuthn(), verifier: { async verify() { throw new Error("no upload here"); } } });
+  await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
+  servers.push(c.http.server);
+  const health = async () => (await fetch(`http://127.0.0.1:${c.http.server.address().port}/api/health`)).json();
+  await h.app.operator.retention();
+  assert.equal((await health()).dailyJobs.retention.ok, true, "a completed run, before");
+  for (const why of JOB_NOTE.whys) {
+    await noteIncomplete(h.store, "retention", why);
+    const body = await health();
+    assert.equal(body.dailyJobs.retention.ok, false, why);
+    assert.match(probeVerdict({ healthStatus: 200, health: body, version: { commit: "c0ffee" }, now: h.clock.now() }).reasons.join(), /the daily job retention did not complete/);
+    await h.app.operator.retention();
+    assert.equal((await health()).dailyJobs.retention.ok, true, "the next completed run clears it");
+  }
+  assert.deepEqual(notes(h, "retention").filter((n) => n.detail.incomplete).map((n) => n.detail), JOB_NOTE.whys.map((why) => ({ report: [], failed: 1, incomplete: why })), "the note names no tenant");
+  await assert.rejects(noteIncomplete(h.store, "migrate", "deadline"), /--job must be one of/);
+  await assert.rejects(noteIncomplete(h.store, "retention", "because"), /--why must be one of/);
+});
+
+test("the schedule: each daily job starts after the other's deadline, its kill and its note are over, and the hoster's timeout is above them", async () => {
+  const { GESTURES, NOTE_TIMEOUT_MS } = await import("../../src/operator-gateway.js");
+  const { readFileSync } = await import("node:fs");
+  const tf = readFileSync(new URL("../../infra/scaleway/main.tf", import.meta.url), "utf8");
+  const scheduled = /scheduled = \{ retention = "(\d+) (\d+) \* \* \*", verify-chains = "(\d+) (\d+) \* \* \*" \}/.exec(tf);
+  assert.ok(scheduled, "the two daily triggers are declared in infra/scaleway/main.tf");
+  const [rm, rh, vm, vh] = scheduled.slice(1).map(Number);
+  const start = { retention: (rh * 60 + rm) * 60_000, "verify-chains": (vh * 60 + vm) * 60_000 };
+  const KILL_GRACE_MS = 5_000, MARGIN_MS = 5 * 60_000;
+  const busyFor = (job) => GESTURES[job].timeoutMs + KILL_GRACE_MS + NOTE_TIMEOUT_MS;
+  const [first, second] = start.retention < start["verify-chains"] ? ["retention", "verify-chains"] : ["verify-chains", "retention"];
+  assert.ok(start[second] - start[first] >= busyFor(first) + MARGIN_MS, `${second} starts ${(start[second] - start[first]) / 60_000} min after ${first}, which may hold the gateway ${busyFor(first) / 60_000} min`);
+  assert.ok(start[first] + 24 * 3600_000 - start[second] >= busyFor(second) + MARGIN_MS);
+  // the hoster cuts a call after `timeout` seconds: above the longest gesture, its kill and its note
+  const timeouts = [...tf.matchAll(/^\s*timeout\s*=\s*(\d+)/gm)].map((m) => Number(m[1]));
+  assert.ok(timeouts.length >= 1);
+  const operator = Number(/name\s*=\s*"runward-hosted-operator"[\s\S]*?\n\s*timeout\s*=\s*(\d+)/.exec(tf)[1]);
+  assert.ok(operator * 1000 >= Math.max(...Object.values(GESTURES).map((g) => g.timeoutMs)) + KILL_GRACE_MS + NOTE_TIMEOUT_MS, "the gateway container's timeout");
+});

@@ -3,7 +3,7 @@
 // answers 200 with its store and object store ok and /api/version names a commit; it is ALERTING when the
 // error rate of the last five minutes crosses ERROR_ALERT (at least 20 requests, more than 5 % of them
 // answered 500 or more), or when a daily job did not complete or has not run for more than a day
-// (DAILY_JOB_MAX_AGE_MS: the jobs run at 03:23 and 03:37 Paris time; review finding of 2026-11-10, a
+// (DAILY_JOB_MAX_AGE_MS: the jobs run at 03:23 and 03:53 Paris time; review finding of 2026-11-10, a
 // failed job was noted in the operator journal and read by nothing), or when the jobs' outcome cannot be
 // read at all while the database answers. A job that never ran (lastRun null) says nothing yet: a schedule
 // that was never wired is not seen here. Either way the probe fails, and two failures in a row open the issue.
