@@ -9,6 +9,8 @@ concurrency: { group: "ci-${{ github.ref }}", cancel-in-progress: true }
 jobs:
   test:
     runs-on: ubuntu-24.04
+    # the whole job takes about two minutes; a hang ends here, not at GitHub's 6 h (run 42537937337)
+    timeout-minutes: 20
     permissions: { contents: read }
     services:
       postgres:
@@ -83,6 +85,7 @@ jobs:
     # not asserted); on main, a real OIDC token of this job is sent and must be refused for the right reason.
     needs: test
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions: { contents: read, id-token: write }
     services:
       postgres:

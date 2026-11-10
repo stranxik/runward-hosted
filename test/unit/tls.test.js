@@ -23,6 +23,12 @@ let dir, ca, otherCa, server, port;
 const served = {};
 let current = null; // the certificate the server presents, or "decline" (answers N to the SSLRequest)
 const handshakes = [];
+// A PostgreSQL ErrorResponse: 'E', its length, then the fields severity, code and message, each NUL-ended.
+const FATAL = (() => {
+  const body = Buffer.from("SFATAL\0VFATAL\0C28000\0Mthe handshake completed; this test server goes no further\0\0");
+  const head = Buffer.alloc(5); head.write("E"); head.writeInt32BE(body.length + 4, 1);
+  return Buffer.concat([head, body]);
+})();
 
 const openssl = (args) => execFileSync("openssl", args, { stdio: "ignore" });
 function authority(name) {
@@ -52,7 +58,11 @@ before(async () => {
       if (current === "decline") { sock.write("N"); return; }
       sock.write("S");
       const t = new TLSSocket(sock, { isServer: true, secureContext: current });
-      t.on("secure", () => { handshakes.push("secure"); t.destroy(); });
+      // After the handshake the server answers the startup message with a FATAL ErrorResponse, then
+      // closes: the client's pending query is refused for good. A bare close here is not an answer: the
+      // client reconnects a query still waiting for its connection, without end (on Linux the close is a
+      // clean FIN, and the CI test job ran until GitHub cancelled it at 6 h; macOS reset the socket instead).
+      t.on("secure", () => { handshakes.push("secure"); t.once("data", () => t.end(FATAL)); });
       t.on("error", () => {});
     });
   });
