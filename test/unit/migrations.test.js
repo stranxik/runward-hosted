@@ -55,6 +55,32 @@ test("migrations: an escape string and a double-quoted identifier, each holding 
   assert.deepEqual(statements("select \"a'b\"; drop x; select \"c'd\""), ['select "_"', "drop x", 'select "_"']);
 });
 
+// Review finding of 2026-11-10 (independent review): `a$b$` is a column name for the server, and this lexer
+// read its `$b$` as the opening of a dollar-quoted body, which ended inside the literal that followed; on
+// PostgreSQL 17.11 the hidden statement dropped rw.ledger. A $ inside a word opens nothing now; a $ glued
+// to a number is refused whole (the server's versions do not read it alike).
+test("migrations: a $ inside a name opens no dollar-quoted body, so the statement after it is read; glued to a number, the file is refused", () => {
+  for (const sql of [
+    "create table rw.t (a$b$ text default '$b$'); drop table rw.ledger; select '1';",
+    "create table rw.t (é$b$ text default '$b$'); drop table rw.ledger; select '1';",
+    "select a$$ from rw.t where b = '$$'; drop table rw.ledger; select '1';",
+    // a number, then a dollar-quoted body for the server: a lexer that takes the $ for a part of a word sees a literal here
+    "select 1$a$ ' $a$; drop table rw.ledger; select $a$ ' $a$;",
+    "select 1_000$a$ ' $a$; drop table rw.ledger; select $a$ ' $a$;",
+    "select 0x1F$a$ ' $a$; drop table rw.ledger; select $a$ ' $a$;",
+    "select 1e3$a$ ' $a$; drop table rw.ledger; select $a$ ' $a$;",
+  ]) assert.ok(contracting(sql), `not refused: ${sql}`);
+  assert.deepEqual(statements("create table rw.t (a$b$ text default '$b$'); drop x; select '1'"), ["create table rw.t (a$b$ text default '')", "drop x", "select ''"]);
+  assert.match(contracting("select 1$a$ x $a$;"), /^spelling: a \$ glued to a number/);
+  assert.match(contracting("select 1_000$a$ x $a$;"), /^spelling: a \$ in a word glued to a number/);
+  for (const sql of [
+    "create table rw.t (a$b$ text default 'x');",
+    "create table rw.price$ (id int, cost$eur numeric default 1);",
+    "create function rw.f() returns int language sql as $body$ select 1 $body$;",
+    "select 'x'$a$ ; $a$;",
+  ]) assert.equal(contracting(sql), null, `refused, but nothing contracts: ${sql}`);
+});
+
 test("migrations: comments and quoted strings are not statements, and expansion passes", () => {
   for (const sql of [
     "-- drop table rw.ledger\ncreate table rw.y (id int);",
