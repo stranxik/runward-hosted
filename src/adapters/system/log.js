@@ -23,9 +23,14 @@ const MARKS = [
 ];
 const SECRET_KEY = /token|secret|password|passwd|authori[sz]ation|cookie|credential|body|e-?mail/i;
 
-/** A string as a log line may carry it: one line, its sensitive spans marked, cut to `max`. */
+/** A string as a log line may carry it: one line, its sensitive spans marked, cut to `max`. The input is
+ *  cut first, to SCRUB_INPUT_FACTOR times `max`: the patterns never run on more than that, whoever the
+ *  caller (review finding of 2026-11-10: they ran on the whole string, and one of them takes quadratic
+ *  time on a long run without an @; 100,000 characters held the event loop for 13 s). What is written
+ *  comes from the first `max` characters of the marked text, so nothing the cut removes could be seen. */
+export const SCRUB_INPUT_FACTOR = 4;
 export function scrub(value, max = LOG_BOUNDS.STRING_MAX) {
-  let s = String(value).replace(/[\u0000-\u001f\u007f]+/g, " ");
+  let s = String(value).slice(0, max * SCRUB_INPUT_FACTOR).replace(/[\u0000-\u001f\u007f]+/g, " ");
   for (const [re, mark] of MARKS) s = s.replace(re, mark);
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }

@@ -8,7 +8,7 @@ import { readConfig, compose } from "../../src/main.js";
 import { memoryStore } from "../../src/adapters/store/memory.js";
 import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
-import { jsonLog, silentLog } from "../../src/adapters/system/log.js";
+import { jsonLog, silentLog, scrub, LOG_BOUNDS } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
 import { errorWindow } from "../../src/http/limits.js";
 import { probeVerdict } from "../../scripts/probe-verdict.mjs";
@@ -103,4 +103,19 @@ test("the probe alerts on an unavailable service and on an error rate above 5 % 
   assert.equal(probeVerdict({ healthStatus: 200, health: few, version: { commit: "abc" } }).ok, true, "below 20 requests a rate says nothing");
   assert.match(probeVerdict({ healthStatus: 503, health: { ok: false, db: "down", objectStore: "ok" }, version: { commit: "abc" } }).reasons.join(), /health answered 503 \(db down/);
   assert.match(probeVerdict({ healthStatus: 0, health: null, version: null }).reasons.join(), /version names no commit/);
+});
+
+// Review finding of 2026-11-10 (code review C8): scrub() ran its patterns on the whole string before cutting
+// it, and the e-mail pattern is quadratic on a long run without an @ (50,000 characters: 3 s; 100,000: 13 s,
+// on the event loop). The input is cut before the patterns run.
+test("scrub: a very long string is cut before the patterns run, so its cost does not grow with the input", () => {
+  const started = process.hrtime.bigint();
+  const out = scrub("a".repeat(50_000));
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(out.length, LOG_BOUNDS.STRING_MAX);
+  assert.ok(ms < 500, `scrub of 50,000 characters took ${ms.toFixed(0)} ms`);
+  // what the cut keeps is still marked, and a secret past the written length never shows
+  const planted = ["someone", "example.org"].join("@");
+  assert.equal(scrub(`${"x ".repeat(50)}${planted} ${"y".repeat(50_000)}`).includes(planted), false);
+  assert.match(scrub(`by ${planted}${" z".repeat(50_000)}`), /^by \[email\]/);
 });
