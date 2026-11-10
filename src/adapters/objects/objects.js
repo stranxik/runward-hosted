@@ -13,6 +13,10 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const need = (re, v, what) => { if (!re.test(String(v))) throw new TypeError(`object key: ${what} is malformed`); return v; };
 
+/** The security log cannot be read whole: the code a caller refuses on. */
+export const SECURITY_LOG_UNREADABLE = "security-log-unreadable";
+const unreadable = (why) => Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: ${why}`), { code: SECURITY_LOG_UNREADABLE });
+
 export const keys = {
   bytes: (t, sha) => `tenants/${need(UUID, t, "tenant")}/sha256/${need(HEX64, sha, "digest")}`,
   security: (t, id) => `tenants/${need(UUID, t, "tenant")}/security/${need(ULID, id, "ulid")}.json`,
@@ -34,7 +38,15 @@ function api(raw) {
       const list = await raw.list(keys.securityPrefix(tenant));
       const ids = list.map((k) => k.slice(keys.securityPrefix(tenant).length, -5)).filter((id) => ULID.test(id) && id > afterUlid).sort();
       const out = [];
-      for (const id of ids) out.push({ id, event: JSON.parse((await raw.get(keys.security(tenant, id))).toString("utf8")) });
+      for (const id of ids) {
+        // a listed object that cannot be read, or is not an event, is a refusal with a code, never a
+        // TypeError on null: the caller must not replay a log it read in part (restore drill of 2026-11-10)
+        const bytes = await raw.get(keys.security(tenant, id));
+        let event = null;
+        try { event = bytes === null ? null : JSON.parse(bytes.toString("utf8")); } catch { event = null; }
+        if (event === null || typeof event !== "object" || Array.isArray(event)) throw unreadable(`object ${id} is listed and ${bytes === null ? "cannot be read" : "is not an event"}`);
+        out.push({ id, event });
+      }
       return out;
     },
     putArchive: (tenant, id, bytes) => raw.put(keys.archive(tenant, id), bytes, "application/x-tar"),

@@ -8,7 +8,8 @@
 //   node src/operator.js reset-access   --hash <sha256> --tenant <uuid>
 //   node src/operator.js maintenance    --on [--until <iso>] [--reason <text>] | --off
 //   node src/operator.js retention | verify-chains
-//   node src/operator.js restore-replay --since <ulid> [--head-before <hash>] [--recovery-hash <sha256>]
+//   node src/operator.js restore-replay --anchor                                  before the database is replaced
+//   node src/operator.js restore-replay --since <ulid> [--recovery-hash <sha256>]  after it
 //   node src/operator.js job-note --job retention|verify-chains --why deadline|exit|busy
 //                        (the gateway's own call, never a route: a daily job that ended without its note)
 import { readConfig, compose } from "./main.js";
@@ -44,6 +45,13 @@ export async function noteIncomplete(store, job, why) {
   return store.tx(null, (tx) => tx.operatorNote(job, { report: [], failed: 1, incomplete: why }));
 }
 
+/** The arguments of restore-replay. A head is no longer an argument: one head could not be right for every
+ *  tenant, each has its own chain; each tenant's head before the loss is the one `--anchor` wrote for it. */
+export function restoreArgs(o) {
+  if (o.headBefore !== undefined) throw new Error("--head-before is no longer taken: run restore-replay --anchor before the database is replaced, each tenant's head is read from its own anchor");
+  return { since: o.since ?? null, anchor: Boolean(o.anchor), recoveryHash: o.recoveryHash ?? null };
+}
+
 export function parse(argv) {
   const [gesture, ...rest] = argv;
   if (!GESTURES.includes(gesture)) throw new Error(`gesture must be one of: ${GESTURES.join(", ")}`);
@@ -52,7 +60,7 @@ export function parse(argv) {
     const k = rest[i];
     if (!k.startsWith("--")) throw new Error(`unexpected argument: ${k}`);
     const name = k.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-    if (["witness", "on", "off"].includes(name)) o[name] = true; else o[name] = rest[++i];
+    if (["witness", "on", "off", "anchor"].includes(name)) o[name] = true; else o[name] = rest[++i];
   }
   return { gesture, o };
 }
@@ -77,7 +85,7 @@ if (import.meta.url === `file://${process.argv[1]}` && process.argv[2] === "job-
     maintenance: () => op.maintenance({ on: Boolean(o.on) && !o.off, until: o.until ?? null, reason: o.reason ?? "" }),
     retention: () => op.retention(),
     "verify-chains": () => op.verifyChains(),
-    "restore-replay": () => op.restoreReplay({ since: o.since, headBefore: o.headBefore ?? null, recoveryHash: o.recoveryHash ?? null }),
+    "restore-replay": async () => op.restoreReplay(restoreArgs(o)),
   }[gesture];
   // A status, never the result (review finding of 2026-11-10): the result names tenants, members, links and
   // chain heads, and each gesture already writes it to the operator journal in the database. The gateway

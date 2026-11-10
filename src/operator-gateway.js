@@ -61,7 +61,7 @@ export const GESTURES = {
   "open-recovery": op("open-recovery", { hash: [HEX64, true], tenant: [UUID, true], member: [UUID, true] }, { timeoutMs: 2 * MIN }),
   "reset-access": op("reset-access", { hash: [HEX64, true], tenant: [UUID, true] }, { timeoutMs: 2 * MIN }),
   maintenance: op("maintenance", { on: ["bool"], off: ["bool"], until: [ISO], reason: [TEXT] }, { timeoutMs: 2 * MIN }),
-  "restore-replay": op("restore-replay", { since: [ULID, true], headBefore: [HEX64], recoveryHash: [HEX64] }),
+  "restore-replay": op("restore-replay", { anchor: ["bool"], since: [ULID], recoveryHash: [HEX64] }),
 };
 
 // what a child may see besides its one URL: configuration, never a credential
