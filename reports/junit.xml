@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- generated: node v22.23.4 linux -->
 <testsuites>
+	<testcase name="on PostgreSQL, as rw_app: erasing a repository's content empties every version built from it, in the table itself; the archive brings nothing back; another tenant is untouched" classname="test"/>
+	<testcase name="planted control on PostgreSQL: an erasure that does not reach the index versions (the code before 0006) leaves the content in rw.fleet_index, and both searches say so; the retention job, as rw_maint, then empties them" classname="test"/>
+	<testcase name="the database holds a published version to what it is: as rw_app and as rw_maint, the only change accepted is the erasure of its own tenant's bytes" classname="test"/>
 	<testcase name="the migration is idempotent: a second run applies nothing" classname="test"/>
 	<testcase name="two real tenants, made through the application under rw_app" classname="test"/>
 	<testcase name="S4: 0 row read or written outside its tenant, both ways, as rw_app" classname="test"/>
@@ -51,6 +54,13 @@
 	<testcase name="egress: one host's open circuit does not close the way to another" classname="test"/>
 	<testcase name="egress: a caller that gives up is not counted against the host" classname="test"/>
 	<testcase name="egress: the service's composition bounds the issuer and S3 fetches (deadline and circuit), through the ports themselves" classname="test"/>
+	<testcase name="erasing a repository's content empties every version of the index built from it: no byte is left in a version, an object or an archive, and the digests stay" classname="test"/>
+	<testcase name="another tenant is untouched by an erasure: its versions, its bytes and its archive are what they were" classname="test"/>
+	<testcase name="planted control: an erasure that does not reach the index versions (the code before 0006) leaves the content, and the search says where" classname="test"/>
+	<testcase name="the archive never waits for the pass: versions an earlier erasure left whole are not packed, and the retention job then empties them once" classname="test"/>
+	<testcase name="30 days after a removal, the retention job erases the uploads' bytes and the versions built from them" classname="test"/>
+	<testcase name="a restore gives the erased versions back; the replay empties them again, and nothing erased is served meanwhile" classname="test"/>
+	<testcase name="a published version is written once: the store refuses any change but the erasure of its bytes" classname="test"/>
 	<testcase name="the pre-commit hook is wired by npm install and runs the repository's own checks" classname="test"/>
 	<testcase name="the pre-commit plan: the format always, the lint of staged sources, the workflows' guards, the unit tests that reach what is staged" classname="test"/>
 	<testcase name="the hook, run in a throwaway clone: a staged lint error stops the commit, the fixed file passes" classname="test"/>
@@ -212,9 +222,9 @@
 	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 211 -->
+	<!-- tests 221 -->
 	<!-- suites 0 -->
-	<!-- pass 211 -->
+	<!-- pass 221 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
