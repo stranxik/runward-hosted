@@ -4,6 +4,12 @@
 	<testcase name="on PostgreSQL, as rw_app: erasing a repository's content empties every version built from it, in the table itself; the archive brings nothing back; another tenant is untouched" classname="test"/>
 	<testcase name="planted control on PostgreSQL: an erasure that does not reach the index versions (the code before 0006) leaves the content in rw.fleet_index, and both searches say so; the retention job, as rw_maint, then empties them" classname="test"/>
 	<testcase name="the database holds a published version to what it is: as rw_app and as rw_maint, the only change accepted is the erasure of its own tenant's bytes" classname="test"/>
+	<testcase name="C21: an upload in flight during an erasure commits first; the erasure then empties its version too, and names it" classname="test"/>
+	<testcase name="C21: an upload of the erased repository itself, in flight during the erasure, is erased with the rest" classname="test"/>
+	<testcase name="C21: a gesture in flight that republishes does not publish, after the erasure, a version assembled before it" classname="test"/>
+	<testcase name="C21: a restore in flight at the end of its window commits first; the retention pass, as rw_maint, then erases nothing of a repository that is back" classname="test"/>
+	<testcase name="C23: the erasure's read of the versions returns their number and their fleet.json, for the tenant's versions not yet erased, as rw_app and as rw_maint" classname="test"/>
+	<testcase name="C24: the database dates an erasure itself: as rw_app and as rw_maint, a date in the past or at infinity is replaced by the transaction's" classname="test"/>
 	<testcase name="the migration is idempotent: a second run applies nothing" classname="test"/>
 	<testcase name="two real tenants, made through the application under rw_app" classname="test"/>
 	<testcase name="S4: 0 row read or written outside its tenant, both ways, as rw_app" classname="test"/>
@@ -24,6 +30,7 @@
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
 	<testcase name="a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed" classname="test"/>
+	<testcase name="a restore from a backup of before the retention erasure: under rw_maint the pass writes its event, the archive on the restored base packs nothing whose bytes are gone, and the replay empties the versions again" classname="test"/>
 	<testcase name="planted control: an unfilled slot of the page is seen" classname="test"/>
 	<testcase name="every slot of the page is filled, and every file it names is served with its media type" classname="test"/>
 	<testcase name="the app's layer is served byte for byte, and the old tokens file is gone" classname="test"/>
@@ -67,6 +74,10 @@
 	<testcase name="30 days after a removal, the retention job erases the uploads' bytes and the versions built from them" classname="test"/>
 	<testcase name="a restore gives the erased versions back; the replay empties them again, and nothing erased is served meanwhile" classname="test"/>
 	<testcase name="a published version is written once: the store refuses any change but the erasure of its bytes" classname="test"/>
+	<testcase name="the date of an erasure is the store's own: one given in the past, or at no instant, is not kept (C24)" classname="test"/>
+	<testcase name="the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)" classname="test"/>
+	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
+	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
 	<testcase name="the pre-commit hook is wired by npm install and runs the repository's own checks" classname="test"/>
 	<testcase name="the pre-commit plan: the format always, the lint of staged sources, the workflows' guards, the unit tests that reach what is staged" classname="test"/>
 	<testcase name="the hook, run in a throwaway clone: a staged lint error stops the commit, the fixed file passes" classname="test"/>
@@ -232,9 +243,9 @@
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 231 -->
+	<!-- tests 242 -->
 	<!-- suites 0 -->
-	<!-- pass 231 -->
+	<!-- pass 242 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
