@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
-import { rateLimiter, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
+import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
 const JSON_LIMIT = 64 * 1024;
@@ -122,7 +122,12 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   const origin = config.origin;
   const limits = { ...RATE_LIMITS, ...(config.rateLimits ?? {}) };
   const errors = errorWindow({ now: () => clock.now() });
-  const limiters = Object.fromEntries(Object.entries(limits).map(([k, l]) => [k, rateLimiter({ ...l, now: () => clock.now() })]));
+  const at = { now: () => clock.now() };
+  const limiters = {
+    writes: rateLimiter({ ...limits.writes, ...at }), reads: rateLimiter({ ...limits.reads, ...at }),
+    machine: failureLimiter({ ...limits.machine, everyCall: true, ...at }), signedOut: failureLimiter({ ...limits.signedOut, ...at }),
+  };
+  const validCookies = recentlyValid(at);
 
   const baseHeaders = (requestId) => ({
     "runward-request-id": requestId, "runward-version": config.commit, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
@@ -149,9 +154,11 @@ export function createHttp({ app, config, assets, version, health, log, clock })
     const headers = baseHeaders(requestId);
     const host = String(req.headers.host ?? "").toLowerCase();
     let route = "-";
+    let machine = null; // the machine route's entry in its limiter, settled with the answer's status
     const lang = /^\s*en\b/i.test(String(req.headers["accept-language"] ?? "")) ? "en" : "fr";
     const fail = (code, extra = {}) => {
       const status = statusOf(code);
+      machine?.settle(status === 401); machine = null;
       const h = { ...headers, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
       if (extra.retryAfter) h["retry-after"] = String(extra.retryAfter);
       const { retryAfter, ...rest } = extra;
@@ -204,8 +211,13 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       if (r.w === "public" && refused(limiters[write ? "writes" : "reads"].take(address))) return;
 
       // ---- the machine routes are not authenticated until their token's RSA signature is checked: each
-      //      call is counted before that check, per address and for the instance (review finding of 2026-11-10)
-      if ((r.w === "workload" || r.w === "reader") && refused(limiters.machine.take(address))) return;
+      //      call is counted for its address before that check (review finding of 2026-11-10); the instance's
+      //      budget counts the calls whose token was refused, and refuses only the addresses that failed
+      if (r.w === "workload" || r.w === "reader") {
+        const entry = limiters.machine.enter(address);
+        if (refused(entry)) return;
+        machine = entry;
+      }
 
       // ---- writes from a browser: same origin, checked before the body is read
       if (write && r.w !== "workload" && r.w !== "reader") {
@@ -216,16 +228,20 @@ export function createHttp({ app, config, assets, version, health, log, clock })
 
       // ---- the session, before any other read of the database. A request that is not signed in is
       //      counted (a cookie that resolves to no session, or a session route called without one); past the
-      //      budget of its address or of the instance, its cookie is refused before the database is read
+      //      budget of its address, or once the instance's is spent and its address has failed, its cookie
+      //      is refused before the database is read. A cookie that resolved a moment ago is not asked.
       const token = cookieOf(req.headers.cookie);
       let session = null;
       if (token) {
-        if (refused(limiters.signedOut.peek(address))) return;
+        const hash = createHash("sha256").update(token).digest("hex");
+        const entry = validCookies.has(hash) ? null : limiters.signedOut.enter(address);
+        if (entry && refused(entry)) return;
         session = await app.identity.sessionFrom(token);
-        if (!session) limiters.signedOut.take(address);
+        if (session) validCookies.add(hash);
+        else { validCookies.drop(hash); const e = entry ?? limiters.signedOut.enter(address); if (e.ok) e.settle(true); }
       }
       if (r.w === "session" && !session) {
-        if (!token && refused(limiters.signedOut.take(address))) return;
+        if (!token) { const entry = limiters.signedOut.enter(address); if (refused(entry)) return; entry.settle(true); }
         return fail("signed-out");
       }
 
@@ -251,6 +267,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       const shaped = out && typeof out === "object" && ("status" in out && ("body" in out || "raw" in out)) ? out : { status: 200, body: out };
       if (shaped.refusal && REFUSALS[shaped.refusal]) shaped.body = { ...refusalBody(shaped.refusal, lang), ...shaped.body, requestId };
       else if (shaped.body && typeof shaped.body === "object" && !Array.isArray(shaped.body) && path === "/api/v0/exports") shaped.body = { ...shaped.body, requestId };
+      machine?.settle(shaped.status === 401); machine = null;
       const h = { ...headers, "cache-control": "no-store", ...(shaped.headers ?? {}) };
       if (shaped.cookie !== undefined) h["set-cookie"] = setCookie(shaped.cookie);
       if (shaped.raw) { h["content-type"] = shaped.type; send(res, shaped.status, h, shaped.raw); }

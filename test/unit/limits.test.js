@@ -9,8 +9,8 @@ import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
 import { silentLog } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
-import { rateLimiter } from "../../src/http/limits.js";
-import { fakeAuthn, testJwk, SEND_SHA, founder } from "../helpers.js";
+import { rateLimiter, failureLimiter, recentlyValid, RATE_LIMITS } from "../../src/http/limits.js";
+import { fakeAuthn, testJwk, SEND_SHA, founder, token, claimsFor } from "../helpers.js";
 
 const servers = [];
 after(() => Promise.all(servers.map((s) => new Promise((r) => s.close(r)))));
@@ -119,4 +119,92 @@ test("RW_TRUST_PROXY: the number of proxies in front, read from the configuratio
   assert.equal(clientAddress(req, 1), "10.0.0.2");
   assert.equal(clientAddress(req, 2), "203.0.113.5", "two proxies: the entry the outer one appended");
   assert.equal(clientAddress({ headers: {}, socket: { remoteAddress: "10.0.0.3" } }, 1), "10.0.0.3", "no header: the peer");
+});
+
+// Review finding of 2026-11-10 (code review C2, and the independent review): the instance-wide budgets
+// refused valid callers too. 600 dead cookies a minute from 20 addresses spent the signedOut budget, and
+// every cookie-bearing request was then answered 429 before its session was read, public routes included;
+// 1,200 junk uploads refused every tenant's upload. The scenario of the finding, with the default budgets.
+test("the instance's budgets refuse only what failed: after a flood of dead cookies and of junk uploads, a valid session and a signed upload are still served", async () => {
+  const s = await serve({ trustProxy: true, ...RATE_LIMITS });
+  const h = { app: s.c.app, store: s.c.store };
+  const seen = await founder(h, { passkeys: 1, prefix: "seen" });
+  const unseen = await founder(h, { passkeys: 1, prefix: "unseen" });
+  const as = (ip, cookie, path = "/api/v0/session") => s.get(path, { "x-forwarded-for": ip, ...(cookie ? { cookie: `__Host-rw_session=${cookie}` } : {}) });
+  assert.equal((await as("198.51.100.1", seen.token)).status, 200, "a valid session, before");
+
+  // ---- 600 dead cookies from 20 addresses: the instance's budget of failures is spent
+  // (the twenty addresses at once, each sending its requests one after the other)
+  const twenty = (each) => Promise.all(Array.from({ length: 20 }, (_, k) => each(k + 1))).then((x) => x.flat());
+  const flood = await twenty(async (a) => { const out = []; for (let i = 0; i < RATE_LIMITS.signedOut.perAddress; i++) out.push((await as(`198.51.100.${a}`, `dead-${a}-${i}`)).status); return out; });
+  assert.deepEqual([...new Set(flood)], [401]);
+  assert.equal(flood.length, RATE_LIMITS.signedOut.global);
+  const before = s.work.tx;
+  assert.equal((await as("198.51.100.2", "dead-again")).status, 429, "an address that failed is refused");
+  assert.equal(s.work.tx, before, "and nothing is read for it");
+  // a valid session is served: one not seen before, from an address that did not fail; one seen a moment
+  // ago, even from an address of the flood; and on a public route
+  assert.equal((await as("203.0.113.7", unseen.token)).status, 200, "a valid session from another address");
+  assert.equal((await as("198.51.100.1", seen.token)).status, 200, "a valid session seen a moment ago, from an address of the flood");
+  assert.equal((await as("198.51.100.1", seen.token, "/api/version")).status, 200, "the same cookie on a public route");
+  // what the flood can still cost: one failure for each new address, then nothing
+  assert.equal((await as("203.0.113.8", "dead-new")).status, 401);
+  const then = s.work.tx;
+  assert.equal((await as("203.0.113.8", "dead-new-2")).status, 429);
+  assert.equal(s.work.tx, then);
+
+  // ---- 1,200 junk uploads from 20 addresses
+  const upload = (ip, bearer) => s.post("/api/v0/exports", { "x-forwarded-for": ip, authorization: `Bearer ${bearer}`, "runward-mission": "m", "runward-export-kind": "check" });
+  const junk = await twenty(async (a) => { const out = []; for (let i = 0; i < RATE_LIMITS.machine.perAddress; i++) out.push((await upload(`192.0.2.${a}`, "aaa.bbb.ccc")).status); return out; });
+  assert.deepEqual([...new Set(junk)], [401]);
+  assert.equal(junk.length, RATE_LIMITS.machine.global);
+  assert.equal((await upload("192.0.2.1", "aaa.bbb.ccc")).status, 429);
+  // an upload signed by the issuer, from another address, has its token checked and reaches the application
+  // (which answers for what it carries: here, a body that does not match its digest header)
+  const signed = await upload("203.0.113.20", token(claimsFor(s.clock)));
+  assert.deepEqual([signed.status, (await signed.json()).refusal], [400, "digest-mismatch"], "a signed upload is not refused for the others' junk");
+  const verified = s.work.verify;
+  assert.equal((await upload("203.0.113.21", "aaa.bbb.ccc")).status, 401, "a new address has one failure");
+  assert.equal((await upload("203.0.113.21", "aaa.bbb.ccc")).status, 429, "then it is refused");
+  assert.equal(s.work.verify, verified + 1, "with no RSA check past it");
+});
+
+test("the budget of failures: an address is refused past its own failures; once the instance's is spent, only the addresses that failed; the table is bounded", () => {
+  let t = 0;
+  const l = failureLimiter({ perAddress: 2, global: 3, maxAddresses: 4, now: () => t });
+  const failOnce = (a) => { const e = l.enter(a); if (e.ok) e.settle(true); return e.ok; };
+  assert.deepEqual([failOnce("a"), failOnce("a"), failOnce("a")], [true, true, false], "its own budget");
+  for (let i = 0; i < 50; i++) { const e = l.enter("good"); assert.equal(e.ok, true); e.settle(false); }
+  assert.equal(failOnce("b"), true, "the third failure of the instance");
+  assert.deepEqual([l.enter("b").scope, l.enter("good").ok, l.enter("new").ok], ["global", true, true], "spent: b failed and is refused, the others are served");
+  assert.equal(failOnce("new"), true); assert.equal(l.enter("new").ok, false);
+  // past the bound, new addresses share one entry: the first failure among them refuses them all
+  assert.equal(failOnce("x1"), true);
+  assert.equal(l.enter("x2").ok, false);
+  assert.equal(l.size(), 5);
+  t = 60_000;
+  assert.equal(failOnce("a"), true, "the next minute opens again");
+  const every = failureLimiter({ perAddress: 2, global: 100, everyCall: true, now: () => 0 });
+  every.enter("m").settle(false); every.enter("m").settle(false);
+  assert.equal(every.enter("m").ok, false, "everyCall: each call is counted for its address, failed or not");
+});
+
+test("a cookie that resolved a moment ago is exempt from the budget, never from the read of its session; the table is bounded and forgets", () => {
+  let t = 0;
+  const v = recentlyValid({ ttlMs: 1000, max: 2, now: () => t });
+  v.add("a"); assert.equal(v.has("a"), true);
+  t = 1000; assert.equal(v.has("a"), false, "past its time");
+  v.add("a"); v.add("b"); v.add("c");
+  assert.deepEqual([v.has("a"), v.has("b"), v.has("c"), v.size()], [false, true, true, 2], "the oldest goes");
+  v.drop("b"); assert.equal(v.has("b"), false);
+});
+
+test("a session closed a moment ago is refused at once, though its cookie was seen valid, and it is counted as a failure", async () => {
+  const s = await serve({ trustProxy: true, signedOut: { perAddress: 1, global: 100 } });
+  const f = await founder({ app: s.c.app, store: s.c.store }, { passkeys: 1 });
+  const as = (cookie) => s.get("/api/v0/session", { "x-forwarded-for": "198.51.100.9", cookie: `__Host-rw_session=${cookie}` });
+  assert.equal((await as(f.token)).status, 200);
+  await s.c.app.identity.signOut(await s.c.app.identity.sessionFrom(f.token), {});
+  assert.equal((await as(f.token)).status, 401, "the session is read on every request");
+  assert.equal((await as(f.token)).status, 429, "and the dead cookie is counted like any other");
 });
