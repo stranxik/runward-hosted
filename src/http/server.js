@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
-import { rateLimiter, clientAddress, errorWindow, PUBLIC_LIMITS } from "./limits.js";
+import { rateLimiter, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
 const JSON_LIMIT = 64 * 1024;
@@ -120,9 +120,9 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   const allowed = new Set(config.hosts.map((h) => h.toLowerCase()));
   const secure = config.origin.startsWith("https://");
   const origin = config.origin;
-  const limits = config.publicLimits ?? PUBLIC_LIMITS;
+  const limits = { ...RATE_LIMITS, ...(config.rateLimits ?? {}) };
   const errors = errorWindow({ now: () => clock.now() });
-  const limiters = { writes: rateLimiter({ ...limits.writes, now: () => clock.now() }), reads: rateLimiter({ ...limits.reads, now: () => clock.now() }) };
+  const limiters = Object.fromEntries(Object.entries(limits).map(([k, l]) => [k, rateLimiter({ ...l, now: () => clock.now() })]));
 
   const baseHeaders = (requestId) => ({
     "runward-request-id": requestId, "runward-version": config.commit, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
@@ -191,11 +191,16 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       const params = path.match(r.re).slice(1);
       const write = ["POST", "PATCH", "DELETE"].includes(req.method);
 
+      const address = clientAddress(req, config.trustProxy);
+      /** Answers 429 and says so when the limiter's verdict is a refusal. */
+      const refused = (t) => { if (t.ok) return false; fail("too-many-requests", { retryAfter: t.retryAfter }); return true; };
+
       // ---- the public routes are limited, per address and for the instance, before anything is read
-      if (r.w === "public") {
-        const t = limiters[write ? "writes" : "reads"].take(clientAddress(req, config.trustProxy));
-        if (!t.ok) return fail("too-many-requests", { retryAfter: t.retryAfter });
-      }
+      if (r.w === "public" && refused(limiters[write ? "writes" : "reads"].take(address))) return;
+
+      // ---- the machine routes are not authenticated until their token's RSA signature is checked: each
+      //      call is counted before that check, per address and for the instance (review finding of 2026-11-10)
+      if ((r.w === "workload" || r.w === "reader") && refused(limiters.machine.take(address))) return;
 
       // ---- writes from a browser: same origin, checked before the body is read
       if (write && r.w !== "workload" && r.w !== "reader") {
@@ -204,16 +209,26 @@ export function createHttp({ app, config, assets, version, health, log, clock })
         if (!okOrigin) return fail("same-origin");
       }
 
+      // ---- the session, before any other read of the database. A request that is not signed in is
+      //      counted (a cookie that resolves to no session, or a session route called without one); past the
+      //      budget of its address or of the instance, its cookie is refused before the database is read
+      const token = cookieOf(req.headers.cookie);
+      let session = null;
+      if (token) {
+        if (refused(limiters.signedOut.peek(address))) return;
+        session = await app.identity.sessionFrom(token);
+        if (!session) limiters.signedOut.take(address);
+      }
+      if (r.w === "session" && !session) {
+        if (!token && refused(limiters.signedOut.take(address))) return;
+        return fail("signed-out");
+      }
+
       // ---- maintenance: writes answer 503 (the upload use case says so itself)
       if (write && r.w === "session") {
         const m = await health.maintenance();
         if (m) return fail("maintenance", { retryAfter: 600 });
       }
-
-      // ---- the session
-      const token = cookieOf(req.headers.cookie);
-      const session = token ? await app.identity.sessionFrom(token) : null;
-      if (r.w === "session" && !session) return fail("signed-out");
 
       // ---- the body (uploads read their own, last, after the token and the repository)
       let body = {};

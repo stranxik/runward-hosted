@@ -1,5 +1,6 @@
-// Limits on the public routes (review finding of 2026-11-08: none on /api/v0/auth/options). Per address
-// and for the instance, a fixed window of one minute, on a real socket through the real routes.
+// Rate limits (review findings of 2026-11-08: none on /api/v0/auth/options; of 2026-11-10: none on the
+// requests of the other routes that are not authenticated yet). Per address and for the instance, a fixed
+// window of one minute, on a real socket through the real routes.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readConfig, compose } from "../../src/main.js";
@@ -9,22 +10,30 @@ import { manualClock } from "../../src/adapters/system/clock.js";
 import { silentLog } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
 import { rateLimiter } from "../../src/http/limits.js";
-import { fakeAuthn, testJwk, SEND_SHA } from "../helpers.js";
+import { fakeAuthn, testJwk, SEND_SHA, founder } from "../helpers.js";
 
 const servers = [];
 after(() => Promise.all(servers.map((s) => new Promise((r) => s.close(r)))));
 
-async function serve({ trustProxy = false, writes = { perAddress: 3, global: 5 }, reads = { perAddress: 4, global: 100 } } = {}) {
+async function serve({ trustProxy = false, writes = { perAddress: 3, global: 5 }, reads = { perAddress: 4, global: 100 }, machine, signedOut } = {}) {
   const clock = manualClock(Date.parse("2026-11-08T12:00:10Z"));
-  const config = { ...readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA }), trustProxy, publicLimits: { writes, reads } };
+  const rateLimits = { writes, reads, ...(machine ? { machine } : {}), ...(signedOut ? { signedOut } : {}) };
+  const config = { ...readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA }), trustProxy, rateLimits };
   const jwks = async () => new Response(JSON.stringify({ keys: [testJwk()] }));
-  const c = compose(config, { clock, log: silentLog, store: memoryStore({ clock }), objects: memoryObjects(), authn: fakeAuthn(), verifier: githubVerifier({ fetch: jwks, clock }) });
+  // the costly work, counted: each RSA check of a token, each transaction of the store
+  const work = { verify: 0, tx: 0 };
+  const real = githubVerifier({ fetch: jwks, clock });
+  const verifier = { verify: (...a) => { work.verify++; return real.verify(...a); } };
+  const store = memoryStore({ clock });
+  const tx = store.tx.bind(store);
+  store.tx = (...a) => { work.tx++; return tx(...a); };
+  const c = compose(config, { clock, log: silentLog, store, objects: memoryObjects(), authn: fakeAuthn(), verifier });
   await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
   servers.push(c.http.server);
   const base = `http://127.0.0.1:${c.http.server.address().port}`;
   const post = (path, headers = {}) => fetch(`${base}${path}`, { method: "POST", headers: { origin: "https://app.runward.dev", "content-type": "application/json", ...headers }, body: "{}" });
   const get = (path, headers = {}) => fetch(`${base}${path}`, { headers });
-  return { clock, post, get };
+  return { clock, post, get, work, c };
 }
 
 test("public routes: past the limit per address, 429 too-many-requests with Retry-After; the next minute opens again", async () => {
@@ -57,6 +66,38 @@ test("public routes: without the proxy setting, X-Forwarded-For is ignored (a cl
   assert.equal((await s.post("/api/v0/auth/options", { "x-forwarded-for": "198.51.100.1" })).status, 200);
   assert.equal((await s.post("/api/v0/auth/options", { "x-forwarded-for": "198.51.100.2" })).status, 200);
   assert.equal((await s.post("/api/v0/auth/options", { "x-forwarded-for": "198.51.100.3" })).status, 429);
+});
+
+test("not yet authenticated: each upload and reader call is counted before its token's RSA check, past the budget 429 with no check", async () => {
+  const s = await serve({ machine: { perAddress: 3, global: 100 } });
+  const upload = () => s.post("/api/v0/exports", { authorization: "Bearer aaa.bbb.ccc", "runward-mission": "m", "runward-export-kind": "check" });
+  for (let i = 0; i < 3; i++) assert.equal((await upload()).status, 401, "an unreadable token, refused by the verifier");
+  assert.equal(s.work.verify, 3);
+  const r = await upload();
+  assert.equal(r.status, 429);
+  assert.equal((await r.json()).refusal, "too-many-requests");
+  assert.ok(Number(r.headers.get("retry-after")) >= 1);
+  assert.equal((await s.get("/api/v0/reader/index", { authorization: "Bearer aaa.bbb.ccc", "runward-fleet": "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70" })).status, 429, "the witness reader's route shares the address's budget");
+  assert.equal(s.work.verify, 3, "no RSA check past the budget");
+  s.clock.advance(60_000);
+  assert.equal((await upload()).status, 401, "the next minute opens again");
+});
+
+test("not yet authenticated: a session cookie that resolves to nothing is counted; past the budget it is refused before the database is read, a valid session never is", async () => {
+  const s = await serve({ trustProxy: true, signedOut: { perAddress: 2, global: 100 } });
+  const { token } = await founder({ app: s.c.app, store: s.c.store }, { passkeys: 1 });
+  const as = (ip, cookie) => s.get("/api/v0/session", { "x-forwarded-for": ip, ...(cookie ? { cookie: `__Host-rw_session=${cookie}` } : {}) });
+  for (let i = 0; i < 2; i++) assert.equal((await as("198.51.100.1", `forged-${i}`)).status, 401);
+  const before = s.work.tx;
+  const r = await as("198.51.100.1", "forged-3");
+  assert.equal(r.status, 429);
+  assert.equal((await r.json()).refusal, "too-many-requests");
+  assert.equal(s.work.tx, before, "refused before the database is read");
+  // the session routes called without a cookie count too
+  for (let i = 0; i < 2; i++) assert.equal((await as("198.51.100.2", null)).status, 401);
+  assert.equal((await as("198.51.100.2", null)).status, 429);
+  // a valid session is authenticated: it is never counted, whatever the number of its calls
+  for (let i = 0; i < 5; i++) assert.equal((await as("198.51.100.3", token)).status, 200, `signed-in call ${i + 1}`);
 });
 
 test("the limiter's table of addresses is bounded: new addresses past the bound share one counter", () => {

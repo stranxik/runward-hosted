@@ -1,28 +1,43 @@
-// Limits on the public routes (review finding of 2026-11-08: none on /api/v0/auth/options, each call of
-// which writes a challenge). A fixed window per minute, counted per client address and for the whole
-// instance; the window state is per instance and is lost on a restart, which reopens at most one window
-// (the service runs one instance, max_scale 1). The table of addresses is bounded: past `maxAddresses`
-// in one window, new addresses share one counter, so a flood of addresses cannot grow memory.
-export const PUBLIC_LIMITS = {
+// Rate limits (review findings of 2026-11-08: none on /api/v0/auth/options, each call of which writes a
+// challenge; of 2026-11-10: none on the requests of the other routes that are not authenticated yet). A
+// fixed window per minute, counted per client address and for the whole instance; the window state is per
+// instance and is lost on a restart, which reopens at most one window (the service runs one instance,
+// max_scale 1). The table of addresses is bounded: past `maxAddresses` in one window, new addresses share
+// one counter, so a flood of addresses cannot grow memory.
+//   writes, reads  the public routes, each call, before anything is read;
+//   machine        the machine routes (an upload, the witness reader), each call, before its token's RSA
+//                  signature is checked: none of them is authenticated before that check;
+//   signedOut      the session cookies that resolved to no session (and the session routes called without
+//                  a cookie); past the budget, a cookie is refused before the database is read for it.
+export const RATE_LIMITS = {
   writes: { perAddress: 30, global: 600 },
   reads: { perAddress: 120, global: 3000 },
+  machine: { perAddress: 60, global: 1200 },
+  signedOut: { perAddress: 30, global: 600 },
 };
 
 export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
   let window = -1, counts = new Map(), total = 0;
+  /** Where `address` stands in this window, without counting it. */
+  const look = (address) => {
+    const t = now();
+    const w = Math.floor(t / windowMs);
+    if (w !== window) { window = w; counts = new Map(); total = 0; }
+    const retryAfter = Math.max(1, Math.ceil(((w + 1) * windowMs - t) / 1000));
+    const key = counts.has(address) || counts.size < maxAddresses ? address : "(overflow)";
+    if (total >= global) return { ok: false, scope: "global", retryAfter, key };
+    if ((counts.get(key) ?? 0) >= perAddress) return { ok: false, scope: "address", retryAfter, key };
+    return { ok: true, key };
+  };
   return {
+    /** Count one call of `address`, or refuse it when its budget or the instance's is spent. */
     take(address) {
-      const t = now();
-      const w = Math.floor(t / windowMs);
-      if (w !== window) { window = w; counts = new Map(); total = 0; }
-      const retryAfter = Math.max(1, Math.ceil(((w + 1) * windowMs - t) / 1000));
-      if (total >= global) return { ok: false, scope: "global", retryAfter };
-      const key = counts.has(address) || counts.size < maxAddresses ? address : "(overflow)";
-      const n = counts.get(key) ?? 0;
-      if (n >= perAddress) return { ok: false, scope: "address", retryAfter };
-      counts.set(key, n + 1); total++;
-      return { ok: true };
+      const { key, ...v } = look(address);
+      if (v.ok) { counts.set(key, (counts.get(key) ?? 0) + 1); total++; }
+      return v;
     },
+    /** Would a call of `address` be refused now? Nothing is counted. */
+    peek(address) { const { key, ...v } = look(address); return v; },
     size: () => counts.size,
   };
 }
