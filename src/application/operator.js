@@ -22,6 +22,8 @@ const operator = { type: "operator", id: "operateur" };
 const when = (e) => Date.parse(e.at);
 /** The code of a replay refused because a tenant's security log cannot be read whole (the object store adapter throws it too). */
 export const SECURITY_LOG_UNREADABLE = "security-log-unreadable";
+/** `restore-replay --anchor` after a restore whose replay has not run: refused, nothing anchored. */
+export const RESTORE_NOT_REPLAYED = "restore-not-replayed";
 
 /** What the events create: a reset or a recovery withdraws what existed before it, never what the log creates after it. */
 function created(events) {
@@ -405,10 +407,35 @@ export function operatorCases(ctx) {
    * seq, hash), which the restore does not touch. The replay reads it back as the head before the loss.
    * Each tenant has its own chain, so each has its own anchor; nothing leaves the private network and no
    * head is taken on the operator's word. Nothing is appended to a journal: an anchor that moved the head
-   * would not be the head.
+   * would not be the head. Refused (`restore-not-replayed`) when a restore is waiting for its replay.
    */
   async function anchorHeads() {
     const tenants = await tenantList("restore-anchored", {});
+    // Refused whole, before any write, when a tenant's latest anchor names an entry its journal no longer
+    // holds and no replay was noted since: the database was restored and `--since` has not run. An anchor
+    // written now would be of the restored head, and the replay would read it as the head before the loss
+    // and say that nothing was lost (code review of 2026-11-10, C17: anchor at 8, restore to 5, `--anchor`
+    // again by mistake, then the replay: a permanent note of 0 entries lost, where three were). A log
+    // that cannot be read refuses too: nothing says then that no restore is waiting for its replay.
+    const pending = [], unread = [];
+    for (const tenant of tenants) {
+      let last = null;
+      try { last = anchors(await objects.securitySince(tenant, "")).pop() ?? null; }
+      catch (e) { unread.push({ tenant, failed: true, error: why(e) }); continue; }
+      if (!last) continue;
+      const entries = await store.tx(tenant, (tx) => tx.ledgerAll());
+      const held = entries.some((x) => x.seq === last.event.seq && x.hash === last.event.hash);
+      const replayed = entries.some((x) => x.body.what === "restore-replayed" && Date.parse(x.body.dates?.received?.at) >= when(last.event));
+      if (!held && !replayed) pending.push({ tenant, anchor: last.id, anchored: last.event.seq, head: entries[entries.length - 1]?.seq ?? 0 });
+    }
+    if (unread.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: SECURITY_LOG_UNREADABLE, report: unread, failed: unread.length }));
+      throw Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: the security log of ${unread.length} tenant(s) out of ${tenants.length} cannot be read; nothing was anchored; first reason: ${unread[0].error}`), { code: SECURITY_LOG_UNREADABLE });
+    }
+    if (pending.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: RESTORE_NOT_REPLAYED, report: pending, failed: pending.length }));
+      throw Object.assign(new Error(`${RESTORE_NOT_REPLAYED}: the latest anchor of ${pending.length} tenant(s) out of ${tenants.length} names an entry the journal no longer holds, and no replay was noted since: the database was restored and restore-replay --since has not run; nothing was anchored; run the replay first`), { code: RESTORE_NOT_REPLAYED });
+    }
     const report = await perTenant(tenants, (tenant) => store.tx(tenant, async (tx) => {
       await tx.lockTenant();
       const head = await tx.ledgerHead();
