@@ -3,8 +3,10 @@
 // no pull_request_target or workflow_run anywhere; in send.yml, only the send job holds id-token, the
 // check job never passes --hooks and writes under $RUNNER_TEMP, and the send job runs no third-party
 // action besides GitHub's artifact actions. No job of this public repository runs on a self-hosted runner:
-// runs-on is a hosted label written out, never an expression, except send.yml's `runner` input (it runs in
-// the caller's repository; its default is ubuntu-24.04 and no workflow here passes it). A deploy or rollback
+// runs-on is one of a closed list of hosted labels, written out on the job's own line; a list, a group, an
+// own label, an expression, an alias, an anchor and a quoted or escaped key are refused (runnerFaults). The
+// one exemption is send.yml's `runner` input (it runs in the caller's repository; its default is
+// ubuntu-24.04 and no workflow here passes it, in any spelling of the key). A deploy or rollback
 // workflow stays off unless its repository variable is set; push-image runs by hand from main only. No
 // secret in a command line (AGENTS.md,
 // never-rule 5; review finding of 2026-11-10): in a workflow and in a shell script of scripts/, a header or
@@ -26,6 +28,81 @@ export function secretsInArgv(text) {
 }
 
 const RUNNER_INPUT = "${{ fromJSON(inputs.runner) }}";
+/** The GitHub-hosted labels this repository's own workflows run on: a closed list. */
+export const HOSTED_LABELS = ["ubuntu-24.04"];
+
+/**
+ * Where the jobs of one workflow run: the faults, without the file's name. The reading is closed, not a
+ * search for a bad word (review findings C16, 2026-11-10: a quoted key, an alias and a quoted `runner`
+ * passed a guard that looked for `runs-on:` lines naming self-hosted):
+ * - every job is a block mapping under `jobs:` and holds, at its own indent, exactly one `runs-on` line
+ *   or one `uses` line (a call to a reusable workflow); a job in flow style, a job that is an alias and a
+ *   job whose `runs-on` key is quoted or escaped have neither, and are refused for that;
+ * - the value of `runs-on` is one of HOSTED_LABELS, as written, on the same line. A list, a group, a label
+ *   of one's own (`nas`), an alias and an expression are all outside the list. The one exemption is
+ *   send.yml's `${{ fromJSON(inputs.runner) }}`: that workflow runs in its caller's repository;
+ * - the text `runs-on` appears nowhere else outside a comment, so no second spelling of the key exists;
+ * - no anchor, no alias, and no \x, \u or \U escape anywhere outside a comment: each one is a way to
+ *   write a key or a value the lines above would not read;
+ * - the word self-hosted appears nowhere (in send.yml: nowhere outside a comment, its header gives the
+ *   word as an example for its callers);
+ * - outside send.yml, no `runner` key in any spelling: this repository never passes send.yml's input.
+ */
+export function runnerFaults(f, t) {
+  const out = [];
+  const isSend = f === "send.yml";
+  const lines = t.split("\n");
+  const comment = (l) => /^\s*#/.test(l);
+  const code = lines.filter((l) => !comment(l));
+  if (/self-hosted/.test(isSend ? code.join("\n") : t)) out.push("a self-hosted runner in a public repository");
+  for (const l of code) {
+    if (/(?:^|:\s+|-\s+|[[{,]\s*)[&*][^\s,[\]{}&*]+(?=\s|$|[,\]}])/.test(l)) out.push(`an anchor or an alias (${l.trim()}): what it stands for is not read where it is used`);
+    if (/\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/.test(l)) out.push(`an escaped character (${l.trim()}): a key or a value could be spelled past the guard`);
+    if (!isSend && /(?:^|[\s{,])["']?runner["']?\s*:/.test(l)) out.push("this repository calls send.yml with a runner (it is public: hosted runners only)");
+  }
+  const start = lines.findIndex((l) => /^jobs:\s*(?:#.*)?$/.test(l));
+  if (start < 0) { out.push("no `jobs:` block found (the guard would prove nothing)"); return out; }
+  let end = lines.findIndex((l, i) => i > start && /^\S/.test(l) && !comment(l));
+  if (end < 0) end = lines.length;
+  const accepted = new Set();
+  let job = null;
+  const close = () => {
+    if (!job) return;
+    if (job.runsOn + job.uses !== 1) out.push(`job ${job.name}: where it runs is not written out (one \`runs-on\` or one \`uses\` at the job's indent, found ${job.runsOn} and ${job.uses})`);
+  };
+  for (let i = start + 1; i < end; i++) {
+    const l = lines[i];
+    if (!l.trim() || comment(l)) continue;
+    if (/^ {2}\S/.test(l)) {
+      close();
+      const m = /^ {2}([A-Za-z_][\w-]*):\s*(?:#.*)?$/.exec(l);
+      if (!m) { out.push(`a job that is not a block mapping (${l.trim()}): its runs-on is not read`); job = null; continue; }
+      job = { name: m[1], runsOn: 0, uses: 0 };
+      continue;
+    }
+    if (/^ ?\S/.test(l)) { out.push(`a line of \`jobs:\` at an odd indent (${l.trim()})`); continue; }
+    if (!job) continue;
+    if (/^ {4}uses:\s*\S/.test(l)) job.uses++;
+    const r = /^ {4}runs-on:(.*)$/.exec(l);
+    if (!r) continue;
+    job.runsOn++;
+    accepted.add(i);
+    const v = r[1].replace(/\s+#.*$/, "").trim();
+    if (isSend && v === RUNNER_INPUT) continue;
+    if (HOSTED_LABELS.includes(v)) continue;
+    if (/self-hosted/.test(v)) continue; // named above
+    if (/\$\{\{/.test(v)) out.push(`runs-on is an expression (${v}): it could resolve to a self-hosted runner`);
+    else out.push(`runs-on is not a hosted label of the closed list (${v || "a block"}; accepted: ${HOSTED_LABELS.join(", ")})`);
+  }
+  close();
+  lines.forEach((l, i) => { if (!comment(l) && /runs-on/.test(l) && !accepted.has(i)) out.push(`\`runs-on\` outside a job's own line (${l.trim()}): a second spelling of the key`); });
+  if (isSend) {
+    if (!accepted.size) out.push("no runs-on found (the guard would prove nothing)");
+    if (!/^      runner: \{ type: string, default: '"ubuntu-24\.04"',/m.test(t)) out.push("the `runner` input does not default to \"ubuntu-24.04\"");
+  }
+  return [...new Set(out)];
+}
+
 const DIR = process.env.RW_WORKFLOWS_DIR ?? new URL("../.github/workflows/", import.meta.url).pathname;
 const faults = [];
 for (const f of readdirSync(DIR).filter((x) => /\.ya?ml$/.test(x))) {
@@ -36,19 +113,8 @@ for (const f of readdirSync(DIR).filter((x) => /\.ya?ml$/.test(x))) {
     if (!/@[0-9a-f]{40}$/.test(u)) faults.push(`${f}: ${u} is not pinned by commit`);
   }
   if (/pull_request_target|workflow_run/.test(t)) faults.push(`${f}: pull_request_target or workflow_run`);
-  // where a job runs: a hosted label, written out. An expression could resolve to a self-hosted runner, so
-  // none is accepted, except send.yml's `runner` input: that workflow runs in its caller's repository, on
-  // the caller's runners, and its default stays hosted. This repository never passes the input.
-  const runsOn = [...t.matchAll(/^\s*runs-on:\s*(.*?)\s*$/gm)].map((m) => m[1]);
-  for (const r of runsOn) {
-    if (f === "send.yml" && r === RUNNER_INPUT) continue;
-    if (/self-hosted/.test(r)) faults.push(`${f}: a self-hosted runner in a public repository`);
-    else if (/\$\{\{/.test(r)) faults.push(`${f}: runs-on is an expression (${r}): it could resolve to a self-hosted runner`);
-  }
-  if (f === "send.yml") {
-    if (!runsOn.length) faults.push("send.yml: no runs-on found (the guard would prove nothing)");
-    if (!/^      runner: \{ type: string, default: '"ubuntu-24\.04"',/m.test(t)) faults.push("send.yml: the `runner` input does not default to \"ubuntu-24.04\"");
-  } else if (/uses:\s*\S*\/send\.yml/.test(t) && /^\s*(?:with:\s*\{[^}]*\b)?runner:/m.test(t)) faults.push(`${f}: this repository calls send.yml with a runner (it is public: hosted runners only)`);
+  // where a job runs (see runnerFaults): a hosted label of the closed list, written out in block style
+  for (const fault of runnerFaults(f, t)) faults.push(`${f}: ${fault}`);
   if (/^(deploy|rollback)\.yml$/.test(f) && !/vars\.RW_DEPLOY_ENABLED == 'true'/.test(t)) faults.push(`${f}: not gated by vars.RW_DEPLOY_ENABLED`);
   // push-image builds and pushes before any container exists (ADR-0016): by hand only, from main only
   if (f === "push-image.yml" && (!/^on:\n  workflow_dispatch:\n(?! )/m.test(t) || !/github\.ref == 'refs\/heads\/main'/.test(t))) faults.push(`${f}: not manual-only from main`);
