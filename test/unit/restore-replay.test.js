@@ -296,3 +296,52 @@ test("every kind the security log receives is replayed, or left with its reason 
   assert.deepEqual([...kinds].filter((k) => !decided.includes(k)).sort(), [], "a kind the security log receives and the replay neither applies nor leaves with a reason");
   assert.deepEqual(decided.filter((k) => !kinds.has(k)).sort(), [], "a kind the replay names and nothing writes");
 });
+
+// ---------------------------------------------------------------- defect 6: a security log that cannot be read
+
+/** Makes one object of a tenant's security log listed and unreadable, as a bucket that lists a key and answers 404 on it. */
+function unreadable(h, tenant) {
+  const m = h.objects._map;
+  const key = [...m.keys()].filter((k) => k.startsWith(`tenants/${tenant}/security/`)).sort().pop();
+  m.has = (k) => k !== key && Map.prototype.has.call(m, k);
+  return key.slice(-31, -5);
+}
+
+test("the security log: an object that is listed and cannot be read, or is not an event, is refused with a code", async () => {
+  const h = harness();
+  const f = await founder(h);
+  assert.equal((await h.objects.securitySince(f.tenant, "")).length, 2, "the control: the log reads");
+  const id = unreadable(h, f.tenant);
+  const e = await h.objects.securitySince(f.tenant, "").then(() => null, (x) => x);
+  assert.equal(e?.code, "security-log-unreadable", `a refusal with its code, not ${e?.constructor.name}: ${e?.message}`);
+  assert.match(e.message, new RegExp(`^security-log-unreadable: object ${id} is listed and cannot be read$`));
+  assert.ok(!e.message.includes(f.tenant), "the message names the object, never the tenant");
+  const h2 = harness();
+  const f2 = await founder(h2);
+  h2.objects._map.set(`tenants/${f2.tenant}/security/${ulid(h2.clock.now())}.json`, Buffer.from("<Error>NoSuchBucket</Error>"));
+  assert.equal(await refusal(h2.objects.securitySince(f2.tenant, "")), "security-log-unreadable");
+});
+
+test("restore-replay is refused whole when one tenant's log cannot be read: nothing is written, the refusal is noted", async () => {
+  const h = harness();
+  const a = await founder(h, { prefix: "a" });
+  const bt = await founder(h, { prefix: "b" });
+  const b = backup(h);
+  await removePasskey(h, a, "a-2");
+  await removePasskey(h, bt, "b-2");
+  restore(h, b);
+  unreadable(h, bt.tenant);
+  const before = { ledger: h.store._state.ledger.length, sessions: [await openSessions(h, a.tenant), await openSessions(h, bt.tenant)] };
+
+  const e = await h.app.operator.restoreReplay({ since: b.since }).then(() => null, (x) => x);
+  assert.deepEqual({ ledger: h.store._state.ledger.length, sessions: [await openSessions(h, a.tenant), await openSessions(h, bt.tenant)] }, before, "no partial write: no session closed, no journal entry, in any tenant");
+  assert.equal((await passkey(h, a.tenant, "a-2")).removedAt, null, "no gesture replayed, in the tenant whose log reads either");
+  assert.equal(e?.code, "security-log-unreadable", `a refusal with its code, not ${e?.constructor.name}: ${e?.message}`);
+  assert.match(e.message, /^security-log-unreadable: the security log of 1 tenant\(s\) out of 2 cannot be read; nothing was replayed/);
+  const [note] = notes(h, "restore-replayed");
+  assert.deepEqual({ refused: note.detail.refused, failed: note.detail.failed, tenants: note.detail.report.map((r) => r.tenant) }, { refused: "security-log-unreadable", failed: 1, tenants: [bt.tenant] }, "the refusal is in the operator journal, with the tenant it names");
+  // the object store answers again: the same gesture replays both tenants
+  delete h.objects._map.has;
+  const report = await h.app.operator.restoreReplay({ since: b.since });
+  assert.deepEqual(report.map((r) => r.replayed), [1, 1]);
+});

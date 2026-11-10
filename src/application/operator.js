@@ -19,6 +19,8 @@ const operator = { type: "operator", id: "operateur" };
 // restore lost (a passkey added after the backup, then removed) applies to nothing. Each returns whether
 // it found something to act on.
 const when = (e) => Date.parse(e.at);
+/** The code of a replay refused because a tenant's security log cannot be read whole (the object store adapter throws it too). */
+export const SECURITY_LOG_UNREADABLE = "security-log-unreadable";
 
 /** What the events create: a reset or a recovery withdraws what existed before it, never what the log creates after it. */
 function created(events) {
@@ -269,12 +271,26 @@ export function operatorCases(ctx) {
    * After a database restore (PADR-0014 note, T24): close every session of every tenant, replay from the
    * object store the gestures after `since` (ULID order, the REPLAY table above), and say so in each
    * tenant's journal. A member left with no passkey gets a recovery opened at once; a tenant left with no
-   * member is reported `memberless`: the operator opens its bootstrap again.
+   * member is reported `memberless`: the operator opens its bootstrap again. Refused whole, before any
+   * write, when a tenant's security log cannot be read (`security-log-unreadable`).
    */
   async function restoreReplay({ since, headBefore = null, recoveryHash = null }) {
+    const tenants = await store.tx(null, (tx) => tx.tenantIds());
+    // Every tenant's log is read before the first write. A log that cannot be read whole refuses the
+    // gesture whole, with a code: nothing is closed, replayed or written to a tenant's journal on a log
+    // read in part, and the refusal is in the operator journal.
+    const logs = new Map(), unread = [];
+    for (const tenant of tenants) {
+      try { logs.set(tenant, await objects.securitySince(tenant, since)); }
+      catch (e) { unread.push({ tenant, failed: true, error: why(e) }); }
+    }
+    if (unread.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, refused: SECURITY_LOG_UNREADABLE, report: unread, failed: unread.length }));
+      throw Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: the security log of ${unread.length} tenant(s) out of ${tenants.length} cannot be read; nothing was replayed; first reason: ${unread[0].error}`), { code: SECURITY_LOG_UNREADABLE });
+    }
     const report = [];
-    for (const tenant of await store.tx(null, (tx) => tx.tenantIds())) {
-      const events = await objects.securitySince(tenant, since);
+    for (const tenant of tenants) {
+      const events = logs.get(tenant);
       const r = await store.tx(tenant, async (tx) => {
         let closed = 0, replayed = 0;
         for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
