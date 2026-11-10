@@ -141,3 +141,29 @@ test("a daily job that did not complete is read by /api/health, without a tenant
   h.clock.advance(27 * 3600 * 1000);
   assert.match((await verdict()).reasons.join(), /the daily job retention has not run since/);
 });
+
+// Review finding of 2026-11-10 (code review C6): the alert failed open. When rw.daily_jobs() cannot be read
+// (a grant not applied, the function missing after a partial deploy, a statement past its deadline),
+// /api/health says dailyJobs null with db ok, and the probe read null as nothing to report.
+test("the daily jobs' outcome that cannot be read raises the probe's alert: null with the database ok is not silence", async () => {
+  const h = harness();
+  let broken = true;
+  const real = h.store.tx.bind(h.store);
+  // the store answers everything but the read of the daily jobs, as a database without the grant would
+  h.store.tx = (tenant, fn) => real(tenant, (tx) => fn(new Proxy(tx, { get: (t, k) => (k === "dailyJobs" && broken ? () => { throw new Error("permission denied for function daily_jobs"); } : t[k]) })));
+  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
+  const c = compose(config, { clock: h.clock, log: silentLog, store: h.store, objects: memoryObjects(), authn: fakeAuthn(), verifier: { async verify() { throw new Error("no upload here"); } } });
+  await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
+  servers.push(c.http.server);
+  const read = async () => { const r = await fetch(`http://127.0.0.1:${c.http.server.address().port}/api/health`); return { status: r.status, health: await r.json() }; };
+  const first = await read();
+  assert.deepEqual([first.status, first.health.ok, first.health.db, first.health.dailyJobs], [200, true, "ok", null], "the service itself is up");
+  const v = probeVerdict({ healthStatus: first.status, health: first.health, version: { commit: "c0ffee" }, now: h.clock.now() });
+  assert.equal(v.ok, false);
+  assert.match(v.reasons.join(), /the daily jobs' last outcome cannot be read/);
+  // controls: once it reads again the alert clears; with the database down, the outage is the one reason
+  broken = false;
+  const second = await read();
+  assert.equal(probeVerdict({ healthStatus: second.status, health: second.health, version: { commit: "c0ffee" }, now: h.clock.now() }).ok, true);
+  assert.deepEqual(probeVerdict({ healthStatus: 503, health: { ok: false, db: "down", objectStore: "ok", dailyJobs: null }, version: { commit: "c0ffee" } }).reasons, ["health answered 503 (db down, objects ok)"]);
+});

@@ -95,7 +95,7 @@ test("the error window counts by minute and forgets after five", () => {
 });
 
 test("the probe alerts on an unavailable service and on an error rate above 5 % over at least 20 requests", () => {
-  const up = { ok: true, db: "ok", objectStore: "ok", errors: { windowSeconds: 300, requests: 100, serverErrors: 5, rate: 0.05 } };
+  const up = { ok: true, db: "ok", objectStore: "ok", errors: { windowSeconds: 300, requests: 100, serverErrors: 5, rate: 0.05 }, dailyJobs: { retention: { lastRun: null, ok: null }, "verify-chains": { lastRun: null, ok: null } } };
   assert.deepEqual(probeVerdict({ healthStatus: 200, health: up, version: { commit: "abc" } }), { ok: true, reasons: [] });
   const erring = { ...up, errors: { windowSeconds: 300, requests: 100, serverErrors: 6, rate: 0.06 } };
   assert.match(probeVerdict({ healthStatus: 200, health: erring, version: { commit: "abc" } }).reasons.join(), /error rate 6\.0 %/);
