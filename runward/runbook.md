@@ -202,7 +202,7 @@ After phase 1: no public endpoint (`run state show scaleway_rdb_instance.rw | gr
 
 What it proves: that someone who did not build this repository can, from this runbook alone, create the roles and migrate through the operator's gateway, start the service on PostgreSQL, open the two witness tenants, run the isolation suite and the daily chain check through the gateway, read the service's health, trace one request by its id, find a decision in the ADRs, and stop everything. It is the sequence of §12 step 5 and step 7 and of §7's isolation, on a stack that costs nothing and holds no real secret: every token and identifier below is drawn for the run, then thrown away. It rehearses locally the gestures that §12 step 5 and step 7 run against the hoster; ADR-0016 is settled only by those calls against the hoster, at the first deploy. Note, for each step, its verdict line, how long it took, and every place where you had to guess: the record is committed as `runward/redone-task.md` and pointed to from `runward/handover.md` §2.
 
-**Prerequisites**: a checkout of this repository at the commit to rehearse, `npm ci` done; Node.js 22, bash, curl, jq and openssl; a throwaway PostgreSQL 16 or 17 that you may destroy, reachable without TLS, trusting connections without a password, its address in `PG` (host:port). Where Docker runs, for example: `docker run -d --rm --name rw-rehearsal -p 127.0.0.1:55432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine`, then `PG=127.0.0.1:55432`. If the steps themselves run in a container (for example `node:22`), put it and the server on one Docker network, start the server without `-p`, and set `PG=rw-rehearsal:5432`; `jq` is not in the `node:22` image (`apt-get update && apt-get install -y jq` inside it), and on a host with SELinux the checkout is mounted with `:Z`. Run every step from the repository's root, in one bash shell.
+**Prerequisites**: a checkout of this repository at the commit to rehearse, `npm ci` done; Node.js 22, bash, curl, jq and openssl; a throwaway PostgreSQL 16 or 17 that you may destroy, reachable without TLS, trusting connections without a password, its address in `PG` (host:port). Where Docker runs, for example: `docker run -d --rm --name rw-rehearsal -p 127.0.0.1:55432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres@sha256:3540c0362c809df084ffac0ae69fe794515f9de92692f02178bcdce0ef0302ac` (the digest of `ci.yml`), then `PG=127.0.0.1:55432`. If the steps themselves run in a container (for example `node:22`), put it and the server on one Docker network, start the server without `-p`, and set `PG=rw-rehearsal:5432`; `jq` is not in the `node:22` image (`apt-get update && apt-get install -y jq` inside it), and on a host with SELinux the checkout is mounted with `:Z`. Run every step from the repository's root, in one bash shell.
 
 1. **The database and the three login roles**, as the server's superuser (what the hoster's API did at phase 1; `db/roles.sql` is the reference). One statement per call: `create database` cannot share a transaction.
    ```sh
@@ -228,7 +228,7 @@ What it proves: that someone who did not build this repository can, from this ru
      RW_OPERATOR_URL_MAINT="postgres://rw_maint@$PG/runward_hosted" RW_OPERATOR_URL_APP="postgres://rw_app@$PG/runward_hosted" \
      S3_ENDPOINT=https://s3.invalid S3_REGION=fr-par S3_BUCKET=rehearsal S3_ACCESS_KEY_ID=rehearsal S3_SECRET_ACCESS_KEY=rehearsal \
      node src/operator-gateway.js > "$R/gateway.log" 2>&1 & GW=$!
-   sleep 1; curl -s http://127.0.0.1:8090/health; echo
+   for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:8090/health && break; sleep 0.2; done; curl -s http://127.0.0.1:8090/health; echo
    ```
    Verify: `{"ok":true}`.
 4. **The two first gestures of a deploy**, through the gateway (§8, §12 step 5):
@@ -244,7 +244,7 @@ What it proves: that someone who did not build this repository can, from this ru
    env NODE_ENV=development PORT=8787 RW_ORIGIN=http://localhost:8787 RW_EXTRA_HOSTS=127.0.0.1 RW_COMMIT=rehearsal \
      DATABASE_URL="postgres://rw_app@$PG/runward_hosted" DATABASE_SSL=disable RW_OBJECTS=memory \
      node src/main.js > "$R/service.log" 2>&1 & SV=$!
-   sleep 1; head -1 "$R/service.log" | jq -c '{event, detail: {store: .detail.store, objects: .detail.objects}}'
+   for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:8787/api/health && break; sleep 0.2; done; head -1 "$R/service.log" | jq -c '{event, detail: {store: .detail.store, objects: .detail.objects}}'
    ```
    Verify: `{"event":"start","detail":{"store":"postgres","objects":"memory"}}`.
 6. **Observe** (§10):
@@ -281,8 +281,9 @@ What it proves: that someone who did not build this repository can, from this ru
 12. **Stop everything**:
     ```sh
     kill "$SV" "$GW"; wait "$SV" "$GW"; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/api/health
+    rm -r "$R"; ls "$R" 2>/dev/null | wc -l
     ```
-    Verify: `000` (nothing answers any more); then drop the throwaway server (`docker stop rw-rehearsal`) and `rm -r "$R"`.
+    Verify: `000` (nothing answers any more), then `0`. Then drop the throwaway server (`docker stop rw-rehearsal`); in the container variant, also the steps' container, its volume and the network (`docker rm -f -v`, `docker volume rm`, `docker network rm`), and the images pulled for the run if you want them gone (`docker rmi`).
 
 ## 14. Rerun the evaluation
 
@@ -348,14 +349,14 @@ What it proves: that after the database is replaced by a backup, `restore-replay
      RW_OPERATOR_URL_ADMIN="postgres://postgres@$PG/runward_hosted" RW_OPERATOR_URL_OWNER="postgres://rw_owner@$PG/runward_hosted" \
      RW_OPERATOR_URL_MAINT="postgres://rw_maint@$PG/runward_hosted" RW_OPERATOR_URL_APP="postgres://rw_app@$PG/runward_hosted" \
      node src/operator-gateway.js > "$R/gateway.log" 2>&1 & GW=$!
-   sleep 1; curl -s http://127.0.0.1:8090/health; echo
+   for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:8090/health && break; sleep 0.2; done; curl -s http://127.0.0.1:8090/health; echo
    export SCW_SECRET_KEY=drill RW_OPERATOR_TOKEN="$T" RW_OPERATOR_URL=http://127.0.0.1:8090
    scripts/operator-call.sh roles; scripts/operator-call.sh migrate; lap 3
    ```
    Verify: `{"ok":true}`, then `operator-call: roles answered HTTP 200 (gesture=roles ok=true exit=0)` and the same line for `migrate`.
 4. **The service, on PostgreSQL and on the object store**:
    ```sh
-   serve() { env PORT=8787 RW_EXTRA_HOSTS=127.0.0.1 RW_COMMIT=drill DATABASE_URL="postgres://rw_app@$PG/runward_hosted" node src/main.js >> "$R/service.log" 2>&1 & SV=$!; sleep 1; }
+   serve() { env PORT=8787 RW_EXTRA_HOSTS=127.0.0.1 RW_COMMIT=drill DATABASE_URL="postgres://rw_app@$PG/runward_hosted" node src/main.js >> "$R/service.log" 2>&1 & SV=$!; for i in $(seq 50); do curl -s -o /dev/null http://127.0.0.1:8787/api/health && break; sleep 0.2; done; }
    serve; head -1 "$R/service.log" | jq -c '{event, detail: {store: .detail.store, objects: .detail.objects}}'
    curl -s http://127.0.0.1:8787/api/health | jq -c '{ok, db, objectStore}'; lap 4
    ```
@@ -466,7 +467,7 @@ What it proves: that after the database is replaced by a backup, `restore-replay
     kill "$SV" "$GW"; wait "$SV" "$GW"; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/api/health
     echo "total: $(( $(node -p 'Date.now()') - START )) ms"; rm -r "$R"; ls "$R" 2>/dev/null | wc -l
     ```
-    Verify: `000`, `total: … ms`, `0`. Then drop the throwaway servers, their volumes and their network (`docker rm -f -v rw-drill-node rw-drill-s3 rw-drill-pg; docker volume rm rw-drill-work; docker network rm rw-drill-net`) and check that nothing is left: `docker ps -a --filter name=rw-drill -q | wc -l` and `docker volume ls -q --filter name=rw-drill | wc -l` both print `0`.
+    Verify: `000`, `total: … ms`, `0`. Then drop the throwaway servers, their volumes and their network (`docker rm -f -v rw-drill-node rw-drill-s3 rw-drill-pg; docker volume rm rw-drill-work; docker network rm rw-drill-net`) and check that nothing is left: `docker ps -a --filter name=rw-drill -q | wc -l` and `docker volume ls -q --filter name=rw-drill | wc -l` both print `0`. The images pulled for the run stay on the host unless removed with `docker rmi`.
 
 **What the time means**: steps 9 and 10 are the restore itself (the base replaced, then the replay) on three small tenants; the hoster's own restore of a managed backup replaces `pg_restore` in production and is not timed here. **What the drill does not exercise**, and what does: an erasure of content after T (the object store has lost bytes the restored database still counts) is replayed in `test/pg/restore-replay.test.js` and `test/unit/restore-replay.test.js`; a recovery redeemed after T, a bootstrap redeemed after T, `--recovery-hash` for a member left without a passkey, a tenant whose replay fails and a security log that cannot be read are in `test/unit/restore-replay.test.js` (a recovery is usable 24 hours after it opens, which a drill does not wait for). The index of a tenant whose content was erased after T is republished by the service's next gesture or upload of that tenant, not by the replay.
 
