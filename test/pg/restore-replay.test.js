@@ -151,8 +151,13 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   // tenant B: the erased content is erased again, and the next upload is assembled without it
   assert.deepEqual({ closed: of(B).closed, replayed: of(B).replayed }, { closed: 1, replayed: 1 });
   assert.equal((await rows(B.tenant, "upload")).filter((u) => !u.erasedAt).length, 0);
+  // the version of its index built from that content, which the restore gave back whole, holds no byte again
+  // (rw_maint's grant on rw.fleet_index is that erasure), and no erased index is served meanwhile
+  assert.deepEqual((await rows(B.tenant, "fleet_index")).map((v) => [v.version, v.bytes.length, v.erasedAt != null]), [[1, 0, true]]);
+  assert.equal(await h.app.reading.index(B.tenant), null);
   const sent = await send(h, { repository: "drill/beta", repository_id: "7001", run_number: "7", run_id: "40000000007" }, { mission: "drill-beta" });
   assert.equal(sent.status, 201);
+  assert.equal((await h.app.reading.index(B.tenant)).version, 2, "the next upload publishes a version after the erased one");
 
   // each tenant's note carries the head of its own journal before the loss (the drill found tenant A's in the three)
   for (const f of [A, B, C]) {

@@ -4,7 +4,7 @@
 import { Refusal } from "../domain/refusals.js";
 import { verifyChain } from "../domain/ledger.js";
 import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE } from "../domain/repository.js";
-import { iso, sha256 } from "./context.js";
+import { iso, sha256, manifestExports } from "./context.js";
 
 const PAGE = 50;
 
@@ -96,7 +96,13 @@ export function readingCases(ctx, identity) {
     });
   }
 
-  /** Build the archive: fleet.json and index of each version, the exports, the journal, replay.json. */
+  /**
+   * Build the archive: fleet.json and index of each version, the exports, the journal, replay.json.
+   * Nothing erased comes back through it: a version's index.json is packed only when its bytes were not
+   * erased and every export it was built from is still held (the rule of context.js#eraseIndexVersions,
+   * read here too, so that an archive never waits for the pass that applies it). Such a version keeps its
+   * fleet.json and its digests in replay.json, which says `indexErased`.
+   */
   async function buildArchive(tx) {
     const versions = (await tx.list("fleet_index")).sort((a, b) => a.version - b.version);
     const uploads = (await tx.list("upload")).filter((u) => !u.erasedAt && u.rank !== "pending");
@@ -117,23 +123,22 @@ export function readingCases(ctx, identity) {
       files.push({ name, bytes: b });
     }
     const erased = new Set((await tx.list("upload")).filter((u) => u.erasedAt).map((u) => u.sha256));
+    const indexKept = (v) => !v.erasedAt && v.bytes.length > 0 && manifestExports(v.manifest).every((f) => seen.has(f));
     const replay = {
       format: "runward-hosted-replay/0",
       how: "for each version: copy versions/<version>/fleet.json next to exports/, run `runward-fleet build fleet.json` with the runward-fleet version named, and compare the sha256 of index.json",
       head: chain.head ?? null,
       chainOk: chain.ok,
       versions: versions.map((v) => {
-        const doc = JSON.parse(v.manifest.toString("utf8"));
-        const needs = doc.missions.flatMap((m) => Object.values(m.exports ?? {}).map((e) => e.file));
-        const missing = needs.filter((f) => !seen.has(f));
-        return { version: v.version, seq: v.seq, indexSha256: v.sha256, manifestSha256: v.manifestSha256, runwardFleet: v.fleetVersion, runwardFleetArchiveSha256: v.fleetArchiveSha256, replayable: missing.length === 0, ...(missing.length ? { why: [...erased].length ? "content erased" : "bytes missing" } : {}) };
+        const missing = manifestExports(v.manifest).filter((f) => !seen.has(f));
+        return { version: v.version, seq: v.seq, indexSha256: v.sha256, manifestSha256: v.manifestSha256, runwardFleet: v.fleetVersion, runwardFleetArchiveSha256: v.fleetArchiveSha256, replayable: missing.length === 0, ...(missing.length ? { why: [...erased].length ? "content erased" : "bytes missing" } : {}), ...(indexKept(v) ? {} : { indexErased: true }) };
       }),
     };
     const out = [
-      { name: "README.txt", bytes: Buffer.from("runward hosted export. replay.json says, for each published index, which runward-fleet version rebuilds it from versions/<version>/fleet.json and exports/. journal.jsonl is the tenant's chained journal, one canonical entry per line.\n") },
+      { name: "README.txt", bytes: Buffer.from("runward hosted export. replay.json says, for each published index, which runward-fleet version rebuilds it from versions/<version>/fleet.json and exports/. journal.jsonl is the tenant's chained journal, one canonical entry per line. A version whose content was erased keeps its fleet.json and its digests; its index.json is not in the archive (replay.json: indexErased).\n") },
       { name: "replay.json", bytes: Buffer.from(`${JSON.stringify(replay, null, 2)}\n`) },
       { name: "journal.jsonl", bytes: Buffer.from(entries.map((e) => JSON.stringify({ seq: e.seq, prev: e.prev, hash: e.hash, body: e.body })).join("\n") + (entries.length ? "\n" : "")) },
-      ...versions.flatMap((v) => [{ name: `versions/${v.version}/fleet.json`, bytes: v.manifest }, { name: `versions/${v.version}/index.json`, bytes: v.bytes }]),
+      ...versions.flatMap((v) => [{ name: `versions/${v.version}/fleet.json`, bytes: v.manifest }, ...(indexKept(v) ? [{ name: `versions/${v.version}/index.json`, bytes: v.bytes }] : [])]),
       ...(versions.length ? [{ name: "fleet.json", bytes: versions[versions.length - 1].manifest }] : []),
       ...files,
     ];

@@ -14,7 +14,7 @@ export const TABLES = {
   mission: { key: ["id"], cols: { id: "s", repositoryRef: "u", path: "s", addedAt: "t", removedAt: "t" } },
   upload: { key: ["id"], cols: { id: "u", repositoryRef: "u", mission: "s", kind: "s", runId: "s", runNumber: "s", runAttempt: "s", epoch: "n", sha256: "s", size: "n", rank: "s", seq: "n", commit: "s", claims: "j", receivedAt: "t", erasedAt: "t" } },
   blob: { key: ["sha256"], cols: { sha256: "s", refs: "n", erasedAt: "t" } },
-  fleet_index: { key: ["version"], cols: { version: "n", sha256: "s", bytes: "b", manifestSha256: "s", manifest: "b", fleetVersion: "s", fleetArchiveSha256: "s", seq: "n", publishedAt: "t" } },
+  fleet_index: { key: ["version"], cols: { version: "n", sha256: "s", bytes: "b", manifestSha256: "s", manifest: "b", fleetVersion: "s", fleetArchiveSha256: "s", seq: "n", publishedAt: "t", erasedAt: "t" } },
   reader: { key: [], cols: { authorizedAt: "t", withdrawnAt: "t" } },
   archive: { key: ["id"], cols: { id: "u", preparedAt: "t", size: "n", sha256: "s", contains: "j", erasedAt: "t" } },
 };

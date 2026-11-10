@@ -1,0 +1,217 @@
+// Erasure reaches the published versions of the index, against a real PostgreSQL (ADR-0009; design
+// decision D5 of 2026-11-10, lot E1; db/migrations/0006). What the in-memory suite
+// (test/unit/erasure.test.js) cannot show is shown here: the erasure holds within the grants of rw_app
+// (the service) and of rw_maint (the retention job), under the forced row level security, and the
+// database itself holds a published version to what it is (the check and the trigger of 0006). The
+// content is looked for twice: through the application, as the tenant reads it, and as the server's
+// superuser, across every tenant, so that a row the row level security hides is seen too.
+// Needs PG_ADMIN_URL (a superuser of a throwaway server). Run on the NAS, never against a real base.
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { randomBytes, randomUUID } from "node:crypto";
+import postgres from "postgres";
+import { migrate } from "../../scripts/migrate.mjs";
+import { postgresStore } from "../../src/adapters/store/postgres.js";
+import { harness, founder, gesture, sha, contentLeft, withoutIndexErasure, erasureScenario, GONE, KEEP, BRAVO } from "../helpers.js";
+import { replay } from "../../scripts/replay-export.mjs";
+import { untar } from "../../src/adapters/archive/tar.js";
+import { verifyChain } from "../../src/domain/ledger.js";
+
+const ADMIN = process.env.PG_ADMIN_URL;
+if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
+const DB = `rw_erasure_${randomBytes(4).toString("hex")}`;
+const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.password = ""; u.pathname = `/${DB}`; return u.toString(); };
+const refusal = async (p) => { try { await p; return null; } catch (e) { return e.code ?? e.message; } };
+const tok = () => randomBytes(32).toString("base64url");
+
+// One application on one object store; its store connects as the role of who acts: rw_app for the
+// service, rw_maint for the operator's gestures and the daily jobs. `plant.on` makes it the store of the
+// planted control (index versions never emptied: the erasure of before 0006).
+let admin, adminDb, h, role = "rw_app";
+const open = new Map();
+const pool = () => { if (!open.has(role)) open.set(role, postgresStore({ url: urlAs(role), ssl: false })); return open.get(role); };
+const closeAll = async () => { for (const s of open.values()) await s.close(); open.clear(); };
+const plant = { on: false };
+const store = withoutIndexErasure({ kind: "postgres", tx: (tenant, fn) => pool().tx(tenant, fn), newId: () => randomUUID(), ping: () => pool().ping(), close: closeAll }, plant);
+async function operator(fn) { role = "rw_maint"; try { return await fn(h.app.operator); } finally { role = "rw_app"; } }
+
+before(async () => {
+  if (!ADMIN) return;
+  admin = postgres(ADMIN, { max: 1, onnotice: () => {} });
+  await admin.unsafe(`create database ${DB}`);
+  for (const r of ["rw_owner login", "rw_resolve nologin", "rw_app login nobypassrls", "rw_maint login nobypassrls"]) {
+    const [name] = r.split(" ");
+    const [x] = await admin`select 1 from pg_roles where rolname = ${name}`;
+    if (!x) await admin.unsafe(`create role ${r}`);
+  }
+  await admin.unsafe("grant rw_resolve to rw_owner");
+  await admin.unsafe(`grant create, connect on database ${DB} to rw_owner; grant connect on database ${DB} to rw_app, rw_maint`);
+  process.env.DATABASE_SSL = "disable";
+  await migrate(urlAs("rw_owner"), { log: () => {} });
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
+  adminDb = postgres(u.toString(), { max: 1, onnotice: () => {} });
+  h = harness({ store, realTime: true, config: { jobRetryWaits: [0, 0] } });
+});
+after(async () => {
+  if (!ADMIN) return;
+  await closeAll();
+  await adminDb?.end();
+  await admin.unsafe(`drop database if exists ${DB} with (force)`);
+  await admin.end();
+});
+
+async function tenant(prefix) {
+  const t = tok();
+  const o = await operator((op) => op.openBootstrap({ hash: sha(Buffer.from(t)) }));
+  return founder(h, { prefix, token: t, tenant: o.tenant });
+}
+const session = (f) => h.app.identity.sessionFrom(f.token);
+async function exported(f) {
+  await gesture(h, f.session, "export", "");
+  return h.app.reading.prepareExport(await session(f), {});
+}
+async function erase(f, repository) {
+  await gesture(h, f.session, "content-erase", repository);
+  return h.app.repositories.eraseContent(await session(f), repository, {});
+}
+/** The versions of a tenant as the table holds them, read by the superuser (no row level security). */
+const versions = async (t) => adminDb`select version, octet_length(bytes)::int as bytes, erased_at is not null as erased, sha256, manifest_sha256, seq::int as seq, published_at, encode(sha256(bytes), 'hex') as bytes_sha256, encode(sha256(manifest), 'hex') as manifest_bytes_sha256 from rw.fleet_index where tenant_id = ${t} order by version`.then((rows) => rows.map((r) => ({ ...r })));
+const shape = (rows) => rows.map((v) => ({ version: v.version, bytes: v.bytes > 0, erased: v.erased }));
+/** Every row of rw.fleet_index, of any tenant, whose bytes hold one of the markers: read by the superuser. */
+async function inAnyVersion(markers) {
+  const out = [];
+  for (const m of markers) for (const r of await adminDb`select tenant_id, version from rw.fleet_index where position(convert_to(${m}, 'UTF8') in bytes) > 0 order by tenant_id, version`) out.push(`${r.tenant_id} version ${r.version}: ${m}`);
+  return out;
+}
+
+test("on PostgreSQL, as rw_app: erasing a repository's content empties every version built from it, in the table itself; the archive brings nothing back; another tenant is untouched", async () => {
+  const A = await tenant("a"), B = await tenant("b");
+  const { gone } = await erasureScenario(h, A, B);
+  const before = await versions(A.tenant), beforeB = await versions(B.tenant);
+  assert.deepEqual(before.map((v) => [v.version, v.bytes > 0]), [[1, true], [2, true], [3, true], [4, true], [5, true]]);
+  const old = await exported(A);
+  // the control of both searches: before the erasure they find the content
+  assert.deepEqual(await inAnyVersion(GONE), [`${A.tenant} version 4: GONE-RUN-1`, `${A.tenant} version 5: GONE-RUN-2`]);
+  const found = await contentLeft(h, A.tenant, GONE, old.bytes);
+  for (const where of ["fleet_index version 4 bytes: GONE-RUN-1", "fleet_index version 5 bytes: GONE-RUN-2", "object sha256: GONE-RUN-2", "object archives: GONE-RUN-2", "archive versions/5/index.json: GONE-RUN-2"]) assert.ok(found.includes(where), `${where}: ${JSON.stringify(found)}`);
+
+  const out = await erase(A, gone.id);
+  const now = await versions(A.tenant);
+  assert.deepEqual(shape(now), [
+    { version: 1, bytes: true, erased: false }, { version: 2, bytes: true, erased: false },
+    { version: 3, bytes: false, erased: true }, { version: 4, bytes: false, erased: true }, { version: 5, bytes: false, erased: true },
+    { version: 6, bytes: true, erased: false },
+  ], "the versions built from the repository hold no byte in the table");
+  for (const v of before) {
+    const n = now.find((x) => x.version === v.version);
+    assert.deepEqual({ sha256: n.sha256, manifestSha256: n.manifest_sha256, seq: n.seq, publishedAt: n.published_at.getTime(), manifest: n.manifest_bytes_sha256 }, { sha256: v.sha256, manifestSha256: v.manifest_sha256, seq: v.seq, publishedAt: v.published_at.getTime(), manifest: v.manifest_bytes_sha256 }, `version ${v.version} keeps its digests, its seq and its fleet.json`);
+  }
+  for (const v of now.filter((x) => !x.erased)) assert.equal(v.bytes_sha256, v.sha256, `version ${v.version}: the bytes kept are the bytes published`);
+
+  const fresh = await exported(A);
+  assert.deepEqual(await inAnyVersion(GONE), [], "no row of rw.fleet_index, of any tenant, holds a byte of the erased content");
+  assert.deepEqual(await contentLeft(h, A.tenant, GONE, fresh.bytes), [], "nor does a version, an object, the journal or the archive, as the tenant reads them");
+  assert.equal(await refusal(h.app.reading.downloadExport(await session(A), old.id)), "not-found", "the archive prepared before the erasure went with it");
+  const names = untar(fresh.bytes).map((f) => f.name);
+  for (const n of [3, 4, 5]) assert.deepEqual([names.includes(`versions/${n}/index.json`), names.includes(`versions/${n}/fleet.json`)], [false, true], `version ${n}: no index.json in the archive, its fleet.json stays`);
+  const plan = JSON.parse(untar(fresh.bytes).find((f) => f.name === "replay.json").bytes.toString("utf8"));
+  assert.deepEqual(plan.versions.map((v) => [v.version, v.replayable, v.indexErased ?? false]), [[1, true, false], [2, true, false], [3, false, true], [4, false, true], [5, false, true], [6, true, false]]);
+  assert.equal(replay(fresh.bytes, "0.46.0").ok, true);
+  const entries = await h.store.tx(A.tenant, (tx) => tx.ledgerAll());
+  const entry = entries.find((e) => e.seq === out.entry.seq);
+  assert.deepEqual([entry.body.what, entry.body.detail.indexVersions, entry.body.detail.indexVersion], ["content-erased", [3, 4, 5], 6]);
+  assert.equal(verifyChain(entries).ok, true);
+  assert.equal((await h.app.reading.index(A.tenant)).version, 6);
+  assert.ok((await contentLeft(h, A.tenant, KEEP)).includes("fleet_index version 6 bytes: KEEP-RUN-1"), "the tenant's other repository keeps its content");
+
+  // the other tenant: every row of its versions is what it was, and its content is still there
+  assert.deepEqual(await versions(B.tenant), beforeB, "nothing of the other tenant's versions moved");
+  const b = await exported(B);
+  const left = await contentLeft(h, B.tenant, BRAVO, b.bytes);
+  for (const where of ["fleet_index version 2 bytes: BRAVO-RUN-1", "object sha256: BRAVO-RUN-1", "archive versions/2/index.json: BRAVO-RUN-1"]) assert.ok(left.includes(where), `${where}: ${JSON.stringify(left)}`);
+  assert.equal(replay(b.bytes, "0.46.0").ok, true);
+});
+
+test("planted control on PostgreSQL: an erasure that does not reach the index versions (the code before 0006) leaves the content in rw.fleet_index, and both searches say so; the retention job, as rw_maint, then empties them", async () => {
+  const C = await tenant("c"), D = await tenant("d");
+  plant.on = true;
+  let gone;
+  try {
+    ({ gone } = await erasureScenario(h, C, D, { ids: ["8301", "8302", "8401"], org: "plant" }));
+    await erase(C, gone.id);
+  } finally { plant.on = false; }
+  assert.deepEqual(shape(await versions(C.tenant)).filter((v) => v.erased), [], "the planted erasure emptied no version");
+  assert.deepEqual(await inAnyVersion(GONE), [`${C.tenant} version 4: GONE-RUN-1`, `${C.tenant} version 5: GONE-RUN-2`], "the superuser's search sees the content left");
+  assert.deepEqual(await contentLeft(h, C.tenant, GONE), ["fleet_index version 4 bytes: GONE-RUN-1", "fleet_index version 5 bytes: GONE-RUN-2"], "and so does the tenant's: the first test's zero would be refused");
+  const stale = await exported(C);
+  assert.deepEqual((await contentLeft(h, C.tenant, GONE, stale.bytes)).filter((w) => w.startsWith("archive ")), [], "even then the archive packs no version built from an erased export");
+
+  // the retention job runs as rw_maint: its grant on rw.fleet_index is the erasure and nothing else
+  const beforeD = await versions(D.tenant);
+  const report = await operator((op) => op.retention());
+  const of = (f) => report.find((r) => r.tenant === f.tenant);
+  assert.deepEqual([of(C).indexVersions, of(C).failed ?? false, of(D).indexVersions], [3, false, 0], JSON.stringify(report));
+  assert.equal(report.some((r) => r.failed), false, JSON.stringify(report));
+  assert.deepEqual(await inAnyVersion(GONE), [], "no row of any tenant holds the content after the pass");
+  assert.deepEqual(shape(await versions(C.tenant)).filter((v) => v.erased).map((v) => v.version), [3, 4, 5]);
+  assert.deepEqual(await versions(D.tenant), beforeD, "the other tenant's versions did not move");
+  const entries = await h.store.tx(C.tenant, (tx) => tx.ledgerAll());
+  const last = entries[entries.length - 1].body;
+  assert.deepEqual([last.who.type, last.what, last.detail], ["operator", "content-erased", { digests: [], indexVersions: [3, 4, 5], reason: "retention" }]);
+  assert.equal(verifyChain(entries).ok, true);
+  assert.equal(await refusal(h.app.reading.downloadExport(await session(C), stale.id)), "not-found", "an archive prepared before the pass goes with the versions");
+  const again = await operator((op) => op.retention());
+  assert.deepEqual(again.map((r) => r.indexVersions).filter(Boolean), [], "a second pass erases nothing");
+});
+
+test("the database holds a published version to what it is: as rw_app and as rw_maint, the only change accepted is the erasure of its own tenant's bytes", async () => {
+  const E = await tenant("e"), F = await tenant("f");
+  await erasureScenario(h, E, F, { ids: ["8501", "8502", "8601"], org: "guard" });
+  const beforeE = await versions(E.tenant), beforeF = await versions(F.tenant);
+  for (const as of ["rw_app", "rw_maint"]) {
+    const sql = postgres(urlAs(as), { max: 1, onnotice: () => {} });
+    /** One statement as the role, inside the tenant; the transaction is rolled back whatever happens. */
+    const attempt = async (t, text) => {
+      let result = null;
+      await sql.begin(async (q) => {
+        await q`select set_config('app.tenant', ${t}, true)`;
+        const r = await q.unsafe(text);
+        result = `${r.count} row(s)`;
+        throw new Error("rollback");
+      }).catch((e) => { if (e.message !== "rollback") result = e.message; });
+      return result;
+    };
+    try {
+      for (const [text, why] of [
+        ["update rw.fleet_index set sha256 = repeat('0', 64) where version = 1", /written once/],
+        ["update rw.fleet_index set manifest = '{}'::bytea where version = 1", /written once/],
+        ["update rw.fleet_index set seq = seq + 1 where version = 1", /written once/],
+        ["update rw.fleet_index set published_at = now() where version = 1", /written once/],
+        ["update rw.fleet_index set bytes = '{}'::bytea where version = 1", /written once/],
+        ["update rw.fleet_index set bytes = '{}'::bytea, erased_at = now() where version = 1", /written once|fleet_index_erased_holds_no_byte/],
+        ["update rw.fleet_index set bytes = ''::bytea where version = 1", /written once/],
+        ["update rw.fleet_index set erased_at = now() where version = 1", /fleet_index_erased_holds_no_byte/],
+        ["delete from rw.fleet_index where version = 1", /permission denied/],
+        ["truncate rw.fleet_index", /permission denied/],
+      ]) assert.match(String(await attempt(E.tenant, text)), why, `${as}: ${text}`);
+      if (as === "rw_maint") assert.match(String(await attempt(E.tenant, "insert into rw.fleet_index (version, sha256, bytes, manifest_sha256, manifest, fleet_version, fleet_archive_sha256, seq) values (99, 'x', 'x'::bytea, 'x', 'x'::bytea, 'x', 'x', 1)")), /permission denied/, "rw_maint publishes nothing");
+      // the erasure itself is accepted for the tenant of the transaction, and reaches no other tenant's row
+      assert.equal(await attempt(E.tenant, "update rw.fleet_index set bytes = ''::bytea, erased_at = now() where version = 1"), "1 row(s)", `${as}: the erasure of its own tenant's version`);
+      assert.equal(await attempt(E.tenant, "update rw.fleet_index set bytes = ''::bytea, erased_at = now()"), `${beforeE.length} row(s)`, `${as}: an erasure without a predicate stops at the tenant's rows`);
+      assert.equal(await attempt(E.tenant, `update rw.fleet_index set bytes = ''::bytea, erased_at = now() where tenant_id = '${F.tenant}'`), "0 row(s)", `${as}: the other tenant's versions are out of reach`);
+      assert.equal(await attempt("", "update rw.fleet_index set bytes = ''::bytea, erased_at = now()"), "0 row(s)", `${as}: without a tenant, no row`);
+    } finally { await sql.end(); }
+  }
+  // an erasure is not undone, even by the role that made it
+  const sql = postgres(urlAs("rw_app"), { max: 1, onnotice: () => {} });
+  try {
+    const undone = await sql.begin(async (q) => {
+      await q`select set_config('app.tenant', ${E.tenant}, true)`;
+      await q`update rw.fleet_index set bytes = ''::bytea, erased_at = now() where version = 1`;
+      await q`update rw.fleet_index set erased_at = null where version = 1`;
+    }).then(() => "accepted", (e) => e.message);
+    assert.match(undone, /written once/);
+  } finally { await sql.end(); }
+  assert.deepEqual(await versions(E.tenant), beforeE, "every attempt was refused or rolled back: the tenant's versions are what they were");
+  assert.deepEqual(await versions(F.tenant), beforeF);
+});

@@ -160,7 +160,10 @@ export function repositoryCases(ctx, identity) {
     });
   }
 
-  /** Erase the bytes of a repository's uploads; the journal keeps the digests (PADR-0017 point 4). */
+  /**
+   * Erase the bytes of a repository's uploads, and of every published version of the index that was built
+   * from them; the journal keeps the digests (PADR-0017 point 4), the versions keep theirs.
+   */
   async function eraseIn(tx, s, id, requestId) {
     const ups = (await tx.list("upload", { repositoryRef: id })).filter((u) => !u.erasedAt);
     const digests = [...new Set(ups.map((u) => u.sha256))];
@@ -173,12 +176,13 @@ export function repositoryCases(ctx, identity) {
       await tx.update("blob", { sha256: d }, { refs, ...(refs === 0 ? { erasedAt: now() } : {}) });
       if (refs === 0) freed.push(d);
     }
+    const indexVersions = await ctx.eraseIndexVersions(tx, now());
     for (const a of await tx.list("archive", { erasedAt: null })) {
       if ((a.contains ?? []).some((d) => digests.includes(d))) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: now() }); }
     }
     for (const d of freed) await objects.removeBytes(tx.tenantId, d);
     await security(tx, { what: "content-erased", repository: id, digests });
-    return republish(tx, "content-erased", human(s), id, { digests });
+    return republish(tx, "content-erased", human(s), id, { digests, indexVersions });
   }
 
   async function withdrawConsent(s, id, { erase = false, requestId }) {
