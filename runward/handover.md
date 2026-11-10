@@ -10,7 +10,7 @@ The kit is written and indexed below. The redone task (runbook §13, the rehears
 |---|---|---|---|
 | Recovery runbook | `runbook.md` (the seven gestures in §0; the rehearsal in §13; the restore drill in §16) | §13 and §16 redone by the receiving side on 2026-11-10, every step as written; the other sections untested by it | yes, §13 and §16: §2 |
 | Agent charter (finalized) | `AGENTS.md` | finalized at hand-over, 2026-11-10 | read by every later session |
-| Architecture note + decision journal | `architecture.md` · `adr/` (ADR-0001 to ADR-0018) · `JOURNAL.md` | current; ADR-0018 proposed | — |
+| Architecture note + decision journal | `architecture.md` · `adr/` (ADR-0001 to ADR-0018) · `JOURNAL.md` | current; ADR-0018 accepted on 2026-11-10 | — |
 | Execution topology and usage registry | `execution-topology.md` | current (revised 2026-11-10: the operator's gateway) | — |
 | Threat model, observability schema, evaluation rubric | `governance/` | current (2026-11-10: T30 to T33; the retention and the operational view) | — |
 | Port contracts | `contracts/` (`index-assembler.md`, `port-contract.md`, `api-contract.json`) | current | — |

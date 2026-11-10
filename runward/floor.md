@@ -52,7 +52,7 @@ The six measures are made on the deployed service only (framing §3). None is me
 |---|---|---|
 | No deployment: S1 to S6 are not measured | the floor is not proven | pending: the paid resources of runbook §11 are created, within the budget the author approved on 2026-11-06 |
 | The invitation of a second member is not built (routes and screens) | none in the floor: PADR-0019 builds it at its trigger | PADR-0019, ratified 2026-11-06 |
-| runward-fleet pinned by a vendored tarball, not an attested release | ADR-0002 is the interim; the pin rests on a commit of main since 2026-11-10 | ADR-0002 accepted on 2026-11-08; the re-pin on main is ADR-0018, proposed |
+| runward-fleet pinned by a vendored tarball, not an attested release | ADR-0002 is the interim; the pin rests on a commit of main since 2026-11-10 | ADR-0002 accepted on 2026-11-08; the re-pin on main is ADR-0018, accepted on 2026-11-10 |
 | The passkey ceremonies were not exercised in a real browser with a real authenticator | the WebAuthn path is tested with a stand-in that checks the challenge | the author's gesture (runbook §12) |
 | The restore drill is not done | B14 of the critique stays open until it is | needs a throwaway DB-DEV-S instance, paid (runbook §11) |
 

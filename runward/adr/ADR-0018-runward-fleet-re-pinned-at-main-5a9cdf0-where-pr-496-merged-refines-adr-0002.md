@@ -1,7 +1,7 @@
 # ADR-0018: runward-fleet re-pinned at main@5a9cdf0, the commit where PR #496 merged (refines ADR-0002)
 
 **Date**: 2026-11-10
-**Status**: proposed, written by an agent session on 2026-11-10; the author decides
+**Status**: accepted 2026-11-10 by the author, after three independent readings recommended it (2026-11-10, at `7f00128`, `e60a0d4` and `b487818`); written by an agent session
 **Refines**: ADR-0002 (accepted 2026-11-08), which stays in force for everything this record does not change
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the two commits of runward, the tarballs, the lock), challenge, durable position
