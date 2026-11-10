@@ -85,7 +85,7 @@ test("the retention job is idempotent: a second pass erases nothing and journals
 });
 
 test("the operator's run of a daily job ends non-zero when a tenant failed or a chain is broken", async () => {
-  const { jobIncomplete, gestureStatus } = await import("../../src/operator.js");
+  const { jobIncomplete, gestureStatus, incompleteReason } = await import("../../src/operator.js");
   assert.equal(jobIncomplete([{ tenant: "a", erased: 0, attempts: 1 }]), false);
   assert.equal(jobIncomplete([{ tenant: "a", erased: 0 }, { tenant: "b", failed: true, error: "x", attempts: 3 }]), true);
   assert.equal(jobIncomplete([{ tenant: "a", ok: false, at: 3, why: "hash" }]), true);
@@ -93,6 +93,13 @@ test("the operator's run of a daily job ends non-zero when a tenant failed or a 
   // what a run prints is its status, never its result (the result is in the operator journal)
   assert.deepEqual(gestureStatus("verify-chains", [{ tenant: "a", ok: false, head: "h", why: "hash" }]), { gesture: "verify-chains", ok: false });
   assert.deepEqual(gestureStatus("open-bootstrap", { tenant: "t", link: "l", expiresAt: "x" }), { gesture: "open-bootstrap", ok: true });
+  // the reason of an incomplete run, for the gateway's log line at the hoster: a count and the first reason, no tenant
+  const tenant = "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70";
+  const reason = incompleteReason("retention", [{ tenant, erased: 0 }, { tenant, failed: true, error: "object store: DELETE 503", attempts: 3 }]);
+  assert.equal(reason, "operator: retention did not complete: 1 tenant(s) failed or broken; first reason: object store: DELETE 503");
+  assert.match(incompleteReason("verify-chains", [{ tenant, ok: false, at: 3, why: "hash does not match the entry" }]), /chain broken at seq 3 \(hash does not match the entry\)/);
+  assert.equal(incompleteReason("retention", [{ tenant, erased: 0 }]), null);
+  assert.equal(incompleteReason("open-bootstrap", { tenant, link: "l" }), null);
 });
 
 test("a daily job that did not complete is read by /api/health, without a tenant, and raises the hourly probe's alert until a run completes", async () => {

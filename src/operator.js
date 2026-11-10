@@ -20,6 +20,16 @@ export const jobIncomplete = (r) => Array.isArray(r) && r.some((x) => x.failed =
 /** What a run prints: the gesture and whether it completed, nothing of its result. */
 export const gestureStatus = (gesture, r) => ({ gesture, ok: !jobIncomplete(r) });
 
+/** Why a daily job did not complete, for the gateway's log line at the hoster: how many tenants, and the
+ *  first reason, never which tenant (the operator journal names it, inside the database). */
+export function incompleteReason(gesture, r) {
+  if (!jobIncomplete(r)) return null;
+  const bad = r.filter((x) => x.failed === true || x.ok === false);
+  const first = bad[0];
+  const why = first.failed ? first.error : `chain broken at seq ${first.at} (${first.why})`;
+  return `operator: ${gesture} did not complete: ${bad.length} tenant(s) failed or broken; first reason: ${String(why ?? "unknown").slice(0, 200)}`;
+}
+
 export function parse(argv) {
   const [gesture, ...rest] = argv;
   if (!GESTURES.includes(gesture)) throw new Error(`gesture must be one of: ${GESTURES.join(", ")}`);
@@ -52,6 +62,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // chain heads, and each gesture already writes it to the operator journal in the database. The gateway
   // keeps this output inside the private network; the reason of a refusal goes to stderr, which only its
   // log line at the hoster reads.
-  run().then((r) => { console.log(JSON.stringify(gestureStatus(gesture, r))); return c.store.close().then(() => { if (jobIncomplete(r)) process.exit(1); }); })
+  run().then((r) => {
+    console.log(JSON.stringify(gestureStatus(gesture, r)));
+    const why = incompleteReason(gesture, r);
+    if (why) console.error(why);
+    return c.store.close().then(() => { if (why) process.exit(1); });
+  })
     .catch((e) => { console.error(`operator: ${gesture} refused: ${e.message}`); c.store.close().finally(() => process.exit(1)); });
 }

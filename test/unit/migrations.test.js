@@ -32,7 +32,7 @@ test("migrations: a contracting statement is refused wherever it sits, in any sp
 // Review finding of 2026-11-10: two spellings that hid a drop between two pieces the lexer took for one
 // literal. Each is refused now, and each control beside it shows the lexer still reads the same construct
 // as data where the server does.
-test("migrations: an escape string with \\' and a double-quoted identifier with ' no longer hide a statement", () => {
+test("migrations: an escape string and a double-quoted identifier, each holding a quote, no longer hide a statement", () => {
   for (const sql of [
     "select E'\\''; drop table rw.ledger; select ' ';",
     "select \"a'b\"; drop table rw.ledger; select \"c'd\";",
