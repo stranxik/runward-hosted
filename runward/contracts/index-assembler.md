@@ -4,7 +4,7 @@
 
 **Contract version**: v0
 **Port type**: secondary (driven by the application)
-**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@5a9cdf08, pinned by ADR-0002, re-pinned on main by ADR-0018)
+**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@d05b5974, archive sha256 `fff95065…2337`; pinned by ADR-0002, re-pinned on main by ADR-0018, then at this commit by ADR-0021, proposed)
 
 ## Business intent
 
@@ -45,7 +45,7 @@ Synchronous, pure (no clock, no network, no process: `read` is a map of preloade
 
 ## Invariants
 
-The same inputs give the same bytes; an index never carries `machine-established` (no trust policy); every export path is `exports/<mission>/<kind>-<sha256>.json`, so the archive replays (`scripts/replay-export.mjs`).
+The same inputs give the same bytes with the same archive of runward-fleet; another archive may give other bytes, under the same version (measured for 0.46.0, ADR-0021). An index never carries `machine-established` (no trust policy), nor a `names` field or a mission `not-available` (the adapter writes neither option); every export path is `exports/<mission>/<kind>-<sha256>.json`, so the archive replays (`scripts/replay-export.mjs`).
 
 ## Errors
 
@@ -57,12 +57,12 @@ The same inputs give the same bytes; an index never carries `machine-established
 
 ## Evolution rule
 
-- **Versioned**: the runward-fleet version and archive digest are recorded on each published index (`fleet_index`).
+- **Versioned**: the runward-fleet version and archive digest are recorded on each published index (`fleet_index`). The archive digest names the build; the version alone does not (ADR-0021).
 - **Additive by default**: `runward-fleet-index/0` is read tolerantly and never extended here.
-- **Expand then contract**: a new runward-fleet version is pinned by a new ADR; old indexes keep their version for replay.
-- **Consumer-driven verification**: `test/unit/repositories.test.js` replays every published index; `test/unit/http.test.js` checks the served `views.js` is the pinned one.
+- **Expand then contract**: a new runward-fleet archive is pinned by a new ADR, which measures whether the bytes change; a published index is never rebuilt by a re-pin, it keeps its bytes and its archive digest for replay.
+- **Consumer-driven verification**: `test/unit/repositories.test.js` replays every published index, and checks that an index another archive built is reported `other-archive`, never matched and never said different; `test/unit/http.test.js` checks the served `views.js` is the pinned one and that the views' `decision` route is not a screen of the app.
 - **Provenance**: `/api/version` serves the version, commit, archive digest and views digest.
 
 ## References
 
-ADR-0002, ADR-0018, ADR-0004; PADR-0011.
+ADR-0002, ADR-0018, ADR-0021 (proposed), ADR-0004; PADR-0011.
