@@ -595,3 +595,182 @@ test("the range is open when the head before the loss was not anchored, and the 
   assert.equal(first.body.detail.rerunOf, undefined);
   assert.equal(second.body.detail.rerunOf, first.seq, "and names the first note of this replay");
 });
+
+// Code review of 2026-11-10, C12: run again with another `since` (an earlier one, because the first missed
+// gestures), the gesture took its own first note for a part of the restored journal: the second note,
+// permanent in the tenant's chained journal, said fewer entries lost, or an open range although the anchor
+// was there. The two reproductions of the finding: three entries lost, then one.
+test("C12: run again with another `since`, the note says the same lost range and the same heads as the first", async () => {
+  for (const removals of [3, 1]) {
+    const h = harness();
+    const f = await founder(h, { passkeys: 4, prefix: "p" });
+    const earlier = mark(h);
+    const b = backup(h);
+    for (let i = 0; i < removals; i++) await removePasskey(h, f, `p-${i + 2}`);
+    tick(h);
+    await h.app.operator.restoreReplay({ anchor: true });
+    const before = await head(h, f.tenant);
+    restore(h, b);
+    const restored = await head(h, f.tenant);
+    assert.notEqual(earlier, b.since, "the control: the two runs are given two different `since`");
+
+    await h.app.operator.restoreReplay({ since: b.since });
+    const first = (await journal(h, f.tenant)).pop();
+    assert.deepEqual(first.body.detail.lost, { from: restored.seq + 1, to: before.seq, count: removals }, `${removals} lost: the first note`);
+    tick(h);
+    await h.app.operator.restoreReplay({ since: earlier });
+    const second = (await journal(h, f.tenant)).pop();
+    assert.equal(second.seq, first.seq + 1, "the control: the second note follows the first");
+    assert.equal(second.body.detail.since, earlier);
+    assert.deepEqual(second.body.detail.lost, { from: restored.seq + 1, to: before.seq, count: removals }, `${removals} lost: the second note says the same range`);
+    for (const k of ["headAfterRestore", "headBefore"]) assert.deepEqual(second.body.detail[k], first.body.detail[k], `and the same ${k}`);
+    assert.deepEqual(second.body.detail.headAfterRestore, restored);
+    assert.equal(first.body.detail.rerunOf, undefined);
+    assert.equal(second.body.detail.rerunOf, first.seq, "and names the first note of this restore's replay");
+    assert.equal(verifyChain(await journal(h, f.tenant)).ok, true);
+  }
+});
+
+test("C12: run again with a `since` that no longer reaches the anchor, the note carries the first note's range forward; a note of an earlier restore is never taken for this one's", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 4, prefix: "p" });
+  // an earlier restore, replayed: its note is an entry of the journal like any other, and is in the next backup
+  const b0 = backup(h);
+  await removePasskey(h, f, "p-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  restore(h, b0);
+  await h.app.operator.restoreReplay({ since: b0.since });
+  const earlierNote = (await journal(h, f.tenant)).pop();
+  assert.equal(earlierNote.body.what, "restore-replayed");
+
+  // this restore: two entries lost, anchored (the replay closed every session: the founder signs in again)
+  tick(h);
+  const g = { ...f, session: await h.app.identity.sessionFrom((await signIn(h, "p-1")).token) };
+  const b = backup(h);
+  await removePasskey(h, g, "p-3");
+  await removePasskey(h, g, "p-4");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = await head(h, f.tenant);
+  const late = mark(h); // after the anchor: a run with it reads no anchor
+  restore(h, b);
+  const restored = await head(h, f.tenant);
+  assert.ok(restored.seq >= earlierNote.seq, "the control: the earlier restore's note came back with the backup");
+  const range = { from: restored.seq + 1, to: before.seq, count: 2 };
+
+  await h.app.operator.restoreReplay({ since: b.since });
+  const first = (await journal(h, f.tenant)).pop();
+  assert.deepEqual([first.body.detail.lost, first.body.detail.headAfterRestore, first.body.detail.rerunOf], [range, restored, undefined], "the first note of this restore is not a rerun of the earlier one's");
+  tick(h);
+  await h.app.operator.restoreReplay({ since: late });
+  const second = (await journal(h, f.tenant)).pop();
+  assert.equal((await h.objects.securitySince(f.tenant, late)).some((x) => x.event.what === "journal-anchored"), false, "the control: this `since` reaches no anchor");
+  assert.deepEqual([second.body.detail.lost, second.body.detail.headAfterRestore, second.body.detail.rerunOf], [range, restored, first.seq]);
+  assert.deepEqual(second.body.detail.headBefore, first.body.detail.headBefore, "the head before the loss is the one the first note read");
+});
+
+// Code review of 2026-11-10 (of d569c95), C19: no test pinned the bound restoredHead takes from the anchors
+// of lost entries. With `ulidTime(since)` alone the file stayed green, because the test above gives a
+// `since` that is already after the earlier restore's note. Here `since` precedes that note, as an operator
+// who reaches back for missed gestures gives it, and this loss is anchored: the anchor was taken after the
+// earlier note, so that note is not this restore's first.
+test("C19: with a `since` that precedes an earlier restore's note, an anchored loss is still read from the restored head, not from that note", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 4, prefix: "p" });
+  const early = mark(h); // before the earlier restore, its replay and its note
+  const earlyAt = h.clock.now();
+  const b0 = backup(h);
+  await removePasskey(h, f, "p-2");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  restore(h, b0);
+  await h.app.operator.restoreReplay({ since: b0.since });
+  const earlierNote = (await journal(h, f.tenant)).pop();
+  assert.equal(earlierNote.body.what, "restore-replayed");
+
+  // this restore: two entries lost, anchored after the earlier note
+  tick(h);
+  const g = { ...f, session: await h.app.identity.sessionFrom((await signIn(h, "p-1")).token) };
+  const b = backup(h);
+  await removePasskey(h, g, "p-3");
+  await removePasskey(h, g, "p-4");
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = await head(h, f.tenant);
+  restore(h, b);
+  const restored = await head(h, f.tenant);
+  assert.ok(restored.seq > earlierNote.seq, "the control: the earlier restore's note came back with the backup, and the journal went on after it");
+  assert.ok(early < b0.since && Date.parse(earlierNote.body.dates.received.at) > earlyAt, "the control: this `since` precedes the earlier restore's note");
+
+  await h.app.operator.restoreReplay({ since: early });
+  const note = (await journal(h, f.tenant)).pop();
+  assert.equal(note.body.what, "restore-replayed");
+  assert.equal(note.body.detail.since, early);
+  // without the bound, the earlier note is taken for this replay's first: the head is the entry before
+  // it, the range is the earlier restore's, and the note calls itself a rerun
+  assert.deepEqual(note.body.detail.headAfterRestore, restored, "the restored head is the journal's last entry, not the entry before the earlier note");
+  assert.deepEqual(note.body.detail.lost, { from: restored.seq + 1, to: before.seq, count: 2 });
+  assert.deepEqual({ seq: note.body.detail.headBefore.seq, hash: note.body.detail.headBefore.hash }, before);
+  assert.equal(note.body.detail.rerunOf, undefined, "and it is not a rerun of the earlier restore's replay");
+  assert.equal(note.seq, restored.seq + 1);
+});
+
+// Code review of 2026-11-10 (of d569c95), C17: an anchor taken after the restore and before its replay is
+// of the restored head, and the replay read it as the head before the loss. The reproduction: anchor at
+// the head, three entries lost by the restore, `--anchor` again by mistake, then the replay: a permanent
+// note of 0 entries lost, although three were lost and their anchor was in the log.
+test("C17: `restore-replay --anchor` is refused restore-not-replayed when a restore is waiting for its replay; nothing is anchored, and the replay still says what was lost", async () => {
+  const h = harness();
+  const f = await founder(h, { passkeys: 4, prefix: "p" });
+  const other = await founder(h, { passkeys: 1, prefix: "q" });
+  const b = backup(h);
+  for (const cred of ["p-2", "p-3", "p-4"]) await removePasskey(h, f, cred);
+  tick(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  const before = await head(h, f.tenant);
+  restore(h, b);
+  const restored = await head(h, f.tenant);
+  const anchorsOf = async (tenant) => (await h.objects.securitySince(tenant, "")).filter((x) => x.event.what === "journal-anchored").length;
+  assert.deepEqual([await anchorsOf(f.tenant), await anchorsOf(other.tenant)], [1, 1]);
+
+  // by mistake: the anchor again, after the restore and before the replay
+  tick(h);
+  let e = null;
+  try { await h.app.operator.restoreReplay({ anchor: true }); } catch (x) { e = x; }
+  assert.equal(e?.code, "restore-not-replayed", `a refusal with its code, not ${e?.constructor.name}: ${e?.message}`);
+  assert.match(e.message, /^restore-not-replayed: the latest anchor of 1 tenant\(s\) out of 2 names an entry the journal no longer holds, and no replay was noted since/);
+  // refused whole, before any write: no anchor for any tenant, the one that lost nothing included
+  assert.deepEqual([await anchorsOf(f.tenant), await anchorsOf(other.tenant)], [1, 1], "nothing was anchored");
+  const refusedNote = notes(h, "restore-anchored").pop();
+  assert.deepEqual({ refused: refusedNote.detail.refused, failed: refusedNote.detail.failed, report: refusedNote.detail.report.map((r) => [r.tenant, r.anchored, r.head]) }, { refused: "restore-not-replayed", failed: 1, report: [[f.tenant, before.seq, restored.seq]] });
+
+  // the replay then says the three entries lost (with the second anchor, it said 0)
+  tick(h);
+  await h.app.operator.restoreReplay({ since: b.since });
+  const d = await replayNote(h, f.tenant);
+  assert.deepEqual(d.lost, { from: restored.seq + 1, to: before.seq, count: 3 });
+  assert.deepEqual(d.headAfterRestore, restored);
+
+  // once the replay has run, the next anchor is taken: of the journal as it now is
+  tick(h);
+  const again = await h.app.operator.restoreReplay({ anchor: true });
+  assert.deepEqual(again.map((r) => r.failed), [undefined, undefined]);
+  assert.deepEqual([await anchorsOf(f.tenant), await anchorsOf(other.tenant)], [2, 2]);
+  // and an anchor that is the journal's own entry never refuses the next one
+  tick(h);
+  assert.equal((await h.app.operator.restoreReplay({ anchor: true })).length, 2);
+});
+
+test("C17: `restore-replay --anchor` is refused whole when a tenant's security log cannot be read: it cannot tell whether a restore is waiting", async () => {
+  const h = harness();
+  const f = await founder(h);
+  await h.app.operator.restoreReplay({ anchor: true });
+  unreadable(h, f.tenant);
+  const e = await h.app.operator.restoreReplay({ anchor: true }).then(() => null, (x) => x);
+  assert.equal(e?.code, "security-log-unreadable", `a refusal with its code, not ${e?.constructor.name}: ${e?.message}`);
+  assert.match(e.message, /^security-log-unreadable: the security log of 1 tenant\(s\) out of 1 cannot be read; nothing was anchored/);
+  assert.equal(notes(h, "restore-anchored").pop().detail.refused, "security-log-unreadable");
+  delete h.objects._map.has;
+  assert.equal((await h.app.operator.restoreReplay({ anchor: true })).length, 1, "the object store answers again: the anchor is taken");
+});

@@ -15,15 +15,78 @@
 // gesture (the search_path does not depend on it).
 // The grants of db/grants.sql are not applied here: they run as rw_owner, the owner of the schema rw, at
 // the end of scripts/migrate.mjs.
+// With --grants (after `migrate`, at each deploy: deploy.yml), it also COMPARES what rw_app and rw_maint
+// may do on the deployed base with the grant lines of db/schema.snapshot.txt, and fails when they differ
+// (review finding of 2026-11-10, C28: the level of these two users at the hoster is ignored by OpenTofu
+// after creation, infra/scaleway/main.tf, and nothing read their table rights). What is compared:
+//   - every table, view and foreign table of the schemas rw and rw_meta, each privilege PostgreSQL knows
+//     for a table (MAINTAIN from version 17), as the role holds it IN EFFECT: granted to it, to PUBLIC or
+//     to a role it is a member of, on the table or on any of its columns;
+//   - USAGE and CREATE on the schemas rw and rw_meta; CONNECT and CREATE on the service database.
+// What is not: TEMPORARY on the database (read and said above, it depends on what the hoster lets its
+// administrator revoke), the schema public and any other schema (the service has nothing there), and the
+// rights on functions and sequences (the snapshot holds the functions' owner and settings, not their ACL).
+// It fails closed: a snapshot that cannot be read, or that holds no line for one of the two roles, is a
+// refusal. What differs is said in ONE line (the gateway keeps the last line of a failed gesture, 300
+// characters): names of tables, roles and privileges only, never a row, so never a tenant.
 import postgres from "postgres";
+import { readFileSync } from "node:fs";
 // The one TLS path of the scripts (verify-full checks the URL's host, an IP against the IP SANs; a bare
 // { ca, rejectUnauthorized } would check "localhost" and refuse the real instance).
 import { migrationTls } from "./migrate.mjs";
 
 const DATABASE = process.env.RW_DATABASE ?? "runward_hosted";
 const NAME = /^[a-z_][a-z0-9_]{0,62}$/;
+const SNAPSHOT = new URL("../db/schema.snapshot.txt", import.meta.url).pathname;
+const CHECKED = ["rw_app", "rw_maint"];
+const TABLE_PRIVILEGES = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
 
-export async function roles(url, { log = console.log } = {}) {
+/** The grant lines of a snapshot for rw_app and rw_maint: `grant <schema>.<table> <role> <PRIVILEGE>`,
+ * `grant schema <schema> <role> <PRIVILEGE>`, `grant database <role> <PRIVILEGE>`. Throws when one of
+ * the two roles has no table, schema or database line: such a snapshot proves nothing. */
+export function expectedGrants(text) {
+  const lines = text.split("\n").filter((l) => l.startsWith("grant ") && CHECKED.includes(l.split(" ").at(-2)));
+  for (const role of CHECKED) {
+    for (const [kind, re] of [["table", /^grant [a-z_]+\.[a-z_0-9]+ /], ["schema", /^grant schema /], ["database", /^grant database /]]) {
+      if (!lines.some((l) => re.test(l) && l.split(" ").at(-2) === role)) throw new Error(`db/schema.snapshot.txt holds no ${kind} grant line for ${role}: nothing to compare with, refused`);
+    }
+  }
+  return lines;
+}
+
+/** What rw_app and rw_maint may do on this base, in the snapshot's own lines. */
+async function effectiveGrants(sql) {
+  const [{ version }] = await sql`select current_setting('server_version_num')::int as version`;
+  const privileges = version >= 170000 ? [...TABLE_PRIVILEGES, "MAINTAIN"] : TABLE_PRIVILEGES;
+  const rows = await sql`
+    with r as (select oid, rolname from pg_roles where rolname in ${sql(CHECKED)}),
+         n as (select oid, nspname from pg_namespace where nspname in ('rw', 'rw_meta'))
+    select format('grant %s.%s %s %s', n.nspname, c.relname, r.rolname, p) as l
+      from pg_class c join n on n.oid = c.relnamespace cross join r cross join unnest(${privileges}::text[]) as p
+      where c.relkind in ('r', 'p', 'v', 'm', 'f')
+        and (has_table_privilege(r.oid, c.oid, p) or (p in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES') and has_any_column_privilege(r.oid, c.oid, p)))
+    union all select format('grant schema %s %s %s', n.nspname, r.rolname, p)
+      from n cross join r cross join unnest(array['USAGE', 'CREATE']) as p where has_schema_privilege(r.oid, n.oid, p)
+    union all select format('grant database %s %s', r.rolname, p)
+      from r cross join unnest(array['CONNECT', 'CREATE']) as p where has_database_privilege(r.oid, ${DATABASE}::text, p)`;
+  return rows.map((x) => x.l);
+}
+
+const some = (lines) => `${lines.slice(0, 4).map((l) => l.slice("grant ".length)).join(", ")}${lines.length > 4 ? ", ..." : ""}`;
+
+/** Compares the grants in effect with the snapshot's; throws, in one line, when they differ. */
+async function compareGrants(sql, snapshot) {
+  const expected = new Set(expectedGrants(snapshot));
+  const actual = new Set(await effectiveGrants(sql));
+  const more = [...actual].filter((l) => !expected.has(l)).sort(), fewer = [...expected].filter((l) => !actual.has(l)).sort();
+  if (more.length || fewer.length) {
+    const said = [more.length ? `${more.length} more than the snapshot (${some(more)})` : null, fewer.length ? `${fewer.length} fewer (${some(fewer)})` : null].filter(Boolean).join("; ");
+    throw new Error(`the grants of rw_app and rw_maint are not those of db/schema.snapshot.txt: ${said}`);
+  }
+  return expected.size;
+}
+
+export async function roles(url, { log = console.log, grants = false, snapshot = null } = {}) {
   const sql = postgres(url, { max: 1, onnotice: () => {}, ssl: migrationTls(url) });
   try {
     await sql.unsafe(`do $$ begin
@@ -57,12 +120,17 @@ export async function roles(url, { log = console.log } = {}) {
     if (problems.length) throw new Error(`the roles do not hold:\n  - ${problems.join("\n  - ")}`);
     const [t] = await sql`select has_database_privilege('rw_app', ${DATABASE}, 'temporary') as app, has_database_privilege('rw_maint', ${DATABASE}, 'temporary') as maint`;
     const temporary = t.app || t.maint ? "TEMPORARY NOT revoked (the administrator may not: the definer functions' search_path remains the control)" : "no temporary objects for rw_app and rw_maint";
-    log(`roles: rw_resolve (nologin) exists, rw_owner is its member, rw_app and rw_maint do not bypass RLS; ${temporary}`);
-    return { temporaryRevoked: !(t.app || t.maint) };
+    const said = `roles: rw_resolve (nologin) exists, rw_owner is its member, rw_app and rw_maint do not bypass RLS; ${temporary}`;
+    if (!grants) { log(said); return { temporaryRevoked: !(t.app || t.maint) }; }
+    const compared = await compareGrants(sql, snapshot ?? readFileSync(SNAPSHOT, "utf8"));
+    log(`${said}; the ${compared} table, schema and database grants of rw_app and rw_maint are those of db/schema.snapshot.txt, no more, no fewer`);
+    return { temporaryRevoked: !(t.app || t.maint), grants: compared };
   } finally { await sql.end({ timeout: 5 }); }
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   if (!process.env.ADMIN_URL) { console.error("ADMIN_URL is required"); process.exit(2); }
-  roles(process.env.ADMIN_URL).catch((e) => { console.error(`roles: ${e.message}`); process.exit(1); });
+  const extra = process.argv.slice(2).filter((a) => a !== "--grants");
+  if (extra.length) { console.error(`roles: unknown argument ${extra[0]}`); process.exit(2); }
+  roles(process.env.ADMIN_URL, { grants: process.argv.includes("--grants") }).catch((e) => { console.error(`roles: ${e.message}`); process.exit(1); });
 }

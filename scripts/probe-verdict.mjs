@@ -5,8 +5,10 @@
 // answered 500 or more), or when a daily job did not complete or has not run for more than a day
 // (DAILY_JOB_MAX_AGE_MS: the jobs run at 03:23 and 03:53 Paris time; review finding of 2026-11-10, a
 // failed job was noted in the operator journal and read by nothing), or when the jobs' outcome cannot be
-// read at all while the database answers. A job that never ran (lastRun null) says nothing yet: a schedule
-// that was never wired is not seen here. Either way the probe fails, and two failures in a row open the issue.
+// read at all while the database answers, or when calls were served untracked by the budgets of failures
+// (`limits` in /api/health: the limiter's tables of addresses and of prefixes were full, code review C14).
+// A job that never ran (lastRun null) says nothing yet: a schedule that was never wired is not seen here.
+// Either way the probe fails, and two failures in a row open the issue.
 //   node scripts/probe-verdict.mjs <health.json> <health-status> <version.json>
 import { readFileSync } from "node:fs";
 import { ERROR_ALERT } from "../src/http/limits.js";
@@ -27,6 +29,12 @@ export function probeVerdict({ healthStatus, health, version, now = Date.now() }
     if (!j?.lastRun) continue;
     if (j.ok === false) reasons.push(`the daily job ${job} did not complete (run of ${j.lastRun}; the operator journal names what failed)`);
     else if (now - Date.parse(j.lastRun) > DAILY_JOB_MAX_AGE_MS) reasons.push(`the daily job ${job} has not run since ${j.lastRun}`);
+  }
+  // the budgets of failures were off for some calls (src/http/limits.js, C14): the tables of addresses and
+  // of prefixes were full. /api/health keeps the count for 130 minutes, so two probes in a row see it
+  for (const [budget, what] of [["signedOut", "the session cookies"], ["machine", "the machine routes"]]) {
+    const n = health?.limits?.[budget]?.untracked;
+    if (n > 0) reasons.push(`${n} call(s) of ${what} were served untracked over the last ${Math.round(health.limits.windowSeconds / 60)} minutes (the limiter's tables were full: a flood from more than 10,000 prefixes a minute)`);
   }
   return { ok: reasons.length === 0, reasons };
 }

@@ -22,6 +22,8 @@ const operator = { type: "operator", id: "operateur" };
 const when = (e) => Date.parse(e.at);
 /** The code of a replay refused because a tenant's security log cannot be read whole (the object store adapter throws it too). */
 export const SECURITY_LOG_UNREADABLE = "security-log-unreadable";
+/** `restore-replay --anchor` after a restore whose replay has not run: refused, nothing anchored. */
+export const RESTORE_NOT_REPLAYED = "restore-not-replayed";
 
 /** What the events create: a reset or a recovery withdraws what existed before it, never what the log creates after it. */
 function created(events) {
@@ -145,15 +147,34 @@ export const SECURITY_NOT_REPLAYED = {
   "journal-anchored": "not a gesture: the head of the tenant's journal, written before a loss and read for the note (headBefore)",
 };
 
+/** The instant a ULID was made at (its first ten characters, Crockford base 32), in milliseconds. */
+function ulidTime(id) {
+  let t = 0;
+  for (const ch of id.slice(0, 10)) t = t * 32 + "0123456789ABCDEFGHJKMNPQRSTVWXYZ".indexOf(ch);
+  return t;
+}
+const anchors = (events) => events.filter(({ event: e }) => e.what === "journal-anchored" && Number.isSafeInteger(e.seq) && HEX64.test(String(e.hash)));
+
 /**
- * The head of a tenant's journal as the restore left it: the entry before the first note of this replay
- * (the same `since`) when the gesture runs again, the journal's last entry otherwise. Run twice, the gesture
- * says the same range twice.
+ * The head of a tenant's journal as the restore left it: the entry before the first note of the replay of
+ * this restore when the gesture runs again, the journal's last entry otherwise. Run twice, the gesture says
+ * the same range twice, whatever the `since` of each run (code review of 2026-11-10, C12: the first note
+ * was looked for by its `since`, so a second run with another `since`, given because the first one missed
+ * gestures, took the first note for a part of the restored journal and said fewer entries lost, or an open
+ * range although the anchor was there).
+ * A note is of this restore when it was written after the backup was made: not before `since`, an instant
+ * before the backup by its definition, and not before the last anchor of an entry the journal no longer
+ * holds, which was taken before this loss. A note older than that is another restore's, and came back
+ * with the backup as any entry of the journal. The limit, said: a `since` set before the replay of an
+ * earlier restore, when this loss took no entry or was not anchored, reads that earlier note as this
+ * restore's first; the backup's instant (runbook §3) is always after it.
  */
-function restoredHead(entries, since) {
-  const first = entries.find((e) => e.body.what === "restore-replayed" && e.body.detail?.since === since) ?? null;
+function restoredHead(entries, since, events) {
+  const lost = anchors(events).filter(({ event: e }) => !entries.some((x) => x.seq === e.seq && x.hash === e.hash));
+  const from = Math.max(ulidTime(since), ...lost.map(({ event: e }) => when(e)));
+  const first = entries.find((e) => e.body.what === "restore-replayed" && Date.parse(e.body.dates?.received?.at) >= from) ?? null;
   const last = first ? entries.find((e) => e.seq === first.seq - 1) ?? null : entries[entries.length - 1] ?? null;
-  return { head: last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS }, rerunOf: first ? first.seq : null };
+  return { head: last ? { seq: last.seq, hash: last.hash } : { seq: 0, hash: GENESIS }, first };
 }
 
 /**
@@ -164,9 +185,9 @@ function restoredHead(entries, since) {
  * anyone's word.
  */
 function anchoredHead(events, restored, entries) {
-  for (let i = events.length - 1; i >= 0; i--) {
-    const { id, event: e } = events[i];
-    if (e.what !== "journal-anchored" || !Number.isSafeInteger(e.seq) || !HEX64.test(String(e.hash))) continue;
+  const taken = anchors(events);
+  for (let i = taken.length - 1; i >= 0; i--) {
+    const { id, event: e } = taken[i];
     if (e.seq === restored.seq && e.hash === restored.hash) return { seq: e.seq, hash: e.hash, anchor: id };
     if (e.seq > restored.seq && !entries.some((x) => x.seq === e.seq && x.hash === e.hash)) return { seq: e.seq, hash: e.hash, anchor: id };
   }
@@ -412,10 +433,35 @@ export function operatorCases(ctx) {
    * seq, hash), which the restore does not touch. The replay reads it back as the head before the loss.
    * Each tenant has its own chain, so each has its own anchor; nothing leaves the private network and no
    * head is taken on the operator's word. Nothing is appended to a journal: an anchor that moved the head
-   * would not be the head.
+   * would not be the head. Refused (`restore-not-replayed`) when a restore is waiting for its replay.
    */
   async function anchorHeads() {
     const tenants = await tenantList("restore-anchored", {});
+    // Refused whole, before any write, when a tenant's latest anchor names an entry its journal no longer
+    // holds and no replay was noted since: the database was restored and `--since` has not run. An anchor
+    // written now would be of the restored head, and the replay would read it as the head before the loss
+    // and say that nothing was lost (code review of 2026-11-10, C17: anchor at 8, restore to 5, `--anchor`
+    // again by mistake, then the replay: a permanent note of 0 entries lost, where three were). A log
+    // that cannot be read refuses too: nothing says then that no restore is waiting for its replay.
+    const pending = [], unread = [];
+    for (const tenant of tenants) {
+      let last = null;
+      try { last = anchors(await objects.securitySince(tenant, "")).pop() ?? null; }
+      catch (e) { unread.push({ tenant, failed: true, error: why(e) }); continue; }
+      if (!last) continue;
+      const entries = await store.tx(tenant, (tx) => tx.ledgerAll());
+      const held = entries.some((x) => x.seq === last.event.seq && x.hash === last.event.hash);
+      const replayed = entries.some((x) => x.body.what === "restore-replayed" && Date.parse(x.body.dates?.received?.at) >= when(last.event));
+      if (!held && !replayed) pending.push({ tenant, anchor: last.id, anchored: last.event.seq, head: entries[entries.length - 1]?.seq ?? 0 });
+    }
+    if (unread.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: SECURITY_LOG_UNREADABLE, report: unread, failed: unread.length }));
+      throw Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: the security log of ${unread.length} tenant(s) out of ${tenants.length} cannot be read; nothing was anchored; first reason: ${unread[0].error}`), { code: SECURITY_LOG_UNREADABLE });
+    }
+    if (pending.length) {
+      await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { refused: RESTORE_NOT_REPLAYED, report: pending, failed: pending.length }));
+      throw Object.assign(new Error(`${RESTORE_NOT_REPLAYED}: the latest anchor of ${pending.length} tenant(s) out of ${tenants.length} names an entry the journal no longer holds, and no replay was noted since: the database was restored and restore-replay --since has not run; nothing was anchored; run the replay first`), { code: RESTORE_NOT_REPLAYED });
+    }
     const report = await perTenant(tenants, (tenant) => store.tx(tenant, async (tx) => {
       await tx.lockTenant();
       const head = await tx.ledgerHead();
@@ -439,10 +485,13 @@ export function operatorCases(ctx) {
     for (const m of members) if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
     // the note: "restore of <since>: entries lost between seq <from> and <to>" (runbook §3), as fields
     const entries = await tx.ledgerAll();
-    const { head, rerunOf } = restoredHead(entries, since);
-    const headBefore = anchoredHead(events, head, entries);
+    const { head, first } = restoredHead(entries, since, events);
+    // run again: the head before the loss is read again from the anchors this `since` reaches and, when
+    // it reaches none (a later `since`), carried forward from the first note, which read it for the same
+    // restored head; so the range a later note states is never narrower than the first one's
+    const headBefore = anchoredHead(events, head, entries) ?? (first ? first.body.detail?.headBefore ?? null : null);
     const lost = lostRange(head, headBefore);
-    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headAfterRestore: head, headBefore, lost, closed, replayed, stranded, ...(rerunOf ? { rerunOf } : {}) } });
+    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headAfterRestore: head, headBefore, lost, closed, replayed, stranded, ...(first ? { rerunOf: first.seq } : {}) } });
     return { closed, replayed, stranded, memberless: members.length === 0, lost, seq: e.seq };
   }
 

@@ -266,3 +266,40 @@ test("a restore from a backup of before the retention erasure: under rw_maint th
   assert.equal((await rows(T.tenant, "upload")).filter((u) => !u.erasedAt).length, 0, "the uploads are marked erased again");
   assert.equal((await h.app.reading.index(T.tenant)).version, 3, "the index served is the one the removal published");
 });
+
+// Code review of 2026-11-10, C12, on real transactions under rw_maint: run again with an earlier `since`,
+// the note of each tenant says the range its first note said (it said fewer entries lost, or an open range).
+test("C12: run again with another `since`, each tenant's note says the same lost range and the same heads as its first", async () => {
+  const F = await tenant("f", 4), G = await tenant("g", 2);
+  await pause();
+  const earlier = ulid(Date.now()).slice(0, 10) + "0".repeat(16);
+  const since = await backup();
+  assert.notEqual(earlier, since, "the control: two different `since`");
+  // after T: F loses three entries, G one
+  for (const cred of ["f-2", "f-3", "f-4"]) await removePasskey(F, cred);
+  await removePasskey(G, "g-2");
+  await operator((op) => op.restoreReplay({ anchor: true }));
+  const heads = new Map();
+  for (const f of [F, G]) heads.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
+  await restore();
+  const restored = new Map();
+  for (const f of [F, G]) restored.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
+
+  const one = await operator((op) => op.restoreReplay({ since }));
+  await pause();
+  const two = await operator((op) => op.restoreReplay({ since: earlier }));
+  assert.equal([...one, ...two].some((r) => r.failed), false);
+  for (const [f, count] of [[F, 3], [G, 1]]) {
+    const [first] = await replayNotes(f.tenant, since);
+    const [second] = await replayNotes(f.tenant, earlier);
+    const from = restored.get(f.tenant).seq + 1, to = heads.get(f.tenant).seq;
+    assert.deepEqual(first.body.detail.lost, { from, to, count }, "the first note");
+    assert.deepEqual(second.body.detail.lost, { from, to, count }, "the second note, with another `since`, says the same range");
+    assert.deepEqual(second.body.detail.headAfterRestore, restored.get(f.tenant));
+    assert.deepEqual(second.body.detail.headBefore, first.body.detail.headBefore);
+    assert.equal(second.body.detail.rerunOf, first.seq);
+    assert.equal(two.find((r) => r.tenant === f.tenant).lost.count, count, "and so does the operator journal's row");
+  }
+  const chains = await operator((op) => op.verifyChains());
+  assert.equal(chains.every((c) => c.ok), true);
+});

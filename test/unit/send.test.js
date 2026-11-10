@@ -108,3 +108,64 @@ test("send.yml: a token endpoint that does not answer is cut at its own deadline
   assert.equal(r.code, 0);
   assert.match(r.summary, /runward hosted: sent[\s\S]*seq: 4/);
 });
+
+// Code review of 2026-11-10, C15: the send job ran `node` and installed none (only the check job has
+// setup-node, and the guard forbids a third-party step in the send job). On a caller's runner without
+// Node.js the step ended 127 and the run was red whatever send-strict said; with an old one, fetch was
+// missing and the summary said "service unavailable after 4 attempts". The job's first step now looks,
+// run here as GitHub runs it: the step's script, by bash, with a PATH of our own.
+function nodeStep() {
+  const lines = readFileSync(WORKFLOW, "utf8").split("\n");
+  const send = lines.findIndex((l) => l === "  send:"), steps = lines.findIndex((l, i) => i > send && l === "    steps:");
+  const first = lines.findIndex((l, i) => i > steps && /^ {6}- /.test(l));
+  assert.equal(lines[first], "      - id: node", "the Node.js check is the send job's first step");
+  const run = lines.findIndex((l, i) => i > first && l === "        run: |");
+  const end = lines.findIndex((l, i) => i > run && !/^ {10}/.test(l) && l.trim() !== "");
+  return { script: lines.slice(run + 1, end).map((l) => l.slice(10)).join("\n"), lines, first };
+}
+
+async function runNodeStep(pathDir, strict) {
+  const run = mkdtempSync(join(dir, "node-"));
+  const summary = join(run, "summary.md"), output = join(run, "output.txt");
+  writeFileSync(summary, ""); writeFileSync(output, "");
+  writeFileSync(join(run, "step.sh"), nodeStep().script);
+  const env = { PATH: pathDir, STRICT: String(strict), GITHUB_STEP_SUMMARY: summary, GITHUB_OUTPUT: output };
+  const r = await new Promise((resolve) => execFile("/bin/bash", ["-e", join(run, "step.sh")], { env, timeout: 30_000 }, (e, stdout) => resolve({ code: e ? e.code : 0, stdout })));
+  return { ...r, summary: readFileSync(summary, "utf8"), output: readFileSync(output, "utf8") };
+}
+
+test("C15, send.yml: on a runner without Node.js 22 the send job says \"not sent: this runner has no Node.js 22\" and keeps runward's verdict; it fails only with send-strict", async () => {
+  const { lines, first } = nodeStep();
+  // every later step of the job that needs the file or node runs only when the check passed
+  const sendJob = lines.slice(first, lines.findIndex((l, i) => i > first && l === "  verdict:"));
+  const stepHeads = sendJob.map((l, i) => [l, i]).filter(([l]) => /^ {6}- /.test(l));
+  assert.equal(stepHeads.length, 4);
+  for (const [, i] of stepHeads.slice(1, 3)) assert.equal(sendJob[i + 1], "        if: ${{ steps.node.outputs.ok == 'true' }}");
+  assert.doesNotMatch(sendJob.join("\n"), /setup-node/, "the send job still installs nothing");
+
+  // a PATH with no node at all
+  const none = join(dir, "path-none"); mkdirSync(none);
+  // a PATH whose node is too old: the real one, saying it is 18.19.0
+  const old = join(dir, "path-old"); mkdirSync(old);
+  writeFileSync(join(old, "as-18.cjs"), "Object.defineProperty(process.versions, 'node', { value: '18.19.0' });\n");
+  writeFileSync(join(old, "node"), `#!/bin/sh\nexec "${process.execPath}" -r "${join(old, "as-18.cjs")}" "$@"\n`, { mode: 0o755 });
+  // a PATH with this very Node.js
+  const real = join(dir, "path-real"); mkdirSync(real);
+  writeFileSync(join(real, "node"), `#!/bin/sh\nexec "${process.execPath}" "$@"\n`, { mode: 0o755 });
+
+  for (const [name, path] of [["no node", none], ["Node.js 18", old]]) {
+    const lax = await runNodeStep(path, false);
+    assert.equal(lax.code, 0, `${name}: the run keeps runward's verdict`);
+    assert.match(lax.summary, /^runward hosted: not sent: this runner has no Node\.js 22$/m, name);
+    assert.doesNotMatch(lax.summary, /service unavailable/, name);
+    assert.equal(lax.output, "ok=false\n", name);
+    assert.match(lax.stdout, /^::warning title=runward hosted not sent::this runner has no Node\.js 22$/m);
+    const strict = await runNodeStep(path, true);
+    assert.equal(strict.code, 1, `${name}: send-strict fails the run`);
+    assert.match(strict.summary, /not sent: this runner has no Node\.js 22/);
+  }
+  for (const strict of [false, true]) {
+    const ok = await runNodeStep(real, strict);
+    assert.deepEqual([ok.code, ok.output, ok.summary], [0, "ok=true\n", ""], "a runner with Node.js 22 or later goes on, and says nothing");
+  }
+});
