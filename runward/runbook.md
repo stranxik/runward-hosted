@@ -103,7 +103,7 @@ All run inside the hoster's private network through the operator's gateway (ADR-
 | retention (daily, 03:23 Paris, trigger) | `retention` |
 | chain check (daily, 03:53 Paris, trigger) | `verify-chains` |
 | before a restore, while the database can still be read | `restore-replay --anchor` |
-| after a restore | `restore-replay --since <ulid> [--recovery-hash <sha256>]` |
+| after a restore | `restore-replay --since <ulid>`, optionally `--recovery-hash <sha256>` |
 
 ## 9. Secrets
 
@@ -379,7 +379,7 @@ What it proves: that after the database is replaced by a backup, `restore-replay
 7. **T: the backup**. `SINCE` is the ULID of T: the ten characters of its time, then sixteen zeros, so that every gesture written from T on sorts after it. T is taken before the dump starts (a gesture between T and the dump's snapshot is in both the backup and the replay, and replaying it changes nothing); the two seconds stand for the margin a real backup's hour is known with.
    ```sh
    sleep 1; T_MS=$(node -p 'Date.now()')
-   SINCE=$(node -e 'const B = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; let t = BigInt(process.argv[1]), s = ""; for (let i = 0; i < 10; i++) { s = B[Number(t % 32n)] + s; t /= 32n; } console.log(s + "0".repeat(16))' "$T_MS")
+   SINCE=$(node -e 'const B = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"; let t = BigInt(process.argv[1]), s = ""; for (let i = 0; i < 10; i++) { s = B[Number(t%32n)] + s; t /= 32n; } console.log(s + "0".repeat(16))' "$T_MS")
    sleep 1; pg_dump -Fc -d "postgres://postgres@$PG/runward_hosted" -f "$R/backup.dump"
    echo ${#SINCE}; pg_restore -l "$R/backup.dump" | grep -c 'TABLE DATA rw ledger'; lap 7
    ```
@@ -438,21 +438,21 @@ What it proves: that after the database is replaced by a backup, `restore-replay
 14. **The service again, and the accesses as a person meets them**: the sessions of before the loss are closed, whether the backup held them (a1) or not (a3); the passkey withdrawn after T opens nothing; the one removed then restored signs in; the journal shows the note; the consent and the removal are as they were left.
     ```sh
     serve
-    d call a1 GET /api/v0/session | jq -c '[.status, .body.refusal]'; d call a3 GET /api/v0/session | jq -c '[.status, .body.refusal]'
-    d signin x A3 | jq -c '[.status, .body.refusal]'; d signin x A4 | jq -c '[.status, .body.refusal]'
-    d signin a5 A2 | jq -c '[.status, .body.signedIn]'; d signin a4 A1 | jq -c '[.status, .body.signedIn]'
+    d call a1 GET /api/v0/session | jq -c '[.status,.body.refusal]'; d call a3 GET /api/v0/session | jq -c '[.status,.body.refusal]'
+    d signin x A3 | jq -c '[.status,.body.refusal]'; d signin x A4 | jq -c '[.status,.body.refusal]'
+    d signin a5 A2 | jq -c '[.status,.body.signedIn]'; d signin a4 A1 | jq -c '[.status,.body.signedIn]'
     d call a4 GET /api/v0/journal | jq -c '.body.entries[] | select(.body.what == "restore-replayed") | {seq, what: .body.what, who: .body.who.id}'
     d call a4 GET /api/v0/access | jq -c '.body.repositories[] | {name, consent}'
-    d signin b2 B1 | jq -c '[.status, .body.signedIn]'; d call b2 GET /api/v0/access | jq -c '.body.repositories[] | {name, state}'; lap 14
+    d signin b2 B1 | jq -c '[.status,.body.signedIn]'; d call b2 GET /api/v0/access | jq -c '.body.repositories[] | {name, state}'; lap 14
     ```
     Verify: `[401,"signed-out"]` twice, `[401,"passkey-unknown"]` twice, `[200,true]` twice, `{"seq":8,"what":"restore-replayed","who":"operateur"}`, `{"name":"drill/alpha","consent":false}`, `[200,true]`, `{"name":"drill/beta","state":"removed"}`.
 15. **Tenant C: an access reset after T**. The operator withdrew the founder and the passkey at step 8, and the object store holds `access-reset` after `SINCE`. What §3 and T24 promise is that the restore does not give that access back. The bootstrap the reset had opened is gone with the restore (the backup never held it): the operator opens one again, and the rightful founder arrives.
     ```sh
-    d signin c2 C1 | jq -c '[.status, .body.refusal // .body.signedIn]'
+    d signin c2 C1 | jq -c '[.status,(.body.refusal//.body.signedIn)]'
     c_state() { sql "select t.title, (select count(*) from rw.member where tenant_id = t.id and removed_at is null), (select count(*) from rw.passkey where tenant_id = t.id and removed_at is null) from rw.tenant t where t.title = 'drill-c'"; }
     c_state
     LC2=$(link); scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(h "$LC2")\",\"tenant\":\"$W3\"}"
-    s open c3 "$LC2" C2; echo; d signin c4 C1 | jq -c '[.status, .body.refusal // .body.signedIn]'; c_state; lap 15
+    s open c3 "$LC2" C2; echo; d signin c4 C1 | jq -c '[.status,(.body.refusal//.body.signedIn)]'; c_state; lap 15
     ```
     Verify: `[401,"passkey-unknown"]` and `drill-c|0|0`: the passkey the reset withdrew opens nothing, the tenant has no member. Then `operator-call: open-bootstrap answered HTTP 200 (gesture=open-bootstrap ok=true exit=0)`, `200`, `[401,"passkey-unknown"]` again and `drill-c|1|1`: the tenant is opened again by a new founder, the withdrawn passkey still opens nothing. A line `[200,true]` on the first or the fourth of these, or `drill-c|1|1` on the second, is the defect of 2026-11-10 (`restore-replay` did not replay `access-reset`): the floor is not declared on it.
 16. **The isolation, on the restored and replayed base** (§7, S4), and the health as the probe reads it:
