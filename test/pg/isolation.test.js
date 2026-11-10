@@ -19,6 +19,7 @@ const DB = `rw_test_${randomBytes(4).toString("hex")}`;
 const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.password = ""; u.pathname = `/${DB}`; return u.toString(); };
 let admin, adminDb, store, h, A, B, firstRun;
 const MIGRATIONS = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
+const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
 const TENANT_TABLES = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
 
 before(async () => {
@@ -376,6 +377,56 @@ test("the roles gesture takes temporary objects away from the service's roles, a
   }
 });
 
+// C28 (review of 2026-11-10): the level of rw_app and rw_maint at the hoster is ignored by OpenTofu after
+// creation, so nothing showed a right added to them by another hand. `roles --grants`, run after `migrate`
+// at each deploy, compares what the two roles may do IN EFFECT with the grant lines of the committed
+// snapshot. Each planted drift must be refused, named, and the base left as it was.
+test("the roles gesture, with --grants, refuses a base whose grants for rw_app or rw_maint are not the snapshot's", async () => {
+  process.env.RW_DATABASE = DB;
+  const { roles, expectedGrants } = await import("../../scripts/roles.mjs");
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
+  const run = () => roles(u.toString(), { log: () => {}, grants: true }).then((r) => r, (e) => ({ error: e.message }));
+  const committed = readFileSync(SNAPSHOT, "utf8");
+  const sound = await run();
+  assert.equal(sound.error, undefined, sound.error);
+  assert.equal(sound.grants, expectedGrants(committed).length, "it compared every grant line of the two roles");
+  assert.ok(sound.grants > 60, "table, schema and database lines for both roles");
+  const lines = [];
+  await roles(u.toString(), { log: (l) => lines.push(l), grants: true });
+  assert.match(lines.join(), /grants of rw_app and rw_maint are those of db\/schema\.snapshot\.txt/);
+  const planted = [
+    ["a DELETE for the service", "grant delete on rw.upload to rw_app", "revoke delete on rw.upload from rw_app", /1 more than the snapshot \(rw\.upload rw_app DELETE\)/],
+    ["the journal made updatable", "grant update on rw.ledger to rw_maint", "revoke update on rw.ledger from rw_maint", /1 more than the snapshot \(rw\.ledger rw_maint UPDATE\)/],
+    ["a right given to everyone", "grant truncate on rw.blob to public", "revoke truncate on rw.blob from public", /2 more than the snapshot \(rw\.blob rw_app TRUNCATE, rw\.blob rw_maint TRUNCATE\)/],
+    ["a right on one column", "grant update (title) on rw.tenant to rw_maint", "revoke update (title) on rw.tenant from rw_maint", /1 more than the snapshot \(rw\.tenant rw_maint UPDATE\)/],
+    ["a right on the migrations' table", "grant usage on schema rw_meta to rw_app; grant select on rw_meta.migration to rw_app", "revoke select on rw_meta.migration from rw_app; revoke usage on schema rw_meta from rw_app", /2 more than the snapshot \(rw_meta\.migration rw_app SELECT, schema rw_meta rw_app USAGE\)/],
+    ["CREATE on the schema", "grant create on schema rw to rw_app", "revoke create on schema rw from rw_app", /1 more than the snapshot \(schema rw rw_app CREATE\)/],
+    ["CREATE on the database", `grant create on database ${DB} to rw_maint`, `revoke create on database ${DB} from rw_maint`, /1 more than the snapshot \(database rw_maint CREATE\)/],
+    ["a right through a membership", "grant rw_owner to rw_app", "revoke rw_owner from rw_app", /more than the snapshot \(.*rw_app DELETE/],
+    ["a grant of db/grants.sql gone", "revoke select on rw.reader from rw_maint", "grant select on rw.reader to rw_maint", /1 fewer \(rw\.reader rw_maint SELECT\)/],
+  ];
+  for (const [what, plant, undo, said] of planted) {
+    await adminDb.unsafe(plant);
+    try {
+      const r = await run();
+      assert.match(r.error ?? "(no refusal)", /^the grants of rw_app and rw_maint are not those of db\/schema\.snapshot\.txt: /, what);
+      assert.match(r.error, said, what);
+      assert.equal(r.error.includes("\n"), false, "one line: the gateway keeps the last line of a failed gesture");
+      assert.equal(/[0-9a-f]{8}-[0-9a-f]{4}-/.test(r.error), false, "no identifier of a row");
+    } finally { await adminDb.unsafe(undo); }
+  }
+  assert.equal((await run()).error, undefined, "the base is as it was");
+  // a snapshot that cannot stand as the reference is a refusal, never a pass
+  const without = (re) => committed.split("\n").filter((l) => !re.test(l)).join("\n");
+  for (const [what, text] of [["no table line for rw_maint", without(/^grant rw\.\S+ rw_maint /)], ["no schema line", without(/^grant schema /)], ["no database line", without(/^grant database /)], ["empty", ""]]) {
+    const r = await roles(u.toString(), { log: () => {}, grants: true, snapshot: text }).then(() => ({}), (e) => ({ error: e.message }));
+    assert.match(r.error ?? "(no refusal)", /holds no (table|schema|database) grant line for rw_(app|maint)/, what);
+  }
+  // without the flag (the call before `migrate`, on a base that may be behind), nothing is compared
+  await adminDb.unsafe("grant delete on rw.upload to rw_app");
+  try { assert.deepEqual(await roles(u.toString(), { log: () => {} }), { temporaryRevoked: true }); } finally { await adminDb.unsafe("revoke delete on rw.upload from rw_app"); }
+});
+
 test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
   const rows = await adminDb`select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`;
   assert.equal(rows.length, 15);
@@ -383,9 +434,9 @@ test("catalog: every security definer function of rw sets search_path to pg_cata
 });
 
 // The schema the migrations build, committed (checklist-day-zero-project: schema drift): tables, columns,
-// constraints, indexes, policies, functions (with their settings), triggers and grants of rw and rw_meta. A migration that
+// constraints, indexes, policies, functions (with their settings), triggers and grants of rw and rw_meta (on the tables,
+// on the two schemas, and CONNECT and CREATE on the database for the three login roles). A migration that
 // changes any of them changes db/schema.snapshot.txt in the same diff (UPDATE_SCHEMA_SNAPSHOT=1 writes it).
-const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
 test("the schema the migrations build is the committed snapshot (no drift)", async () => {
   const lines = (await adminDb.unsafe(`
     select format('table %s.%s rls=%s force=%s', n.nspname, c.relname, c.relrowsecurity, c.relforcerowsecurity) as l from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname in ('rw', 'rw_meta') and c.relkind = 'r'
@@ -396,6 +447,8 @@ test("the schema the migrations build is the committed snapshot (no drift)", asy
     union all select format('function %s.%s(%s) definer=%s owner=%s config=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner), coalesce(array_to_string(p.proconfig, '; '), '')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
     union all select format('trigger %s', pg_get_triggerdef(t.oid)) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where not t.tgisinternal and n.nspname in ('rw', 'rw_meta')
     union all select format('grant %s.%s %s %s', table_schema, table_name, grantee, privilege_type) from information_schema.role_table_grants where table_schema in ('rw', 'rw_meta') and grantee like 'rw\\_%'
+    union all select format('grant schema %s %s %s', n.nspname, r.rolname, p) from pg_namespace n cross join pg_roles r cross join unnest(array['USAGE', 'CREATE']) as p where n.nspname in ('rw', 'rw_meta') and r.rolname in ('rw_owner', 'rw_resolve', 'rw_app', 'rw_maint') and has_schema_privilege(r.oid, n.oid, p)
+    union all select format('grant database %s %s', r.rolname, p) from pg_roles r cross join unnest(array['CONNECT', 'CREATE']) as p where r.rolname in ('rw_owner', 'rw_app', 'rw_maint') and has_database_privilege(r.oid, current_database(), p)
   `)).map((r) => r.l).sort();
   const text = `${lines.join("\n")}\n`;
   if (process.env.UPDATE_SCHEMA_SNAPSHOT === "1") writeFileSync(SNAPSHOT, text);
