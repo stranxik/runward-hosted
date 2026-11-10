@@ -26,3 +26,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: the in-place update of ADR-0002 recorded above is undone: ADR-0002 is restored as accepted on 2026-11-08, and the re-pin on `main` is ADR-0018 (proposed), which refines it. No other structural decision: every manifest row stays a proposal.
 - Blocked / to dig: the redone task waits for a doer who did not build the repository (runbook §13, handover §2); the rows wait for the author's ratification; the verify pass (`runward/governance/verify-findings.md`) comes once the gate is green, on another model.
 - Next: the redone task's record in `runward/handover.md` §2; ratification; then phase 2 (the first image, the operator's token).
+
+## 2026-11-10 - the two independent reviews published
+
+- Done: the reports of the two independent reviews of the 42 proposed rows are in `runward/governance/reviews/`: 2026-11-08 at `3ac3b8d` (17 rows rejected, six of them on five real defects, fixed the same day, each with a test) and 2026-11-10 at `a4ede14` (9 rows rejected, one new defect on the issuer's keys, three reservations, all addressed on `fix/h0-gate`). Each review was made by an AI agent that wrote none of the rows; Thibault Souris is accountable for both.
+- Decided: nothing structural.
+- Next: a third independent review at `0d94dc2`, before any ratification.
