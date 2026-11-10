@@ -81,7 +81,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Members, invitation at its trigger | ADR-0011 |
 | The witness reader | ADR-0012 |
 | Licence and hosting | ADR-0013 |
-| Design tokens in one file | ADR-0014; pending: ADR-0019 (the app's own layer), proposed |
+| Design tokens in one file | ADR-0019 (the app's own layer), which supersedes ADR-0014 |
 | The in-memory store as reference adapter | ADR-0015 |
 | The operator's gateway to the private database | ADR-0016 |
 | No load test before the preview; the bounds are tested | ADR-0017 |
