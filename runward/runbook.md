@@ -199,9 +199,9 @@ After phase 1: no public endpoint (`run state show scaleway_rdb_instance.rw | gr
 
 ## 13. A rehearsal of a deploy's first gestures, on a throwaway stack (the hand-over's redone task)
 
-What it proves: that someone who did not build this repository can, from this runbook alone, create the roles and migrate through the operator's gateway, start the service on PostgreSQL, open the two witness tenants, run the isolation suite and the daily chain check through the gateway, read the service's health, trace one request by its id, find a decision in the ADRs, and stop everything. It is the sequence of §12 step 5 and step 7 and of §7's isolation, on a stack that costs nothing and holds no real secret: every token and identifier below is drawn for the run, then thrown away. It is real backlog: ADR-0016 lists the first `roles`, `migrate` and `isolation` calls through the gateway among what would settle it. Note, for each step, its verdict line, how long it took, and every place where you had to guess: the record goes to `runward/handover.md` §2.
+What it proves: that someone who did not build this repository can, from this runbook alone, create the roles and migrate through the operator's gateway, start the service on PostgreSQL, open the two witness tenants, run the isolation suite and the daily chain check through the gateway, read the service's health, trace one request by its id, find a decision in the ADRs, and stop everything. It is the sequence of §12 step 5 and step 7 and of §7's isolation, on a stack that costs nothing and holds no real secret: every token and identifier below is drawn for the run, then thrown away. It is real backlog: ADR-0016 lists the first `roles`, `migrate` and `isolation` calls through the gateway among what would settle it. Note, for each step, its verdict line, how long it took, and every place where you had to guess: the record is committed as `runward/redone-task.md` and pointed to from `runward/handover.md` §2.
 
-**Prerequisites**: a checkout of this repository at the commit to rehearse, `npm ci` done; Node.js 22, bash, curl, jq and openssl; a throwaway PostgreSQL 16 or 17 that you may destroy, reachable without TLS, trusting connections without a password, its address in `PG` (host:port). Where Docker runs, for example: `docker run -d --rm --name rw-rehearsal -p 127.0.0.1:55432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine`, then `PG=127.0.0.1:55432`. Run every step from the repository's root, in one bash shell.
+**Prerequisites**: a checkout of this repository at the commit to rehearse, `npm ci` done; Node.js 22, bash, curl, jq and openssl; a throwaway PostgreSQL 16 or 17 that you may destroy, reachable without TLS, trusting connections without a password, its address in `PG` (host:port). Where Docker runs, for example: `docker run -d --rm --name rw-rehearsal -p 127.0.0.1:55432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17-alpine`, then `PG=127.0.0.1:55432`. If the steps themselves run in a container (for example `node:22`), put it and the server on one Docker network, start the server without `-p`, and set `PG=rw-rehearsal:5432`; `jq` is not in the `node:22` image (`apt-get update && apt-get install -y jq` inside it), and on a host with SELinux the checkout is mounted with `:Z`. Run every step from the repository's root, in one bash shell.
 
 1. **The database and the three login roles**, as the server's superuser (what the hoster's API did at phase 1; `db/roles.sql` is the reference). One statement per call: `create database` cannot share a transaction.
    ```sh
@@ -216,8 +216,9 @@ What it proves: that someone who did not build this repository can, from this ru
    R=$(mktemp -d); T=$(openssl rand -hex 32)
    TH=$(node -e 'process.stdout.write(require("node:crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$T")
    W1=$(node -p 'crypto.randomUUID()'); W2=$(node -p 'crypto.randomUUID()')
+   echo ${#TH} ${#W1}
    ```
-   Verify: `echo ${#TH} ${#W1}` prints `64 36`.
+   Verify: `64 36`.
 3. **The operator's gateway** (the private container of ADR-0016, here a local process): its four role URLs point at the throwaway server, the superuser standing in for `rw_admin`; its bucket does not exist (no gesture of this rehearsal touches the object store).
    ```sh
    env NODE_ENV=development PORT=8090 DATABASE_SSL=disable RW_DATABASE=runward_hosted RW_ORIGIN=http://localhost:8787 \
@@ -255,12 +256,13 @@ What it proves: that someone who did not build this repository can, from this ru
    ```sh
    for W in "$W1" "$W2"; do scripts/operator-call.sh open-bootstrap "{\"hash\":\"$(openssl rand -hex 32)\",\"tenant\":\"$W\",\"witness\":true,\"title\":\"Rehearsal\"}"; done
    ```
-   Verify: two lines `HTTP 200 (gesture=open-bootstrap ok=true exit=0)`, and nothing else printed: no tenant, no link.
-8. **The isolation suite on this base**, as after each deploy (§7, S4):
+   Verify: two lines `operator-call: open-bootstrap answered HTTP 200 (gesture=open-bootstrap ok=true exit=0)`, and nothing else printed: no tenant, no link.
+8. **The isolation suite on this base**, as after each deploy (§7, S4), then the gateway's own line for it:
    ```sh
    scripts/operator-call.sh isolation
+   grep '"event":"operator.gesture"' "$R/gateway.log" | tail -1 | jq -c '{status, role: .detail.role, exit: .detail.exit}'
    ```
-   Verify: `HTTP 200 (gesture=isolation ok=true exit=0)`.
+   Verify: `operator-call: isolation answered HTTP 200 (gesture=isolation ok=true exit=0)`, then `{"status":200,"role":"rw_app","exit":0}`. What `exit=0` covers (`scripts/isolation-deployed.mjs`): from each witness, the 13 tenant tables held no row of the other, a write naming the other was refused, and `rw_app` does not bypass RLS. The suite exits 2, not 0, when the witnesses hold no row at all, so a 0 cannot come from an empty base.
 9. **The daily chain check, by the schedule's path** (no token, as the hoster's trigger calls it), then read on the service:
    ```sh
    curl -s -X POST http://127.0.0.1:8090/scheduled/verify-chains; echo
@@ -274,12 +276,14 @@ What it proves: that someone who did not build this repository can, from this ru
     ```
     Verify: an id `r-` and 12 hex, `1`, then `{"status":401,"refusal":"token-missing"}`.
 11. **A decision, from the ADRs alone**: why may the hoster's schedule call `/scheduled/verify-chains` without the operator's token, and what observation would reverse that? Answer from `runward/adr/` only, naming the record and its section.
-    Verify: ADR-0016, section Decision (a trigger cannot hold a secret except in clear, so the two scheduled paths run only those two idempotent, argument-free gestures) and section What would settle it (Reverses).
+    Verify: write your answer down first, then compare it with the key after step 12; say in the record whether you had read the key before answering.
 12. **Stop everything**:
     ```sh
     kill "$SV" "$GW"; wait "$SV" "$GW"; curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8787/api/health
     ```
     Verify: `000` (nothing answers any more); then drop the throwaway server (`docker stop rw-rehearsal`) and `rm -r "$R"`.
+
+**Key to step 11**, to read after answering: ADR-0016, section Decision (a trigger cannot hold a secret except in clear, so the two scheduled paths run only those two idempotent, argument-free gestures) and section What would settle it (Reverses).
 
 ## 14. Rerun the evaluation
 

@@ -32,3 +32,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Done: the reports of the two independent reviews of the 42 proposed rows are in `runward/governance/reviews/`: 2026-11-08 at `3ac3b8d` (17 rows rejected, six of them on five real defects, fixed the same day, each with a test) and 2026-11-10 at `a4ede14` (9 rows rejected, one new defect on the issuer's keys, three reservations, all addressed on `fix/h0-gate`). Each review was made by an AI agent that wrote none of the rows; Thibault Souris is accountable for both.
 - Decided: nothing structural.
 - Next: a third independent review at `0d94dc2`, before any ratification.
+
+## 2026-11-10 - the hand-over's task redone by a doer who did not build the repository
+
+- Done: an agent session that did not build this repository redid runbook §13 from §13 alone, on the author's home server: 12 of 12 steps as written, on the first run (`runward/redone-task.md`). Its six gaps are folded back into §13: the key to step 11 after step 12, step 2's check in its block, what step 8's `exit=0` covers, the full verdict lines of steps 7 and 8, the steps run inside a container, the record's destination said one way. `runward/handover.md` §2 holds the record.
+- Decided: nothing structural.
+- Next: the third independent review, then the ratification.
