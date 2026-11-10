@@ -6,6 +6,13 @@
 // set an attribute or grant a membership. This script does that part, then CHECKS what roles.sql asks
 // for and fails closed when it does not hold: NOBYPASSRLS cannot be set here (PostgreSQL 16 lets only a
 // role that has BYPASSRLS change it), so it is verified, never assumed.
+// It also takes TEMPORARY on the service database away from PUBLIC (review finding of 2026-11-10, C1: a
+// role that may create temporary objects can plant a type in pg_temp; the definer functions' search_path
+// is the control, 0005, this is the second net). Only the database's owner or a superuser can: db/grants.sql
+// runs as rw_owner, which is neither, so the revoke is here, under the administrator. Whether the hoster
+// lets its administrator do it is not known before the first call against it: the revoke is attempted,
+// then what rw_app and rw_maint may do is READ and said in this script's one line; it does not fail the
+// gesture (the search_path does not depend on it).
 // The grants of db/grants.sql are not applied here: they run as rw_owner, the owner of the schema rw, at
 // the end of scripts/migrate.mjs.
 import postgres from "postgres";
@@ -14,6 +21,7 @@ import postgres from "postgres";
 import { migrationTls } from "./migrate.mjs";
 
 const DATABASE = process.env.RW_DATABASE ?? "runward_hosted";
+const NAME = /^[a-z_][a-z0-9_]{0,62}$/;
 
 export async function roles(url, { log = console.log } = {}) {
   const sql = postgres(url, { max: 1, onnotice: () => {}, ssl: migrationTls(url) });
@@ -22,6 +30,9 @@ export async function roles(url, { log = console.log } = {}) {
       if not exists (select 1 from pg_roles where rolname = 'rw_resolve') then create role rw_resolve nologin; end if;
     end $$`);
     await sql.unsafe("grant rw_resolve to rw_owner");
+    if (!NAME.test(DATABASE)) throw new Error("RW_DATABASE is not a plain database name");
+    // a role that does not own the database gets a warning here, not an error: the check below tells
+    await sql.unsafe(`revoke temporary on database ${DATABASE} from public`).catch(() => {});
     const rows = await sql`select rolname, rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
       from pg_roles where rolname in ('rw_owner', 'rw_resolve', 'rw_app', 'rw_maint')`;
     const by = new Map(rows.map((r) => [r.rolname, r]));
@@ -44,7 +55,10 @@ export async function roles(url, { log = console.log } = {}) {
     if (!d.app_connect) problems.push(`rw_app cannot connect to ${DATABASE}`);
     if (!d.maint_connect) problems.push(`rw_maint cannot connect to ${DATABASE}`);
     if (problems.length) throw new Error(`the roles do not hold:\n  - ${problems.join("\n  - ")}`);
-    log("roles: rw_resolve (nologin) exists, rw_owner is its member, rw_app and rw_maint do not bypass RLS");
+    const [t] = await sql`select has_database_privilege('rw_app', ${DATABASE}, 'temporary') as app, has_database_privilege('rw_maint', ${DATABASE}, 'temporary') as maint`;
+    const temporary = t.app || t.maint ? "TEMPORARY NOT revoked (the administrator may not: the definer functions' search_path remains the control)" : "no temporary objects for rw_app and rw_maint";
+    log(`roles: rw_resolve (nologin) exists, rw_owner is its member, rw_app and rw_maint do not bypass RLS; ${temporary}`);
+    return { temporaryRevoked: !(t.app || t.maint) };
   } finally { await sql.end({ timeout: 5 }); }
 }
 

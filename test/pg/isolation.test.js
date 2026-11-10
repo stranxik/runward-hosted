@@ -343,6 +343,39 @@ test("a security definer function resolves no name in the caller's temporary sch
   }
 });
 
+// The second net of C1: scripts/roles.mjs, the administrator's gesture, takes TEMPORARY on the service
+// database away from PUBLIC, so the service's role cannot create the temporary type at all.
+test("the roles gesture takes temporary objects away from the service's roles, and says whether it could", async () => {
+  process.env.RW_DATABASE = DB;
+  const { roles } = await import("../../scripts/roles.mjs");
+  const tryTemp = async (role) => {
+    const sql = postgres(urlAs(role), { max: 1, onnotice: () => {} });
+    try { await sql.unsafe("create temporary table planted_temp (x int)"); return "created"; } catch (e) { return e.message; } finally { await sql.end(); }
+  };
+  assert.equal(await tryTemp("rw_app"), "created", "control: before the gesture, PUBLIC may create temporary objects");
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
+  const lines = [];
+  assert.deepEqual(await roles(u.toString(), { log: (l) => lines.push(l) }), { temporaryRevoked: true });
+  assert.match(lines.join(), /no temporary objects for rw_app and rw_maint/);
+  for (const role of ["rw_app", "rw_maint"]) assert.match(await tryTemp(role), /permission denied to create temporary tables/, role);
+  // an administrator that may manage the roles but does not own the database, as a hoster's may be: its
+  // revoke is a warning, the same line says so, and the gesture does not fail
+  await adminDb.unsafe(`grant temporary on database ${DB} to public`);
+  const stand = `rw_test_admin_${randomBytes(4).toString("hex")}`;
+  await adminDb.unsafe(`create role ${stand} login createrole; grant rw_resolve to ${stand} with admin option; grant connect on database ${DB} to ${stand}`);
+  try {
+    const said = [];
+    const r = await roles(urlAs(stand), { log: (l) => said.push(l) }).catch((e) => ({ error: e.message }));
+    assert.deepEqual(r, { temporaryRevoked: false }, JSON.stringify(r));
+    assert.match(said.join(), /TEMPORARY NOT revoked/);
+    assert.equal(await tryTemp("rw_app"), "created");
+  } finally {
+    await adminDb.unsafe(`revoke rw_resolve from rw_owner granted by ${stand}`).catch(() => {});
+    await adminDb.unsafe(`drop owned by ${stand}; drop role ${stand}`);
+    await adminDb.unsafe(`revoke temporary on database ${DB} from public`);
+  }
+});
+
 test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
   const rows = await adminDb`select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`;
   assert.equal(rows.length, 15);
