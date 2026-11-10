@@ -1,0 +1,80 @@
+/* runward hosted: the app's own design layer (ADR "app layer"), loaded right after web/famille.css (the
+   family's structure, jetons-famille) and before everything else. It replaces web/tokens.css: EVERY colour,
+   font, radius and motion value of the shell lives here, and only here (test/unit/tokens.test.js fails on a
+   literal colour anywhere else, and measures the contrasts below).
+
+   Light is the default theme (the readers are decision makers: ecrans-animes, rule 8); dark is an option,
+   chosen in the app (data-theme="dark") and kept per viewer. The page does not follow the system preference.
+
+   Start: Radar's layer (app/couche-radar.css: true black, neutral greys, three inks), with the radii of
+   Dropyour's layer (999, 8, 6, 12, 14 px). Radar's two second surfaces are on this product's banned list (the
+   test names it); they are replaced by neighbours, #0c0c0e and #f7f7f8. No brand accent. No green, ever, and
+   never a red and green pair. Text stays in ink, never in a state colour: a state is said by a shape, a word,
+   then a colour.
+
+   State colours: Okabe-Ito's vermilion, orange and sky blue, one step of lightness per theme, each validated
+   against its two surfaces by the dataviz skill's validate_palette.js on 2026-11-10 (all pairs pass; worst pair
+   refusal and level: 14.5 deutan, 16.0 normal in light; 14.1 and 15.8 in dark). The blue is the live state
+   only (author's decision, 2026-11-10).
+
+   Geist and Geist Mono are served by the app itself from web/fonts/ (SIL OFL 1.1, web/fonts/OFL.txt): no
+   third party is called. The mono is kept for measured values (times, digests, counters, the command). */
+
+@font-face{font-family:"Geist";font-weight:400;font-style:normal;font-display:swap;src:url(/assets/fonts/Geist-Regular.woff2) format("woff2")}
+@font-face{font-family:"Geist";font-weight:500;font-style:normal;font-display:swap;src:url(/assets/fonts/Geist-Medium.woff2) format("woff2")}
+@font-face{font-family:"Geist";font-weight:600;font-style:normal;font-display:swap;src:url(/assets/fonts/Geist-SemiBold.woff2) format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:400;font-style:normal;font-display:swap;src:url(/assets/fonts/GeistMono-Regular.woff2) format("woff2")}
+@font-face{font-family:"Geist Mono";font-weight:500;font-style:normal;font-display:swap;src:url(/assets/fonts/GeistMono-Medium.woff2) format("woff2")}
+
+/* ---- light, the default */
+:root{
+  /* the family contract's roles (jetons-famille) */
+  --bg:#ffffff; --bg-2:#f7f7f8;
+  --line:#ebebeb; --line-2:#dcdcdf;
+  --text:#171717; --text-2:#5e5e5e; --text-3:#62626c;
+  --bar:#7e7e88; --beat:#ececef;
+  --hit:#000000;
+  --sans:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+  --ls-h1:-0.05em; --ls-h2:-0.045em; --ls-h3:-0.025em;
+  --r-pill:999px; --r-panel:8px; --r-thumb:6px; --r-notice:12px; --r-win:14px;
+  /* state colours: never alone (shape and word first), never on text */
+  --refus:#9f4502;   /* Refusée par le contrôle : Okabe-Ito vermilion, light step */
+  --niveau:#bb8105;  /* Niveau exigé non atteint : Okabe-Ito orange, light step */
+  --direct:#1a84b6;  /* the live state only : Okabe-Ito sky blue, light step */
+  /* the code block: the one technical object, a quiet surface in each theme */
+  --term:#f1f1f3; --term-ink:#171717; --term-soft:#5e5e5e;
+  color-scheme:light;
+
+  /* names the existing shell and the pinned fleet stylesheet use, mapped onto the roles above (the shell is
+     rewritten in the family's vocabulary by its own lot; until then nothing it shows loses its value) */
+  --fg:var(--text); --soft:var(--text-2); --panel:var(--bg-2); --mist:var(--bg-2);
+  --hair:var(--line); --hair2:var(--line-2);
+  --soft-i:color-mix(in srgb, var(--bg) 70%, var(--fg)); /* the soft ink of an inverted section */
+  --chaux:var(--term-ink); /* the ink on the code block */
+  --or:var(--text); /* the fleet stylesheet's one emphasis: in ink here, the app has no brand accent */
+  --font:var(--sans); --code:var(--mono);
+  /* the relevés (mono micro-annotations) read at 12 px everywhere (author's rule, 2026-11-06) */
+  --fs-releve:12px;
+  /* layout */
+  --gut:16px; --max:1180px;
+  /* shape: the shell's single radius is the panel's; the mark of a state keeps a near-square corner */
+  --radius:var(--r-panel); --r-mark:1px;
+  /* motion: the family's productive curve and durations apply (famille.css); no entrance animation in the
+     app. The one loop kept is the loading line, a progress indicator. */
+  --ease-load:cubic-bezier(.45,.05,.25,1); --dur-load:1.6s;
+}
+
+/* ---- dark, an option */
+:root[data-theme="dark"]{
+  --bg:#000000; --bg-2:#0c0c0e;
+  --line:#1f1f22; --line-2:#2e2e33;
+  --text:#ededed; --text-2:#a1a1a1; --text-3:#8a8a93;
+  --bar:#6e6e78; --beat:#2a2a2e;
+  --hit:#ffffff;
+  --refus:#a84800; --niveau:#c18505; --direct:#3c9cd0;
+  --term:#141417; --term-ink:#ededed; --term-soft:#a1a1a1;
+  color-scheme:dark;
+}
+
+@media (min-width: 760px){ :root{ --gut:32px; } }
