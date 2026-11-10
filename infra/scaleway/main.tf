@@ -388,7 +388,7 @@ resource "scaleway_container" "operator" {
   memory_limit_bytes     = 536870912 # 512 MiB
   min_scale              = 0
   max_scale              = 1   # one gesture at a time, in one process
-  timeout                = 900 # above the longest gesture's own deadline (14 min)
+  timeout                = 900 # above the longest gesture's own deadline (14 min), its kill and the note that follows (35 s)
   privacy                = "private"
   protocol               = "http1"
   https_connections_only = true
@@ -418,8 +418,12 @@ resource "scaleway_container" "operator" {
 # The two daily gestures, at the hour of Paris (the trigger carries its time zone). The schedule cannot
 # hold a secret in clear, so it calls /scheduled/<gesture>, which runs only these two idempotent,
 # argument-free gestures; every other gesture needs the operator's token.
+# verify-chains starts 30 minutes after retention: retention's own deadline is 14 minutes (the gateway's
+# GESTURES), then the kill's grace and the gateway's note of a job that did not complete; the gateway runs
+# one gesture at a time and would refuse (409) a job that starts while the other still runs (review finding
+# of 2026-11-10: 03:37 was the very minute retention's deadline ended). test/unit/jobs.test.js holds the gap.
 locals {
-  scheduled = { retention = "23 3 * * *", verify-chains = "37 3 * * *" }
+  scheduled = { retention = "23 3 * * *", verify-chains = "53 3 * * *" }
 }
 resource "scaleway_container_trigger" "scheduled" {
   for_each     = local.phase2 ? local.scheduled : {}

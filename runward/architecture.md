@@ -12,6 +12,7 @@ A hosted view of runward missions: each declared repository's CI sends what runw
 - **Application** (`src/application/`): upload, order, assemble, sign in, links, declare and confirm, consent, withdraw and restore, journal, export, erase, operator gestures, witness reader.
 - **Domain** (`src/domain/`): refusals, workload claims and upload order, identity rules, repositories and retention, the chained journal. Imports only itself and `node:crypto` (`test/unit/boundary.test.js`).
 - **Adapters** (`src/adapters/`): PostgreSQL and in-memory stores, S3 and in-memory objects, GitHub OIDC, WebAuthn, runward-fleet (the anti-corruption layer), tar, clock, log, egress.
+- **Operator entry** (`src/operator-gateway.js`, ADR-0016): a second process of the same image, in a private container of the private network, one authenticated route per gesture of the closed list, each gesture a child process holding one database role; it answers a status and a code, the results stay in the operator journal.
 
 ## 3. Ports
 
@@ -25,7 +26,7 @@ A hosted view of runward missions: each declared repository's CI sends what runw
 | IndexAssembler | secondary | the fleet index by runward-fleet, or a named refusal | v0 | contracts/index-assembler.md |
 | Clock, Log | secondary | the service time, declared; one JSON line per event | v0 | ../src/adapters/system/log.js |
 
-Port contracts: `runward/contracts/index-assembler.md`.
+Port contracts: `runward/contracts/index-assembler.md` (IndexAssembler) and `runward/contracts/port-contract.md` (the other secondary ports); the HTTP contract is `runward/contracts/api-contract.json`, compared with the served one by a test.
 
 ## 4. Default topology and triggers
 
@@ -35,7 +36,7 @@ Port contracts: `runward/contracts/index-assembler.md`.
 | Single orchestrator | the application layer composes use cases; no agent | a genuinely parallelizable subtask (none known) |
 | Tool registry + middleware chain | no agent tools: the route table and one entry middleware hold the host list, request id, headers, same origin, session, in one place (`src/http/server.js`) | a second entry (an MCP read access) |
 | One core language, thin model SDK | no model SDK at all; Node.js because runward-fleet is JavaScript; three production dependencies | a measured need the table router cannot cover in under a hundred lines |
-| Mono-instance, scale 0 to 1, state outside the process | all state in PostgreSQL and S3 | S2 or S6 fails at scale 0 (minimum scale 1), or a second instance (advisory locks already serialise per tenant) |
+| Mono-instance, scale 0 to 1, state outside the process | all durable state in PostgreSQL and S3; held per instance, by design at one instance: the rate windows (`src/http/limits.js`), the error window of `/api/health`, the issuer's key cache (`src/adapters/oidc/github.js`), the cookies that resolved in the last minute (bounded) and the circuits (`src/adapters/system/egress.js`), each lost on a restart | S2 or S6 fails at scale 0 (minimum scale 1), or a second instance: advisory locks already serialise per tenant; the per-instance windows, key cache and circuits then move to PostgreSQL, or an ADR keeps them per instance |
 
 ## Rule conformance
 
@@ -43,12 +44,12 @@ Port contracts: `runward/contracts/index-assembler.md`.
 
 | Rule | Status | Evidence |
 |---|---|---|
-| contracts-governance | proposed:applied | test:reports/junit.xml::the API contract served is the committed one: same routes, same refusals, same digest; test:reports/junit.xml::planted control: one more route, or a route opened to the public, changes the digest; file:runward/contracts/api-contract.json; adr:0003 |
-| hexa-adapter-pattern | proposed:applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; file:reports/eslint.json#src/adapters/objects/objects.js |
-| hexa-architecture | proposed:applied | file:reports/eslint.json#src/domain/workload.js; file:reports/eslint.json#src/main.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; adr:0001 |
-| hexa-typescript-native | proposed:n/a | the service calls no model: there is no model SDK or chain framework to keep light; JavaScript ES modules without a framework (adr:0001) |
-| process-adr-and-journal | proposed:applied | adr:0002; adr:0015; file:runward/JOURNAL.md |
-| security-mcp-server-pinning | proposed:n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
+| contracts-governance | applied | test:reports/junit.xml::the API contract served is the committed one: same routes, same refusals, same digest; test:reports/junit.xml::planted control: one more route, or a route opened to the public, changes the digest; file:runward/contracts/api-contract.json; adr:0003 |
+| hexa-adapter-pattern | applied | file:reports/eslint.json#src/application/app.js; file:reports/eslint.json#src/adapters/store/memory.js; file:reports/eslint.json#src/adapters/store/postgres.js; file:reports/eslint.json#src/adapters/objects/objects.js |
+| hexa-architecture | applied | file:reports/eslint.json#src/domain/workload.js; file:reports/eslint.json#src/main.js; test:reports/junit.xml::the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error; adr:0001 |
+| hexa-typescript-native | n/a | the service calls no model: there is no model SDK or chain framework to keep light; JavaScript ES modules without a framework (adr:0001) |
+| process-adr-and-journal | applied | adr:0002; adr:0016; file:runward/JOURNAL.md; file:runward/adr/ADR-0018-runward-fleet-re-pinned-at-main-5a9cdf0-where-pr-496-merged-refines-adr-0002.md#Refines — an accepted record is never edited: ADR-0002, rewritten in place on 2026-11-10, is restored as accepted, and the re-pin is a new record that refines it (ADR-0018, proposed) |
+| security-mcp-server-pinning | n/a | no MCP server is consumed or exposed in the floor; agent read access by MCP is deferred to its trigger (framing §6) |
 
 ## 5. What stays open
 
@@ -67,7 +68,8 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Decision | ADR |
 |---|---|
 | One Node.js monolith, no framework, one network exit | ADR-0001 |
-| runward-fleet pinned by a vendored tarball of a commit | pending: ADR-0002, proposed |
+| runward-fleet pinned by a vendored tarball of a commit | ADR-0002 |
+| runward-fleet re-pinned on main at main@5a9cdf0, where PR #496 merged | decided: ADR-0018, accepted 2026-11-10 |
 | Upload by the OIDC token of the send workflow | ADR-0003 |
 | The index by runward-fleet, the view imported | ADR-0004 |
 | Passkeys and one link mechanism | ADR-0005 |
@@ -79,6 +81,10 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Members, invitation at its trigger | ADR-0011 |
 | The witness reader | ADR-0012 |
 | Licence and hosting | ADR-0013 |
-| Design tokens in one file | pending: ADR-0014, proposed |
-| The in-memory store as reference adapter | pending: ADR-0015, proposed |
-| The operator's gateway to the private database | pending: ADR-0016, accepted |
+| Design tokens in one file | ADR-0014 |
+| The in-memory store as reference adapter | ADR-0015 |
+| The operator's gateway to the private database | ADR-0016 |
+| No load test before the preview; the bounds are tested | ADR-0017 |
+
+### Ratification
+- 2026-11-10 · rows: contracts-governance, hexa-adapter-pattern, hexa-architecture, hexa-typescript-native, process-adr-and-journal, security-mcp-server-pinning · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: contracts-governance@3819c661f85728cf, hexa-adapter-pattern@b76e0f90c6a7b5b3, hexa-architecture@611e39392ab4085f, hexa-typescript-native@c33865aec11fb9dd, process-adr-and-journal@6d0c6b5a4da8f56b, security-mcp-server-pinning@2e6d819f82f30657 · mode: agent

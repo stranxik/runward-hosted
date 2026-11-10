@@ -3,8 +3,24 @@
 // no pull_request_target or workflow_run anywhere; in send.yml, only the send job holds id-token, the
 // check job never passes --hooks and writes under $RUNNER_TEMP, and the send job runs no third-party
 // action besides GitHub's artifact actions. A deploy or rollback workflow stays off unless its repository
-// variable is set; push-image runs by hand from main only. Exit 1 with the list of faults.
+// variable is set; push-image runs by hand from main only. No secret in a command line (AGENTS.md,
+// never-rule 5; review finding of 2026-11-10): in a workflow and in a shell script of scripts/, a header or
+// a user option of curl never expands a variable that names a secret, a token, a key or a password, on the
+// curl line or in an array built for it; the value goes through a file curl reads (-H @<(printf ...)).
+// Exit 1 with the list of faults.
 import { readFileSync, readdirSync } from "node:fs";
+
+/** The lines of a shell text that put a secret in a command line: `-H "Name: $SECRET"`, `-u "$TOKEN"`. */
+export function secretsInArgv(text) {
+  const out = [];
+  text.split("\n").forEach((line, i) => {
+    if (/^\s*#/.test(line)) return;
+    // what a process substitution holds is written by the shell itself, never an argument of curl
+    const outside = line.replace(/<\([^)]*\)/g, "");
+    if (/(?:-H|--header|-u|--user|--oauth2-bearer|--proxy-user)[ =]*["']?[^"'|;]*\$\{?\w*(?:SECRET|TOKEN|KEY|PASSWORD|PASSWD)\w*/i.test(outside)) out.push(i + 1);
+  });
+  return out;
+}
 
 const DIR = process.env.RW_WORKFLOWS_DIR ?? new URL("../.github/workflows/", import.meta.url).pathname;
 const faults = [];
@@ -21,6 +37,10 @@ for (const f of readdirSync(DIR).filter((x) => /\.ya?ml$/.test(x))) {
   // push-image builds and pushes before any container exists (ADR-0016): by hand only, from main only
   if (f === "push-image.yml" && (!/^on:\n  workflow_dispatch:\n(?! )/m.test(t) || !/github\.ref == 'refs\/heads\/main'/.test(t))) faults.push(`${f}: not manual-only from main`);
 }
+const SCRIPTS = process.env.RW_SCRIPTS_DIR ?? new URL("./", import.meta.url).pathname;
+for (const [dir, files] of [[DIR, readdirSync(DIR).filter((x) => /\.ya?ml$/.test(x))], [SCRIPTS, readdirSync(SCRIPTS).filter((x) => x.endsWith(".sh"))]]) {
+  for (const f of files) for (const n of secretsInArgv(readFileSync(dir + f, "utf8"))) faults.push(`${f}:${n}: a secret in a command line (pass it to curl through a file: -H @<(printf ...))`);
+}
 const send = readFileSync(DIR + "send.yml", "utf8");
 const jobs = send.split(/^  (?=[a-z]+:\s*$)/m);
 const job = (name) => jobs.find((j) => j.startsWith(`${name}:`)) ?? "";
@@ -32,4 +52,4 @@ if (!/permissions: \{ id-token: write \}/.test(job("send"))) faults.push("send.y
 if (!/\$RUNNER_TEMP\/rw\/check\.json/.test(job("check"))) faults.push("send.yml: check does not write under $RUNNER_TEMP");
 for (const m of job("send").matchAll(/uses:\s*([^@\s]+)@/g)) if (!["actions/download-artifact", "actions/upload-artifact"].includes(m[1])) faults.push(`send.yml: the send job runs ${m[1]}`);
 if (faults.length) { console.error(`check-workflows:\n  - ${faults.join("\n  - ")}`); process.exit(1); }
-console.log("check-workflows: actions pinned, send.yml's id-token held by send alone, no --hooks, output under $RUNNER_TEMP");
+console.log("check-workflows: actions pinned, send.yml's id-token held by send alone, no --hooks, output under $RUNNER_TEMP, no secret in a command line");

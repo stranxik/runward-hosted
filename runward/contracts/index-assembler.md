@@ -4,7 +4,7 @@
 
 **Contract version**: v0
 **Port type**: secondary (driven by the application)
-**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@5a9cdf08, pinned by ADR-0002)
+**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@5a9cdf08, pinned by ADR-0002, re-pinned on main by ADR-0018)
 
 ## Business intent
 
@@ -65,4 +65,4 @@ The same inputs give the same bytes; an index never carries `machine-established
 
 ## References
 
-ADR-0002, ADR-0004; PADR-0011.
+ADR-0002, ADR-0018, ADR-0004; PADR-0011.

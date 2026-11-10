@@ -131,6 +131,11 @@ export function postgresStore({ url, max = 4, ssl }) {
       async setMaintenance(m) { await q`select rw.set_maintenance(${m === null ? null : JSON.stringify(m)}::text::jsonb)`; },
       async tenantIds() { const rows = await q`select * from rw.tenant_ids() as id`; return rows.map((r) => r.id); },
       async operatorNote(what, detail) { const [r] = await q`select rw.operator_note(${what}, ${JSON.stringify(detail)}::text::jsonb) as seq`; return Number(r.seq); },
+      // the last outcome of each daily job: { <job>: { at, ok } }, never a tenant, an error or a head
+      async dailyJobs() {
+        const [r] = await q`select rw.daily_jobs() as j`;
+        return Object.fromEntries(Object.entries(r.j ?? {}).map(([job, v]) => [job, { at: new Date(v.at).getTime(), ok: v.ok === true }]));
+      },
     };
   }
 

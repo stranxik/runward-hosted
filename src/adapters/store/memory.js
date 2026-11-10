@@ -152,6 +152,16 @@ export function memoryStore({ clock }) {
       setMaintenance(m) { state.maintenance = m; },
       tenantIds() { return state.rows.tenant.map((t) => t.tenantId); },
       operatorNote(what, detail) { state.operator.push({ seq: state.operator.length + 1, at: clock.now(), what, detail }); return state.operator.length; },
+      // as rw.daily_jobs(): per daily job, its last note's time and whether that run completed
+      dailyJobs() {
+        const out = {};
+        for (const n of state.operator) {
+          if (n.what !== "retention" && n.what !== "verify-chains") continue;
+          const report = Array.isArray(n.detail?.report) ? n.detail.report : [];
+          out[n.what] = { at: n.at, ok: !(Number(n.detail?.failed ?? 0) > 0) && !report.some((e) => e?.ok === false || e?.failed === true) };
+        }
+        return out;
+      },
     };
   }
 

@@ -10,14 +10,15 @@ import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
 import { harness, founder, pinnedRepository, send, gesture, sha, token, claimsFor } from "../helpers.js";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { replay } from "../../scripts/replay-export.mjs";
 
 const ADMIN = process.env.PG_ADMIN_URL;
 if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
 const DB = `rw_test_${randomBytes(4).toString("hex")}`;
 const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.password = ""; u.pathname = `/${DB}`; return u.toString(); };
-let admin, adminDb, store, h, A, B;
+let admin, adminDb, store, h, A, B, firstRun;
+const MIGRATIONS = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
 const TENANT_TABLES = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
 
 before(async () => {
@@ -32,7 +33,7 @@ before(async () => {
   await admin.unsafe("grant rw_resolve to rw_owner");
   await admin.unsafe(`grant create, connect on database ${DB} to rw_owner; grant connect on database ${DB} to rw_app, rw_maint`);
   process.env.DATABASE_SSL = "disable";
-  await migrate(urlAs("rw_owner"), { log: () => {} });
+  firstRun = await migrate(urlAs("rw_owner"), { log: () => {} });
   store = postgresStore({ url: urlAs("rw_app"), ssl: false });
   const u = new URL(ADMIN); u.pathname = `/${DB}`;
   adminDb = postgres(u.toString(), { max: 1, onnotice: () => {} });
@@ -47,7 +48,13 @@ after(async () => {
 });
 
 test("the migration is idempotent: a second run applies nothing", async () => {
-  await migrate(urlAs("rw_owner"), { log: () => {} });
+  assert.deepEqual(firstRun.applied, MIGRATIONS, "the first run applied every committed migration, in order");
+  const lines = [];
+  const second = await migrate(urlAs("rw_owner"), { log: (l) => lines.push(l) });
+  assert.deepEqual(second.applied, [], "the second run applied no migration");
+  assert.deepEqual(lines, ["migrate: grants applied"], "it only re-applied the grants, which are idempotent");
+  const recorded = await adminDb`select name from rw_meta.migration order by name`;
+  assert.deepEqual(recorded.map((r) => r.name), MIGRATIONS, "each migration recorded once");
 });
 
 test("two real tenants, made through the application under rw_app", async () => {
@@ -135,7 +142,7 @@ test("catalog: forced RLS on every tenant table, rw_app without bypass, no USING
   const views = await adminDb`select viewname from pg_views where schemaname = 'rw'`;
   assert.deepEqual([...views], [], "no view (a view without security_invoker would bypass RLS)");
   const defs = (await adminDb`select p.proname, pg_get_userbyid(p.proowner) as owner from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`).map((r) => `${r.proname}:${r.owner}`);
-  assert.deepEqual(defs, ["count_refused", "maintenance", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "tenant_ids", "use_jti"].map((f) => `${f}:rw_resolve`));
+  assert.deepEqual(defs, ["count_refused", "daily_jobs", "maintenance", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "tenant_ids", "use_jti"].map((f) => `${f}:rw_resolve`));
   const owners = await adminDb`select distinct tableowner from pg_tables where schemaname = 'rw'`;
   assert.deepEqual(owners.map((r) => r.tableowner), ["rw_owner"], "the service owns nothing");
 });
@@ -243,8 +250,140 @@ test("two instances on one PostgreSQL share every state: a session, a challenge,
   } finally { await other.close(); }
 });
 
+// ADR-0017: every statement has a deadline, each bound with a test (review finding of 2026-11-10: this one
+// had none). Read on a connection the store itself opened; the control, a bare connection to the same
+// server, reads the server's default, so the check tells the two apart.
+test("every statement has a deadline: the store's connections read statement_timeout 10s, a bare connection the server's 0 (control)", async () => {
+  const [{ statement_timeout: store }] = await h.store.sql`show statement_timeout`;
+  assert.equal(store, "10s");
+  const bare = postgres(urlAs("rw_app"), { max: 1, onnotice: () => {} });
+  try {
+    const [{ statement_timeout: plain }] = await bare`show statement_timeout`;
+    assert.equal(plain, "0", "without the store's setting, a statement has no deadline");
+  } finally { await bare.end(); }
+});
+
+// Review finding of 2026-11-10: a failed daily job was noted in the operator journal, which rw_app cannot
+// read and nothing else read. rw.daily_jobs() gives the service the last outcome of each job, nothing more.
+test("the daily jobs' last outcome is read by the service (rw_app) through rw.daily_jobs(), without a tenant, an error or a head", async () => {
+  const note = async (what, detail) => {
+    const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+    try { await maint.tx(null, (tx) => tx.operatorNote(what, detail)); } finally { await maint.close(); }
+  };
+  await note("retention", { report: [{ tenant: A.tenant, failed: true, error: `planted failure in ${B.tenant}`, attempts: 3 }], failed: 1 });
+  await note("verify-chains", { report: [{ tenant: A.tenant, ok: false, head: "f".repeat(64), at: 3, why: "hash" }], failed: 0 });
+  const j = await h.store.tx(null, (tx) => tx.dailyJobs());
+  assert.deepEqual(Object.keys(j).sort(), ["retention", "verify-chains"]);
+  assert.deepEqual([j.retention.ok, j["verify-chains"].ok], [false, false], "a failed tenant and a broken chain are both a run that did not complete");
+  assert.ok(Number.isFinite(j.retention.at));
+  const sql = postgres(urlAs("rw_app"), { max: 1, onnotice: () => {} });
+  try {
+    const [{ t }] = await sql`select rw.daily_jobs()::text as t`;
+    for (const s of [A.tenant, B.tenant, "f".repeat(64), "planted"]) assert.equal(t.includes(s), false, `${s} reached the service`);
+  } finally { await sql.end(); }
+  await note("retention", { report: [{ tenant: A.tenant, erased: 0, archives: 0, expired: 0, attempts: 1 }], failed: 0 });
+  assert.equal((await h.store.tx(null, (tx) => tx.dailyJobs())).retention.ok, true, "the latest run is the one read");
+});
+
+// Review finding of 2026-11-10 (code review C4): rw.daily_jobs() evaluated its `ok` on every retained note of
+// both jobs, not on the two it keeps, on each call of the public /api/health: 365 days of 1,000 tenants took
+// 1.5 s a call, on the way to the 10 s statement deadline. It reads the last note of each job by an index.
+test("rw.daily_jobs() evaluates the last note of each job and no other, found through its index", async () => {
+  const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+  try {
+    // an older note that cannot be evaluated at all: a function that reads every note fails on it
+    await maint.tx(null, (tx) => tx.operatorNote("retention", { failed: "not a number", report: [] }));
+    for (let day = 0; day < 40; day++) await maint.tx(null, (tx) => tx.operatorNote("retention", { failed: 0, report: Array.from({ length: 25 }, () => ({ erased: 0, attempts: 1 })) }));
+  } finally { await maint.close(); }
+  const j = await h.store.tx(null, (tx) => tx.dailyJobs());
+  assert.equal(j.retention.ok, true, "the last note is the one evaluated");
+  const [index] = await adminDb`select indexdef from pg_indexes where schemaname = 'rw' and indexname = 'operator_journal_what_seq'`;
+  assert.match(index?.indexdef ?? "", /\(what, seq DESC\)/);
+  // the read the function makes for each job is served by that index, not by a scan of the journal
+  const plan = await adminDb.begin(async (q) => {
+    await q.unsafe("set local enable_seqscan = off");
+    return q.unsafe("explain (format json) select o.what, o.at, o.detail from rw.operator_journal o where o.what = 'retention' order by o.seq desc limit 1");
+  });
+  assert.match(JSON.stringify(plan), /operator_journal_what_seq/);
+  // control: the unreadable note is still there, and reading every note fails on it, as the function did
+  await assert.rejects(adminDb.unsafe("select (detail ->> 'failed')::integer from rw.operator_journal where what = 'retention'"), /invalid input syntax for type integer/);
+});
+
+// Review finding of 2026-11-10 (code review C1, blocking): rw.daily_jobs() named the type jsonb without its
+// schema under `search_path = rw, pg_catalog`. PostgreSQL searches pg_temp first for a type unless the path
+// names it, so a session as rw_app planted pg_temp.jsonb, a domain whose check calls its own function, and
+// that function ran as rw_resolve, which reads tenants, sessions, passkeys and links across tenants.
+test("a security definer function resolves no name in the caller's temporary schema: a planted pg_temp.jsonb never runs as rw_resolve", async () => {
+  // the worst case: the service's role may create temporary objects in this database
+  await adminDb.unsafe(`grant temporary on database ${DB} to rw_app`);
+  // the last note of each job carries no report, so the function's body evaluates its typed constant (the
+  // `else '[]'::jsonb` of its case): the place where a shadowed type would run
+  const maint = postgresStore({ url: urlAs("rw_maint"), ssl: false });
+  try { for (const job of ["retention", "verify-chains"]) await maint.tx(null, (tx) => tx.operatorNote(job, { failed: 0 })); } finally { await maint.close(); }
+  const notices = [];
+  const sql = postgres(urlAs("rw_app"), { max: 1, onnotice: (n) => notices.push(n.message) });
+  try {
+    await sql.unsafe("create function pg_temp.spy(pg_catalog.jsonb) returns boolean language plpgsql as $$ begin raise notice 'spy runs as % (session %)', current_user, session_user; return true; end $$");
+    await sql.unsafe("create domain pg_temp.jsonb as pg_catalog.jsonb check (pg_temp.spy(value))");
+    // control: the plant is live. In the caller's own statement the temporary type is found first, and its
+    // check runs, as the caller
+    await sql.unsafe("select '{}'::jsonb as j");
+    assert.deepEqual(notices, ["spy runs as rw_app (session rw_app)"], "the planted type shadows jsonb for its own session");
+    notices.length = 0;
+    const [{ j }] = await sql.unsafe("select rw.daily_jobs() as j");
+    assert.deepEqual([j.retention.ok, j["verify-chains"].ok], [true, true], "the function answered, from the two notes without a report");
+    assert.deepEqual(notices, [], "the planted type ran inside rw.daily_jobs()");
+    // the other functions the service may call, with the plant in place
+    await sql.unsafe("select rw.maintenance(), rw.name_taken('github', 'nobody/none'), rw.count_refused('planted', 1)");
+    await sql.unsafe("select * from rw.resolve_session('none'), rw.resolve_link('none'), rw.resolve_credential('none')");
+    assert.deepEqual(notices, []);
+  } finally {
+    await sql.end();
+    await adminDb.unsafe(`revoke temporary on database ${DB} from rw_app`);
+  }
+});
+
+// The second net of C1: scripts/roles.mjs, the administrator's gesture, takes TEMPORARY on the service
+// database away from PUBLIC, so the service's role cannot create the temporary type at all.
+test("the roles gesture takes temporary objects away from the service's roles, and says whether it could", async () => {
+  process.env.RW_DATABASE = DB;
+  const { roles } = await import("../../scripts/roles.mjs");
+  const tryTemp = async (role) => {
+    const sql = postgres(urlAs(role), { max: 1, onnotice: () => {} });
+    try { await sql.unsafe("create temporary table planted_temp (x int)"); return "created"; } catch (e) { return e.message; } finally { await sql.end(); }
+  };
+  assert.equal(await tryTemp("rw_app"), "created", "control: before the gesture, PUBLIC may create temporary objects");
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
+  const lines = [];
+  assert.deepEqual(await roles(u.toString(), { log: (l) => lines.push(l) }), { temporaryRevoked: true });
+  assert.match(lines.join(), /no temporary objects for rw_app and rw_maint/);
+  for (const role of ["rw_app", "rw_maint"]) assert.match(await tryTemp(role), /permission denied to create temporary tables/, role);
+  // an administrator that may manage the roles but does not own the database, as a hoster's may be: its
+  // revoke is a warning, the same line says so, and the gesture does not fail
+  await adminDb.unsafe(`grant temporary on database ${DB} to public`);
+  const stand = `rw_test_admin_${randomBytes(4).toString("hex")}`;
+  await adminDb.unsafe(`create role ${stand} login createrole; grant rw_resolve to ${stand} with admin option; grant connect on database ${DB} to ${stand}`);
+  try {
+    const said = [];
+    const r = await roles(urlAs(stand), { log: (l) => said.push(l) }).catch((e) => ({ error: e.message }));
+    assert.deepEqual(r, { temporaryRevoked: false }, JSON.stringify(r));
+    assert.match(said.join(), /TEMPORARY NOT revoked/);
+    assert.equal(await tryTemp("rw_app"), "created");
+  } finally {
+    await adminDb.unsafe(`revoke rw_resolve from rw_owner granted by ${stand}`).catch(() => {});
+    await adminDb.unsafe(`drop owned by ${stand}; drop role ${stand}`);
+    await adminDb.unsafe(`revoke temporary on database ${DB} from public`);
+  }
+});
+
+test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
+  const rows = await adminDb`select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`;
+  assert.equal(rows.length, 15);
+  for (const r of rows) assert.deepEqual(r.proconfig, ["search_path=pg_catalog, rw, pg_temp"], r.proname);
+});
+
 // The schema the migrations build, committed (checklist-day-zero-project: schema drift): tables, columns,
-// constraints, indexes, policies, functions, triggers and grants of rw and rw_meta. A migration that
+// constraints, indexes, policies, functions (with their settings), triggers and grants of rw and rw_meta. A migration that
 // changes any of them changes db/schema.snapshot.txt in the same diff (UPDATE_SCHEMA_SNAPSHOT=1 writes it).
 const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
 test("the schema the migrations build is the committed snapshot (no drift)", async () => {
@@ -254,7 +393,7 @@ test("the schema the migrations build is the committed snapshot (no drift)", asy
     union all select format('constraint %s %s %s', conrelid::regclass, conname, pg_get_constraintdef(c.oid)) from pg_constraint c join pg_namespace n on n.oid = c.connamespace where n.nspname in ('rw', 'rw_meta')
     union all select format('index %s', indexdef) from pg_indexes where schemaname in ('rw', 'rw_meta')
     union all select format('policy %s.%s %s %s to=%s using=%s check=%s', schemaname, tablename, policyname, cmd, roles, coalesce(qual, ''), coalesce(with_check, '')) from pg_policies where schemaname in ('rw', 'rw_meta')
-    union all select format('function %s.%s(%s) definer=%s owner=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
+    union all select format('function %s.%s(%s) definer=%s owner=%s config=%s', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid), p.prosecdef, pg_get_userbyid(p.proowner), coalesce(array_to_string(p.proconfig, '; '), '')) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('rw', 'rw_meta')
     union all select format('trigger %s', pg_get_triggerdef(t.oid)) from pg_trigger t join pg_class c on c.oid = t.tgrelid join pg_namespace n on n.oid = c.relnamespace where not t.tgisinternal and n.nspname in ('rw', 'rw_meta')
     union all select format('grant %s.%s %s %s', table_schema, table_name, grantee, privilege_type) from information_schema.role_table_grants where table_schema in ('rw', 'rw_meta') and grantee like 'rw\\_%'
   `)).map((r) => r.l).sort();

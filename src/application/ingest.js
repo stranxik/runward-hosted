@@ -5,7 +5,7 @@
 import { Refusal } from "../domain/refusals.js";
 import { readClaims, checkGenericClaims, checkRepositoryClaims, checkUploadHeaders, placeUpload, rateWindow, RUNS_PER_HOUR } from "../domain/workload.js";
 import { sha256, iso } from "./context.js";
-import { StoreConflict } from "../ports/errors.js";
+import { StoreConflict, VerifierUnavailable } from "../ports/errors.js";
 
 export function ingestCases(ctx) {
   const { store, clock, append, objects, assemble, publish, latestIndex } = ctx;
@@ -25,8 +25,15 @@ export function ingestCases(ctx) {
     let raw;
     try { raw = await verifier.verify(m[1], { audience }); } catch (e) {
       if (e.code) throw new Refusal(e.code);
-      log.warn("oidc.keys-unavailable", { error: String(e.message).slice(0, 120) });
-      throw new Refusal("service-unavailable");
+      // only the verifier saying it could not work is the service's failure (503, retried by the sender);
+      // anything else it throws on a caller's token is a token it could not read (review finding of
+      // 2026-11-10: every codeless error was answered 503 and logged as a key outage)
+      if (e instanceof VerifierUnavailable) {
+        log.warn("oidc.keys-unavailable", { error: String(e.message).slice(0, 120) });
+        throw new Refusal("service-unavailable");
+      }
+      log.error("oidc.verifier-error", { error: String(e?.message ?? e).slice(0, 120) });
+      throw new Refusal("token-unreadable");
     }
     const c = readClaims(raw);
     if (!c) throw new Refusal("token-unreadable");

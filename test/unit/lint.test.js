@@ -52,3 +52,26 @@ test("the security scan refuses a read of the environment outside the compositio
   const results = await scan.lintFiles(["src"]);
   assert.deepEqual(results.filter((r) => r.errorCount).map((r) => r.filePath), [], "the tree as it is passes the scan");
 });
+
+// Review finding of 2026-11-10 (independent review): both configurations' comments said two composition
+// roots; there are three since the operator's gateway (ADR-0016), and the hexagon's rule did not name the
+// third. What the comments say is held to what the rules do.
+test("the composition roots are three, in the rules and in what the two configurations say of them", async () => {
+  const { readFileSync, readdirSync } = await import("node:fs");
+  const { ENV_READERS } = await import("../../eslint.security.config.js");
+  // the roots, read off the tree: the files of src/ itself (every other file lives in a layer's directory)
+  const roots = readdirSync(`${ROOT}src`).filter((f) => f.endsWith(".js")).map((f) => `src/${f}`).sort();
+  assert.deepEqual(roots, ["src/main.js", "src/operator-gateway.js", "src/operator.js"]);
+  assert.deepEqual([...ENV_READERS].sort(), roots, "the environment's readers are the roots");
+  for (const config of ["eslint.config.js", "eslint.security.config.js"]) {
+    const comments = readFileSync(`${ROOT}${config}`, "utf8").split("\n").filter((l) => l.startsWith("//")).join("\n");
+    assert.doesNotMatch(comments, /\btwo composition roots\b/, config);
+    assert.match(comments, /three composition roots/, config);
+    for (const root of roots) assert.ok(comments.includes(root), `${config} does not name ${root}`);
+  }
+  // no layer may import any of the three
+  for (const root of ["main.js", "operator.js", "operator-gateway.js"]) {
+    assert.deepEqual((await rules(boundary, "src/adapters/system/planted.js", `import * as x from "../../${root}";\n`)).filter((r) => r !== "no-unused-vars"), ["no-restricted-imports"], `an adapter importing ${root}`);
+    assert.deepEqual((await rules(boundary, "src/http/planted.js", `import * as x from "../${root}";\n`)).filter((r) => r !== "no-unused-vars"), ["no-restricted-imports"], `the HTTP entry importing ${root}`);
+  }
+});

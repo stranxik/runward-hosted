@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
-import { rateLimiter, clientAddress, errorWindow, PUBLIC_LIMITS } from "./limits.js";
+import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
 const JSON_LIMIT = 64 * 1024;
@@ -120,9 +120,14 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   const allowed = new Set(config.hosts.map((h) => h.toLowerCase()));
   const secure = config.origin.startsWith("https://");
   const origin = config.origin;
-  const limits = config.publicLimits ?? PUBLIC_LIMITS;
+  const limits = { ...RATE_LIMITS, ...(config.rateLimits ?? {}) };
   const errors = errorWindow({ now: () => clock.now() });
-  const limiters = { writes: rateLimiter({ ...limits.writes, now: () => clock.now() }), reads: rateLimiter({ ...limits.reads, now: () => clock.now() }) };
+  const at = { now: () => clock.now() };
+  const limiters = {
+    writes: rateLimiter({ ...limits.writes, ...at }), reads: rateLimiter({ ...limits.reads, ...at }),
+    machine: failureLimiter({ ...limits.machine, everyCall: true, ...at }), signedOut: failureLimiter({ ...limits.signedOut, ...at }),
+  };
+  const validCookies = recentlyValid(at);
 
   const baseHeaders = (requestId) => ({
     "runward-request-id": requestId, "runward-version": config.commit, "x-content-type-options": "nosniff", "referrer-policy": "no-referrer",
@@ -149,9 +154,11 @@ export function createHttp({ app, config, assets, version, health, log, clock })
     const headers = baseHeaders(requestId);
     const host = String(req.headers.host ?? "").toLowerCase();
     let route = "-";
+    let machine = null; // the machine route's entry in its limiter, settled with the answer's status
     const lang = /^\s*en\b/i.test(String(req.headers["accept-language"] ?? "")) ? "en" : "fr";
     const fail = (code, extra = {}) => {
       const status = statusOf(code);
+      machine?.settle(status === 401); machine = null;
       const h = { ...headers, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
       if (extra.retryAfter) h["retry-after"] = String(extra.retryAfter);
       const { retryAfter, ...rest } = extra;
@@ -160,7 +167,12 @@ export function createHttp({ app, config, assets, version, health, log, clock })
     };
     try {
       if (!allowed.has(host) && !allowed.has(host.replace(/:\d+$/, ""))) return fail("host-not-allowed");
-      const url = new URL(req.url, origin);
+      // the request target is a path of this origin. One that does not parse (`//`, `/\`), or that names an
+      // authority of its own (`//host/...`), is the caller's fault: 404, never a server error (review
+      // finding of 2026-11-10: `GET //` threw "Invalid URL" here, was answered 503 and counted as one)
+      let url = null;
+      if (!String(req.url).startsWith("//")) { try { url = new URL(req.url, origin); } catch { /* not a path */ } }
+      if (!url || url.origin !== origin) { route = "unparsable"; return fail("not-found"); }
       const path = url.pathname;
 
       // ---- static files and the shell
@@ -191,10 +203,20 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       const params = path.match(r.re).slice(1);
       const write = ["POST", "PATCH", "DELETE"].includes(req.method);
 
+      const address = clientAddress(req, config.trustProxy);
+      /** Answers 429 and says so when the limiter's verdict is a refusal. */
+      const refused = (t) => { if (t.ok) return false; fail("too-many-requests", { retryAfter: t.retryAfter }); return true; };
+
       // ---- the public routes are limited, per address and for the instance, before anything is read
-      if (r.w === "public") {
-        const t = limiters[write ? "writes" : "reads"].take(clientAddress(req, config.trustProxy));
-        if (!t.ok) return fail("too-many-requests", { retryAfter: t.retryAfter });
+      if (r.w === "public" && refused(limiters[write ? "writes" : "reads"].take(address))) return;
+
+      // ---- the machine routes are not authenticated until their token's RSA signature is checked: each
+      //      call is counted for its address before that check (review finding of 2026-11-10); the instance's
+      //      budget counts the calls whose token was refused, and refuses only the addresses that failed
+      if (r.w === "workload" || r.w === "reader") {
+        const entry = limiters.machine.enter(address);
+        if (refused(entry)) return;
+        machine = entry;
       }
 
       // ---- writes from a browser: same origin, checked before the body is read
@@ -204,16 +226,35 @@ export function createHttp({ app, config, assets, version, health, log, clock })
         if (!okOrigin) return fail("same-origin");
       }
 
-      // ---- maintenance: writes answer 503 (the upload use case says so itself)
-      if (write && r.w === "session") {
+      // ---- the session, before any other read of the database. A request that is not signed in is
+      //      counted (a cookie that resolves to no session, or a session route called without one); past the
+      //      budget of its address, or once the instance's is spent and its address has failed, its cookie
+      //      is refused before the database is read. A cookie that resolved a moment ago is not asked.
+      const token = cookieOf(req.headers.cookie);
+      let session = null;
+      if (token) {
+        const hash = createHash("sha256").update(token).digest("hex");
+        const entry = validCookies.has(hash) ? null : limiters.signedOut.enter(address);
+        if (entry && refused(entry)) return;
+        // the entry holds a place in its address's budget while the session is read, and gives it back
+        // unless the cookie resolved to nothing
+        try { session = await app.identity.sessionFrom(token); } catch (e) { entry?.settle(false); throw e; }
+        if (session) { entry?.settle(false); validCookies.add(hash); }
+        else { validCookies.drop(hash); const e = entry ?? limiters.signedOut.enter(address); if (e.ok) e.settle(true); }
+      }
+      if (r.w === "session" && !session) {
+        if (!token) { const entry = limiters.signedOut.enter(address); if (refused(entry)) return; entry.settle(true); }
+        return fail("signed-out");
+      }
+
+      // ---- maintenance: every write from a browser answers 503, the public ones included: a sign-in and a
+      //      link's opening write a session (finding of the restore drill, 2026-11-10: only the writes of a
+      //      session were refused, so a passkey removed after the backup signed in again before the
+      //      replay). The upload use case says so itself, and so do the sign-in and link use cases.
+      if (write && (r.w === "session" || r.w === "public")) {
         const m = await health.maintenance();
         if (m) return fail("maintenance", { retryAfter: 600 });
       }
-
-      // ---- the session
-      const token = cookieOf(req.headers.cookie);
-      const session = token ? await app.identity.sessionFrom(token) : null;
-      if (r.w === "session" && !session) return fail("signed-out");
 
       // ---- the body (uploads read their own, last, after the token and the repository)
       let body = {};
@@ -231,6 +272,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       const shaped = out && typeof out === "object" && ("status" in out && ("body" in out || "raw" in out)) ? out : { status: 200, body: out };
       if (shaped.refusal && REFUSALS[shaped.refusal]) shaped.body = { ...refusalBody(shaped.refusal, lang), ...shaped.body, requestId };
       else if (shaped.body && typeof shaped.body === "object" && !Array.isArray(shaped.body) && path === "/api/v0/exports") shaped.body = { ...shaped.body, requestId };
+      machine?.settle(shaped.status === 401); machine = null;
       const h = { ...headers, "cache-control": "no-store", ...(shaped.headers ?? {}) };
       if (shaped.cookie !== undefined) h["set-cookie"] = setCookie(shaped.cookie);
       if (shaped.raw) { h["content-type"] = shaped.type; send(res, shaped.status, h, shaped.raw); }

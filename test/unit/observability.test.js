@@ -8,7 +8,7 @@ import { readConfig, compose } from "../../src/main.js";
 import { memoryStore } from "../../src/adapters/store/memory.js";
 import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
-import { jsonLog, silentLog } from "../../src/adapters/system/log.js";
+import { jsonLog, silentLog, scrub, LOG_BOUNDS } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
 import { errorWindow } from "../../src/http/limits.js";
 import { probeVerdict } from "../../scripts/probe-verdict.mjs";
@@ -35,6 +35,35 @@ test("a log line keeps only the fields of its schema: no body, no token, no secr
   const line = JSON.parse(lines[0]);
   assert.deepEqual(Object.keys(line).sort(), ["at", "event", "level", "requestId", "status"]);
   assert.ok(lines[0].endsWith("\n") && lines.length === 1, "one JSON line per event");
+});
+
+// Review finding of 2026-11-10: `detail` and `error` were written as given, whatever a caller put in them.
+test("a log line's free fields are bounded and scrubbed: no credential, address, path, identifier or second line in detail and error", () => {
+  const lines = [];
+  const log = jsonLog({ write: (s) => lines.push(s), clock: { now: () => 0 } });
+  const planted = {
+    url: ["postgres://rw_app:", "pw-9", "@10.0.0.4/db"].join(""), // assembled at run time: no literal credential in the tree
+    bearer: ["Bearer eyJhbGciOiJSUzI1NiJ9", "eyJzdWIiOiJ4In0", "c2ln"].join("."),
+    email: ["someone", "example.org"].join("@"),
+    path: "/home/someone/secret/file.txt",
+    id: "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70",
+  };
+  const text = `failed for ${planted.id} at ${planted.path} by ${planted.email}\nwith ${planted.bearer} on ${planted.url}`;
+  log.error("x", { error: `${text} ${"z".repeat(5000)}`, detail: { reason: text, token: "tok-1", nested: { deeper: { deepest: { gone: 1 } } }, list: Array.from({ length: 50 }, (_, i) => i), password: "p" } });
+  assert.equal(lines.length, 1);
+  const line = JSON.parse(lines[0]);
+  for (const v of [...Object.values(planted), "pw-9", "tok-1"]) assert.equal(lines[0].includes(v), false, `${v} reached the log`);
+  assert.ok(line.error.length <= 300 && !line.error.includes("\n"), "error: one line, bounded");
+  assert.match(line.error, /\[id\] at \[path\] by \[email\] with Bearer \[redacted\] on postgres:\/\/\[redacted\]/);
+  assert.deepEqual(Object.keys(line.detail).sort(), ["list", "nested", "reason"], "a key that names a credential is dropped");
+  assert.equal(line.detail.list.length, 20);
+  assert.equal(line.detail.nested.deeper.deepest, "[nested]");
+  log.info("y", { detail: Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`k${i}`, "v".repeat(300)])) });
+  assert.equal(JSON.parse(lines[1]).detail, "[detail too large: cut]");
+  // the service's own lines still read as they did
+  const start = { origin: "https://app.runward.dev", egress: ["token.actions.githubusercontent.com"], sendWorkflow: 1 };
+  log.info("start", { detail: start });
+  assert.deepEqual(JSON.parse(lines[2]).detail, start);
 });
 
 test("the error rate: answers at 500 or more over five minutes, shown by /api/health", async () => {
@@ -66,7 +95,7 @@ test("the error window counts by minute and forgets after five", () => {
 });
 
 test("the probe alerts on an unavailable service and on an error rate above 5 % over at least 20 requests", () => {
-  const up = { ok: true, db: "ok", objectStore: "ok", errors: { windowSeconds: 300, requests: 100, serverErrors: 5, rate: 0.05 } };
+  const up = { ok: true, db: "ok", objectStore: "ok", errors: { windowSeconds: 300, requests: 100, serverErrors: 5, rate: 0.05 }, dailyJobs: { retention: { lastRun: null, ok: null }, "verify-chains": { lastRun: null, ok: null } } };
   assert.deepEqual(probeVerdict({ healthStatus: 200, health: up, version: { commit: "abc" } }), { ok: true, reasons: [] });
   const erring = { ...up, errors: { windowSeconds: 300, requests: 100, serverErrors: 6, rate: 0.06 } };
   assert.match(probeVerdict({ healthStatus: 200, health: erring, version: { commit: "abc" } }).reasons.join(), /error rate 6\.0 %/);
@@ -74,4 +103,19 @@ test("the probe alerts on an unavailable service and on an error rate above 5 % 
   assert.equal(probeVerdict({ healthStatus: 200, health: few, version: { commit: "abc" } }).ok, true, "below 20 requests a rate says nothing");
   assert.match(probeVerdict({ healthStatus: 503, health: { ok: false, db: "down", objectStore: "ok" }, version: { commit: "abc" } }).reasons.join(), /health answered 503 \(db down/);
   assert.match(probeVerdict({ healthStatus: 0, health: null, version: null }).reasons.join(), /version names no commit/);
+});
+
+// Review finding of 2026-11-10 (code review C8): scrub() ran its patterns on the whole string before cutting
+// it, and the e-mail pattern is quadratic on a long run without an @ (50,000 characters: 3 s; 100,000: 13 s,
+// on the event loop). The input is cut before the patterns run.
+test("scrub: a very long string is cut before the patterns run, so its cost does not grow with the input", () => {
+  const started = process.hrtime.bigint();
+  const out = scrub("a".repeat(50_000));
+  const ms = Number(process.hrtime.bigint() - started) / 1e6;
+  assert.equal(out.length, LOG_BOUNDS.STRING_MAX);
+  assert.ok(ms < 500, `scrub of 50,000 characters took ${ms.toFixed(0)} ms`);
+  // what the cut keeps is still marked, and a secret past the written length never shows
+  const planted = ["someone", "example.org"].join("@");
+  assert.equal(scrub(`${"x ".repeat(50)}${planted} ${"y".repeat(50_000)}`).includes(planted), false);
+  assert.match(scrub(`by ${planted}${" z".repeat(50_000)}`), /^by \[email\]/);
 });

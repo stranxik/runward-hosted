@@ -19,16 +19,18 @@ id="$1" digest="$2" commit="${3:-}"
 base="${SCW_API_URL:-https://api.scaleway.com}"
 [[ "$base" =~ ^(https://api\.scaleway\.com|http://127\.0\.0\.1:[0-9]+)$ ]] || { echo "container-deploy: SCW_API_URL is the hoster's API or a loopback stand-in"; exit 2; }
 api="$base/containers/v1beta1/regions/${REGION:-fr-par}/containers/$id"
-h=(-H "X-Auth-Token: $SCW_SECRET_KEY")
-current=$(curl -sSf --max-time 30 "${h[@]}" "$api")
+# the key reaches curl in a header file it reads from a pipe (printf is a shell builtin), never in its
+# arguments: a command line is read by every process of the machine (AGENTS.md, never-rule 5)
+auth() { printf 'X-Auth-Token: %s\n' "$SCW_SECRET_KEY"; }
+current=$(curl -sSf --max-time 30 -H @<(auth) "$api")
 env=$(jq -c '.environment_variables // {}' <<<"$current")
 [ "$(jq 'length' <<<"$env")" -gt 0 ] || { echo "container-deploy: the container's environment reads empty: refused (it would be sent back empty)"; exit 1; }
 body=$(jq -n --argjson env "$env" --arg img "$digest" --arg c "$commit" \
   '{registry_image: $img, environment_variables: (($env | del(.RW_COMMIT)) + {RW_IMAGE: $img} + (if $c == "" then {} else {RW_COMMIT: $c} end))}')
-curl -sSf --max-time 30 -X PATCH "${h[@]}" -H 'content-type: application/json' "$api" -d "$body" >/dev/null
-curl -sSf --max-time 30 -X POST "${h[@]}" -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null
+curl -sSf --max-time 30 -X PATCH -H @<(auth) -H 'content-type: application/json' "$api" -d "$body" >/dev/null
+curl -sSf --max-time 30 -X POST -H @<(auth) -H 'content-type: application/json' "$api/deploy" -d '{}' >/dev/null
 for _ in $(seq 1 60); do
-  c=$(curl -sSf --max-time 30 "${h[@]}" "$api")
+  c=$(curl -sSf --max-time 30 -H @<(auth) "$api")
   if [ "$(jq -r .status <<<"$c")" = "ready" ] && [ "$(jq -r .registry_image <<<"$c")" = "$digest" ]; then
     # the merge held: every key that was there before is still there
     missing=$(jq -r --argjson before "$env" '.environment_variables as $now | [$before | keys[] | select(. != "RW_COMMIT" and ($now[.] == null))] | join(",")' <<<"$c")

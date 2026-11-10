@@ -24,6 +24,10 @@ for (const [me, other] of [[a, b], [b, a]]) {
 }
 const [{ rolbypassrls }] = await sql`select rolbypassrls from pg_roles where rolname = current_user`;
 if (rolbypassrls) faults.push("the service role bypasses RLS");
+// every security definer function resolves its names in pg_catalog, then rw, and in pg_temp last (0005)
+const loose = await sql`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'rw' and p.prosecdef and (p.proconfig is null or not p.proconfig @> array['search_path=pg_catalog, rw, pg_temp'])`;
+if (loose.length) faults.push(`security definer functions without the search_path pg_catalog, rw, pg_temp: ${loose.map((r) => r.proname).join(", ")}`);
 await sql.end();
 if (!seen) { console.error("isolation-deployed: the witnesses hold no row: cannot tell"); process.exit(2); }
 if (faults.length) { console.error(`isolation-deployed:\n  - ${faults.join("\n  - ")}`); process.exit(1); }
