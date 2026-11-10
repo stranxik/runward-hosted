@@ -152,6 +152,57 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
 
+test("the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app", async () => {
+  const views = await import("runward-fleet/views");
+  const build = await import("runward-fleet");
+  for (const name of ["decide", "renderDecision", "renderView", "renderNav", "ROUTES"]) assert.ok(name in views, `runward-fleet/views exports ${name}`);
+  assert.equal(typeof views.decide, "function");
+  assert.equal(typeof views.renderDecision, "function");
+  assert.ok(build.VERDICT_STATES.includes("not-available"));
+  assert.ok(Array.isArray(build.ENDORSEMENTS));
+  assert.ok(views.ROUTES.includes("decision"), "the pinned views route the decision reading");
+  const html = await (await call("GET", "/")).text();
+  const js = await (await call("GET", /src="(\/assets\/app\.[0-9a-f]{16}\.js)"/.exec(html)[1])).text();
+  assert.ok(js.includes('const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");'), "the shell leaves the decision route out");
+  assert.equal(/(?<!FLEET_)ROUTES\.includes\(|\.\.\.ROUTES\b/.test(js), false, "the router reads FLEET_ROUTES, never the views' own list");
+  // the router itself, as served, run on the pinned ROUTES (the review of 3afe41d, C44: reading its source
+  // let a router that also accepted the views' own list through). Its screens are stood for by their names.
+  const from = js.indexOf("const parts = ");
+  const to = js.indexOf("\nlet loadedFor");
+  assert.ok(from > 0 && to > from, "the router is where this test reads it");
+  const router = js.slice(from, to);
+  assert.ok(router.includes("function resolve() {"));
+  const screens = [...new Set(router.match(/\bview[A-Z]\w*/g))];
+  assert.ok(screens.includes("viewFleet"));
+  const location = { hash: "" };
+  const resolve = new Function("ROUTES", "location", ...screens, `${router}\nreturn resolve;`)(views.ROUTES, location, ...screens.map((name) => (...args) => [name, ...args]));
+  const at = (hash) => { location.hash = hash; return resolve(); };
+  for (const route of views.ROUTES.filter((r) => r !== "decision")) assert.deepEqual(at(`#/${route}`), ["viewFleet", route, ""], `the view ${route} is a screen of the app`);
+  assert.equal(views.ROUTES.filter((r) => r !== "decision").length, views.ROUTES.length - 1);
+  assert.deepEqual(at("#/"), ["viewFleet", "", ""]);
+  assert.equal(at("#/decision"), null, "the decision route answers like any unknown one");
+  assert.equal(at("#/decision/dropyour"), null);
+  assert.equal(at("#/no-such-route"), null, "the control: an unknown route");
+});
+
+test("/api/version names the archive that is installed: the digest of the tarball npm installed, not a line of the lock alone", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const root = new URL("../../", import.meta.url);
+  const lock = JSON.parse(readFileSync(new URL("vendor/runward-fleet.lock.json", root), "utf8"));
+  // what npm installed, by its own record: the file it resolved, and the integrity it checked it against
+  const installed = JSON.parse(readFileSync(new URL("node_modules/.package-lock.json", root), "utf8")).packages["node_modules/runward-fleet"];
+  assert.match(installed.resolved, /^file:vendor\/runward-fleet-[0-9a-z.-]+\.tgz$/);
+  const tgz = readFileSync(new URL(installed.resolved.slice("file:".length), root));
+  assert.equal(`sha512-${createHash("sha512").update(tgz).digest("base64")}`, installed.integrity, "the tarball in vendor/ is the one npm installed");
+  const v = await (await call("GET", "/api/version")).json();
+  assert.equal(v.views.runwardFleetArchiveSha256, sha(tgz), "the digest served is the sha256 of that tarball (a digit of the lock changed is caught here, K6)");
+  assert.equal(v.views.runwardFleet, JSON.parse(readFileSync(new URL("node_modules/runward-fleet/package.json", root), "utf8")).version);
+  assert.equal(v.views.viewsSha256, sha(readFileSync(new URL("node_modules/runward-fleet/ui/views.js", root))));
+  assert.equal(v.views.runwardFleetCommit, lock.commit);
+  assert.equal(v.views.runwardFleetArchiveSha256, lock.tarballSha256);
+});
+
 test("the served views say « niveau non atteint » and \"level not met\" for level-not-met, from the pinned package (author's rule)", async () => {
   const html = await (await call("GET", "/")).text();
   const views = /href="(\/assets\/views-0\.46\.0\.[0-9a-f]{16}\.js)"/.exec(html)[1];

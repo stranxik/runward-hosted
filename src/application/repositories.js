@@ -109,7 +109,7 @@ export function repositoryCases(ctx, identity) {
             quarantine = built.refusal;
           }
         }
-        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, ...(published ? { indexSha256: published.sha256, indexVersion: published.version } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
+        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, ...(published ? { indexSha256: published.sha256, indexVersion: published.version, fleetVersion: ctx.ports.assembler.pin.version, fleetArchiveSha256: ctx.ports.assembler.pin.archiveSha256 } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
         return { entry: e, published, quarantine, ...(quarantine ? { refusal: quarantine } : {}) };
       });
     } catch (e) {
