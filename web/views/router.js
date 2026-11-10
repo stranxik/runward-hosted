@@ -1,7 +1,18 @@
 // The router: which screen an address opens, what that screen reads at its opening, and who may open it.
+//
+// One line per screen in SCREENS. A lot that brings a screen adds its file in web/views/, its line here and
+// its line in MODULES (src/http/assets.js); it does not touch another screen's file. Routes kept for the
+// screens designed on 2026-11-10 (none is written yet, each answers "unknown address" until its lot lands):
+//   parcours      the path through the six steps, per application     web/views/parcours.js      reads: fleet
+//   portefeuille  the map of the portfolio, applications by steps     web/views/portefeuille.js  reads: fleet
+//   historique    the evolution over time, and the live refresh       web/views/historique.js    reads: its own
+//   registre      the register of the ADRs                            web/views/registre.js      reads: its own
+//   documents     the reader of the mission's documents               web/views/documents.js     reads: its own
+// A screen that needs a new read names it in READS: the key says when the read is made again, the loader makes
+// it (web/views/api.js). The budget of architecture §6 holds for every screen: 4 reads at most at its opening.
 import { parts, S } from "./base.js";
 import { loadingView } from "./marks.js";
-import { loadSession, loadFleet, loadAccess, loadJournal } from "./api.js";
+import { loadFleet, loadAccess, loadJournal, loadSession } from "./api.js";
 import { ROUTES } from "./fleet-views.js";
 import { paint } from "./shell.js";
 import { viewEntree } from "./entree.js";
@@ -16,20 +27,34 @@ import { viewPanne } from "./panne.js";
 import { viewLegal } from "./legal.js";
 import { view404 } from "./introuvable.js";
 
-const PROTECTED = new Set(["arrivee", "declarer", "envois", "acces", "vue", ...ROUTES]);
+/** The fleet's screens: the dashboard, a mission, and the views of the pinned runward-fleet. */
+const FLEET = { view: (sub, route) => viewFleet(route, sub ? decodeURIComponent(sub) : ""), reads: "fleet", signedIn: true };
+/** The screens, by route: its view (given the rest of the address), what it reads, whether it asks a session. */
+const SCREENS = {
+  entree: { view: (sub) => viewEntree(sub) },
+  lien: { view: (sub) => viewLien(sub) },
+  reprise: { view: (sub) => (sub ? null : viewReprise()) },
+  arrivee: { view: (sub) => viewArrivee(sub), reads: "access", signedIn: true },
+  declarer: { view: (sub) => viewDeclarer(sub), reads: "access", signedIn: true },
+  envois: { view: () => viewEnvois(), reads: "journal", signedIn: true },
+  acces: { view: (sub) => viewAcces(sub), reads: "access", signedIn: true },
+  panne: { view: (sub) => viewPanne(sub) },
+  legal: { view: (sub) => (sub ? null : viewLegal()) },
+};
+const isFleet = (route) => route === "" || route === "vue" || ROUTES.includes(route);
+const screenOf = (route) => (Object.hasOwn(SCREENS, route) ? SCREENS[route] : isFleet(route) ? FLEET : null);
+
+/** The reads of a screen at its opening: `key` names the opening (the same key is not read twice), `load` reads. */
+const READS = {
+  fleet: { key: () => "fleet", load: () => loadFleet() },
+  access: { key: () => "access", load: () => loadAccess() },
+  journal: { key: (sub) => `journal:${sub}`, load: (sub) => loadJournal(sub) },
+};
+
 function resolve() {
   const { route, sub } = parts();
-  if (route === "entree") return viewEntree(sub);
-  if (route === "lien") return viewLien(sub);
-  if (route === "reprise") return sub ? null : viewReprise();
-  if (route === "arrivee") return viewArrivee(sub);
-  if (route === "declarer") return viewDeclarer(sub);
-  if (route === "envois") return viewEnvois();
-  if (route === "acces") return viewAcces(sub);
-  if (route === "panne") return viewPanne(sub);
-  if (route === "legal") return sub ? null : viewLegal();
-  if (route === "" || route === "vue" || ROUTES.includes(route)) return viewFleet(route, sub ? decodeURIComponent(sub) : "");
-  return null;
+  const screen = screenOf(route);
+  return screen ? screen.view(sub, route) : null;
 }
 
 let loadedFor = null;
@@ -37,24 +62,26 @@ let loadedFor = null;
 export const forgetReads = () => { loadedFor = null; };
 export async function show() {
   const { h, route, sub } = parts();
+  const screen = screenOf(route);
   if (S.session === undefined && !S.error) await loadSession();
   if (S.session === undefined && S.error) { if (route !== "panne") { location.replace(navigator.onLine === false ? "#/panne/hors-ligne" : "#/panne"); return; } }
   if (S.session && route === "entree" && sub !== "sortie") { location.replace(S.session.arrivalDone ? "#/" : "#/arrivee"); return; }
   // signed out: the root opens the public home; any other protected address opens the sign-in, with its intent
-  if (!S.session && PROTECTED.has(route)) {
+  if (!S.session && screen?.signedIn) {
     S.intent = route === "" ? null : location.hash;
     location.replace(S.session === null && S.closedBy === "passkey" ? "#/entree/session-fermee" : route === "" ? "#/entree" : "#/entree/connexion");
     return;
   }
-  if (S.session && !S.session.arrivalDone && (route === "" || route === "vue" || ROUTES.includes(route))) { location.replace("#/arrivee"); return; }
+  if (S.session && !S.session.arrivalDone && isFleet(route)) { location.replace("#/arrivee"); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
   // the sidebar lists the missions from the index once this page has read it; a screen opened cold
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
-  const key = route === "" || route === "vue" || ROUTES.includes(route) ? "fleet" : ["arrivee", "declarer", "acces"].includes(route) ? "access" : route === "envois" ? `journal:${sub}` : null;
+  const reads = screen?.reads ? READS[screen.reads] : null;
+  const key = reads ? reads.key(sub) : null;
   if (S.session && key && loadedFor !== key) {
     loadedFor = key;
     paint(loadingView(""));
-    if (key === "fleet") await loadFleet(); else if (key === "access") await loadAccess(); else await loadJournal(sub);
+    await reads.load(sub);
   }
   paint(resolve() ?? view404(location.hash || "#/"));
 }
