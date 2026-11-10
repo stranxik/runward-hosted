@@ -68,3 +68,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 
 - Done: `web/couche-runward-app.css` replaces `web/tokens.css`: light by default, dark as an option, Geist served by the app from a closed list of files, the state hues told apart by shape, word and hue, no green. The token test audits the layer against the family's contract in both themes, with broken layers planted on purpose; a new test proves the layer and the fonts are served, and nothing outside the list.
 - Decided: ADR-0019, proposed: the app's own layer, which supersedes ADR-0014 once accepted. The author agreed to its direction and validated the mock-up of all states on 2026-11-10.
+
+## 2026-11-10 - the follow-up of C11 to C13, then of C13 to C19
+
+- Done: the send workflow takes a `runner` input; its three jobs have deadlines; the image smoke reads GitHub's OIDC token over five tries. An adversarial review of `d569c95` (`runward/governance/reviews/2026-11-10_code-review_d569c95.md`) found nothing blocking and seven findings, all answered on this branch: the workflow guard reads `runs-on` from a closed list of hosted labels (C16); past the limiter's bound a key is counted with its prefix, and untracked calls are logged, exposed in `/api/health` and alerted by the probe (C14); the send job looks for Node.js 22 before it runs (C15); no `execute` passes inside a body and `set schema` is refused (C13); the lost-anchor bound is pinned by a test (C19); `restore-replay --anchor` is refused while a restore waits for its replay (C17); the residual of a GitHub-hosted runner built from the caller's image is recorded (C18, T41).
+- Decided: nothing structural. T41 needs a record: it goes with the record of a client's own runner per declared repository (option C, which amends ADR-0003), planned.
+- Next: an independent review of these fixes; the merge; then the first release, whose SHA of `send.yml` the service will accept.
