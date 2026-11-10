@@ -81,6 +81,28 @@ test("migrations: a $ inside a name opens no dollar-quoted body, so the statemen
   ]) assert.equal(contracting(sql), null, `refused, but nothing contracts: ${sql}`);
 });
 
+// Review finding of 2026-11-10 (code review C3): the server joins two literals that white space with a
+// newline separates, and keeps reading the second with the backslash escapes of the first. This lexer read
+// the second piece as a plain literal, so its \' closed it early and the drop after it was hidden.
+test("migrations: an escape string continued after a newline is read whole, so the statement after it is read", () => {
+  for (const sql of [
+    "select E'a'\n'\\' ' ; drop table rw.ledger; select '';",
+    "select e'a' \t\r\n  '\\' ' ; drop table rw.ledger; select '';",
+    // a -- comment up to its newline is white space between the two pieces
+    "select E'a' -- note\n '\\' ' ; drop table rw.ledger; select '';",
+    "select E'a'\n-- note\n'\\' ' ; drop table rw.ledger; select '';",
+    // three pieces
+    "select E'a'\n'b'\n'\\' ' ; drop table rw.ledger; select '';",
+  ]) assert.ok(contracting(sql), `not refused: ${sql}`);
+  assert.deepEqual(statements("select E'a'\n'\\' ' ; drop x; select ''"), ["select E''", "drop x", "select ''"]);
+  // controls: without a newline between them, two literals are two literals, and the server reads the second plain
+  assert.deepEqual(statements("select E'a' '\\' ; drop x; select '"), ["select E'' ''", "drop x", "select ''"]);
+  for (const sql of [
+    "insert into rw.n values (E'a'\n'\\'; drop table rw.ledger');",
+    "insert into rw.n values ('a'\n  'b; drop table rw.ledger');",
+  ]) assert.equal(contracting(sql), null, `refused, but the contracting words are data: ${sql}`);
+});
+
 test("migrations: comments and quoted strings are not statements, and expansion passes", () => {
   for (const sql of [
     "-- drop table rw.ledger\ncreate table rw.y (id int);",

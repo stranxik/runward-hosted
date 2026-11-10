@@ -23,12 +23,31 @@ const identStart = (ch) => ch !== undefined && (/[A-Za-z_]/.test(ch) || ch.charC
 const digit = (ch) => ch !== undefined && ch >= "0" && ch <= "9";
 const near = (sql, from, to) => sql.slice(Math.max(0, from - 12), to).replace(/\s+/g, " ");
 
-/** The index after the single-quoted literal that opens at `open`; `escapes`: a backslash escapes the next
- * character (an escape string). */
+/** Where a literal that closed right before `from` goes on, or -1: the server joins two literals that only
+ * white space holding at least one newline separates (its scanner's quotecontinue; a `--` comment up to
+ * its newline counts as white space there), and reads the second piece as it read the first. */
+function continuation(sql, from) {
+  let k = from, newline = false;
+  for (;;) {
+    const ch = sql[k];
+    if (ch === "\n" || ch === "\r") { newline = true; k++; }
+    else if (ch === " " || ch === "\t" || ch === "\f" || ch === "\v") k++;
+    else if (sql.startsWith("--", k)) { const e = sql.indexOf("\n", k); if (e < 0) return -1; k = e; }
+    else break;
+  }
+  return newline && sql[k] === "'" ? k : -1;
+}
+
+/** The index after the single-quoted literal that opens at `open`, its continuations included; `escapes`:
+ * a backslash escapes the next character (an escape string), in every piece of it. */
 function literalEnd(sql, open, escapes) {
   let j = open + 1;
-  while (j < sql.length) { if (escapes && sql[j] === "\\") j += 2; else if (sql[j] === "'" && sql[j + 1] === "'") j += 2; else if (sql[j] === "'") break; else j++; }
-  return j + 1;
+  for (;;) {
+    while (j < sql.length) { if (escapes && sql[j] === "\\") j += 2; else if (sql[j] === "'" && sql[j + 1] === "'") j += 2; else if (sql[j] === "'") break; else j++; }
+    const next = continuation(sql, j + 1);
+    if (next < 0) return j + 1;
+    j = next + 1;
+  }
 }
 
 /** The text as the server reads it: comments removed, single-quoted literals emptied (an escape string
@@ -40,7 +59,8 @@ function literalEnd(sql, open, escapes) {
  * opens nothing.
  * Review findings of 2026-11-10: an escape string holding \' and a double-quoted identifier holding a '
  * each opened what this lexer took for one long literal; then `a$b$`, a column name, was read as the
- * opening of a dollar-quoted body, whose end fell inside a later literal. Each time a drop between the two
+ * opening of a dollar-quoted body, whose end fell inside a later literal; then an escape string continued
+ * after a newline was read as a plain literal from its second piece on. Each time a drop between the two
  * was hidden (the cases are in test/unit/migrations.test.js).
  * Returns the statements and, in `ambiguous`, the first spelling this lexer will not claim to read as
  * every version of the server does (the file is then refused whole): a $ glued to a number (`1$a$`), or
