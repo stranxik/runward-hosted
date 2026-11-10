@@ -7,6 +7,14 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals/index.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
+import { ingestRoutes } from "./routes/ingest.js";
+import { fleetRoutes } from "./routes/fleet.js";
+import { identityRoutes, recoveryRoutes } from "./routes/identity.js";
+import { repositoryRoutes, tenantRoutes } from "./routes/repositories.js";
+import { readerRoutes } from "./routes/reader.js";
+import { journalRoutes } from "./routes/journal.js";
+import { exportRoutes } from "./routes/export.js";
+import { systemRoutes } from "./routes/system.js";
 import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
@@ -16,78 +24,24 @@ const CSP = [
   "connect-src 'self'", "base-uri 'none'", "form-action 'none'", "frame-ancestors 'none'", "require-trusted-types-for 'script'", "trusted-types runward",
 ].join("; ");
 
-/** The route table: [method, pattern, who, handler]. `who`: public | session | workload | reader. */
+/**
+ * The route table: [method, pattern, who, handler]. `who`: public | session | workload | reader.
+ * The rows live in src/http/routes/, one file per domain. Their order here is the order of the API
+ * contract (runward/contracts/api-contract.json): a lot adds its file and one line at the end of this list,
+ * and commits the contract's new digest in the same diff (npm run contract:write).
+ */
 export function routes(app) {
-  const id = "([0-9a-f-]{36})";
-  const I = app.identity, R = app.repositories, G = app.reading;
   return [
-    ["POST", "/api/v0/exports", "workload", (q) => app.ingest.upload({ headers: q.headers, readBody: q.readRaw, requestId: q.requestId })],
-    ["GET", `/f/${id}/index.json`, "session", async (q, [t]) => {
-      if (t !== q.session.tenantId) throw new Refusal("not-found");
-      const idx = await G.index(t);
-      if (!idx) throw new Refusal("not-found");
-      return { status: 200, raw: idx.bytes, type: "application/json; charset=utf-8", headers: { etag: `"${idx.sha256}"` } };
-    }],
-    ["GET", "/api/v0/fleet/status", "session", (q) => G.status(q.session)],
-    ["GET", "/api/v0/session", "session", async (q) => ({ ...(await I.sessionView(q.session)), sendWorkflow: q.config.sendWorkflow.published })],
-    ["POST", "/api/v0/auth/options", "public", () => I.signInOptions()],
-    ["POST", "/api/v0/auth/verify", "public", async (q) => {
-      const r = await I.signIn({ challengeId: q.body.challengeId, response: q.body.response, ua: q.headers["user-agent"], requestId: q.requestId });
-      return { status: 200, body: { signedIn: true }, cookie: r.token };
-    }],
-    ["POST", "/api/v0/auth/fresh/options", "session", (q) => I.freshOptions(q.session, { gesture: q.body.gesture ?? null, object: q.body.object ?? null })],
-    ["POST", "/api/v0/auth/fresh", "session", (q) => I.fresh(q.session, { challengeId: q.body.challengeId, response: q.body.response, requestId: q.requestId })],
-    ["POST", "/api/v0/auth/logout", "session", async (q) => { await I.signOut(q.session, { requestId: q.requestId }); return { status: 200, body: { signedOut: true }, cookie: "" }; }],
-    ["POST", "/api/v0/links/inspect", "public", (q) => I.inspectLink({ token: q.body.token, session: q.session })],
-    ["POST", "/api/v0/links/options", "public", (q) => I.linkOptions({ token: q.body.token, session: q.session })],
-    ["POST", "/api/v0/links/redeem", "public", async (q) => {
-      const r = await I.redeemLink({ token: q.body.token, challengeId: q.body.challengeId, response: q.body.response, ua: q.headers["user-agent"], requestId: q.requestId });
-      return { status: 200, body: { redeemed: true, seq: r.entry.seq }, cookie: r.token };
-    }],
-    ["GET", "/api/v0/access", "session", (q) => I.accessView(q.session)],
-    ["POST", "/api/v0/passkeys/options", "session", (q) => I.passkeyAddOptions(q.session)],
-    ["POST", "/api/v0/passkeys", "session", (q) => I.passkeyAdd(q.session, { challengeId: q.body.challengeId, response: q.body.response, ua: q.headers["user-agent"], requestId: q.requestId })],
-    ["POST", "/api/v0/passkeys/single", "session", (q) => I.passkeySingle(q.session, { requestId: q.requestId })],
-    ["DELETE", `/api/v0/passkeys/${id}`, "session", async (q, [p]) => { const r = await I.passkeyRemove(q.session, p, { requestId: q.requestId }); return r.closedCurrent ? { status: 200, body: r, cookie: "" } : r; }],
-    ["POST", `/api/v0/passkeys/${id}/restore`, "session", (q, [p]) => I.passkeyRestore(q.session, p, { requestId: q.requestId })],
-    ["DELETE", `/api/v0/sessions/${id}`, "session", async (q, [s]) => { const r = await I.sessionClose(q.session, s, { requestId: q.requestId }); return r.closedCurrent ? { status: 200, body: r, cookie: "" } : r; }],
-    ["POST", "/api/v0/sessions/close-others", "session", (q) => I.sessionsCloseOthers(q.session, { requestId: q.requestId })],
-    ["POST", "/api/v0/repositories", "session", async (q) => ({ status: 201, body: await R.declare(q.session, q.body, { requestId: q.requestId }) })],
-    ["PATCH", `/api/v0/repositories/${id}`, "session", (q, [r]) => R.patch(q.session, r, q.body, { requestId: q.requestId })],
-    ["POST", `/api/v0/repositories/${id}/confirm`, "session", (q, [r]) => R.confirm(q.session, r, { requestId: q.requestId })],
-    ["DELETE", `/api/v0/repositories/${id}`, "session", (q, [r]) => R.remove(q.session, r, { requestId: q.requestId })],
-    ["POST", `/api/v0/repositories/${id}/restore`, "session", (q, [r]) => R.restore(q.session, r, { requestId: q.requestId })],
-    ["POST", `/api/v0/repositories/${id}/consent`, "session", (q, [r]) => R.consent(q.session, r, { requestId: q.requestId })],
-    ["DELETE", `/api/v0/repositories/${id}/consent`, "session", (q, [r]) => R.withdrawConsent(q.session, r, { erase: q.body.erase === true, requestId: q.requestId })],
-    ["DELETE", `/api/v0/repositories/${id}/content`, "session", (q, [r]) => R.eraseContent(q.session, r, { requestId: q.requestId })],
-    ["POST", "/api/v0/recovery/cancel", "session", (q) => I.recoveryCancel(q.session, { requestId: q.requestId })],
-    ["POST", "/api/v0/tenant/settings", "session", (q) => R.settings(q.session, q.body, { requestId: q.requestId })],
-    ["POST", "/api/v0/reader", "session", (q) => R.reader(q.session, true, { requestId: q.requestId })],
-    ["DELETE", "/api/v0/reader", "session", (q) => R.reader(q.session, false, { requestId: q.requestId })],
-    ["GET", "/api/v0/reader/index", "reader", async (q) => {
-      const r = await app.reader.readIndex({ authorization: q.headers.authorization, fleet: q.headers["runward-fleet"], requestId: q.requestId });
-      return { index: r.index ? { sha256: r.index.sha256, version: r.index.version, json: JSON.parse(r.index.bytes.toString("utf8")) } : null, status: r.status };
-    }],
-    ["POST", "/api/v0/reader/export", "reader", async (q) => {
-      const r = await app.reader.readExport({ authorization: q.headers.authorization, fleet: q.headers["runward-fleet"], requestId: q.requestId });
-      return { status: 200, raw: r.bytes, type: "application/x-tar", headers: { "runward-archive-sha256": r.sha256 } };
-    }],
-    ["GET", "/api/v0/journal", "session", async (q) => {
-      const page = await G.journal(q.session, q.url.searchParams.get("cursor"));
-      for (const e of page.entries) {
-        const code = e.body.detail?.refusal;
-        if (code && REFUSALS[code]) { const t = refusalBody(code, q.lang); e.text = { message: t.message, action: t.action }; }
-      }
-      return page;
-    }],
-    ["POST", "/api/v0/export", "session", async (q) => { const r = await G.prepareExport(q.session, { requestId: q.requestId }); return { id: r.id, size: r.size, sha256: r.sha256, expiresAt: r.expiresAt }; }],
-    ["GET", `/api/v0/export/${id}`, "session", async (q, [a]) => {
-      const r = await G.downloadExport(q.session, a);
-      return { status: 200, raw: r.bytes, type: "application/x-tar", headers: { "content-disposition": 'attachment; filename="runward-hosted-export.tar"', "runward-archive-sha256": r.sha256 } };
-    }],
-    ["GET", "/api/version", "public", (q) => q.version],
-    ["GET", "/api/health", "public", async (q) => q.health()],
-    ["GET", "/.well-known/security.txt", "public", (q) => ({ status: 200, raw: Buffer.from(q.config.securityTxt), type: "text/plain; charset=utf-8" })],
+    ...ingestRoutes(app),
+    ...fleetRoutes(app),
+    ...identityRoutes(app),
+    ...repositoryRoutes(app),
+    ...recoveryRoutes(app),
+    ...tenantRoutes(app),
+    ...readerRoutes(app),
+    ...journalRoutes(app),
+    ...exportRoutes(app),
+    ...systemRoutes(app),
   ];
 }
 
