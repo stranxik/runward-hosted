@@ -140,3 +140,61 @@ test("C40: what the check cannot read at the commit is a cannot-tell, never a pa
   assert.match(packList(pkg, [...tree, { path: "src/link.js", mode: "120000" }]).cannotTell, /not a regular file/);
   assert.match(packList(pkg, [...tree, { path: "src/.DS_Store", mode: "100644" }]).cannotTell, /npm leaves out of a pack/);
 });
+
+// ------------------------------------------------------------------ C42: what is installed
+
+/** A copy of the installed package and of npm's record of it, in a throwaway node_modules. */
+function installCopy() {
+  const dir = mkdtempSync(join(tmpdir(), "rw-pin-"));
+  const pkgDir = join(dir, "node_modules", "runward-fleet");
+  mkdirSync(dirname(pkgDir), { recursive: true });
+  cpSync(join(ROOT, "node_modules", "runward-fleet"), pkgDir, { recursive: true });
+  const record = join(dir, "node_modules", ".package-lock.json");
+  writeFileSync(record, JSON.stringify({ packages: { "node_modules/runward-fleet": { version: lock.version, integrity: lock.integrity } } }));
+  return { dir, pkgDir, record };
+}
+const refused = (fn) => { try { fn(); return null; } catch (e) { return e.message; } };
+
+test("C42: fleetPin gives the archive digest only when the install is the pinned archive: npm's integrity and every file", () => {
+  const live = fleetPin({ lockFile: LOCK });
+  assert.equal(live.archiveSha256, lock.tarballSha256);
+  assert.equal(JSON.parse(readFileSync(join(ROOT, "node_modules", ".package-lock.json"), "utf8")).packages["node_modules/runward-fleet"].integrity, lock.integrity, "npm recorded the lock's integrity for what the tests run on");
+  const c = installCopy();
+  try {
+    const pin = () => fleetPin({ lockFile: LOCK, pkgDir: c.pkgDir });
+    assert.equal(pin().archiveSha256, lock.tarballSha256, "the control: the copy is accepted before it is changed");
+
+    // the review's K7: another archive's files under the same version, npm's record untouched
+    const build = join(c.pkgDir, "src", "build.js");
+    const genuine = readFileSync(build);
+    writeFileSync(build, Buffer.concat([genuine, Buffer.from("// another archive\n")]));
+    assert.match(refused(pin), /is not the pinned archive fff950650d3a: changed: src\/build\.js\. Nothing is served or published with it; install again with npm ci/);
+    writeFileSync(build, genuine);
+    assert.equal(refused(pin), null);
+
+    writeFileSync(join(c.pkgDir, "src", "planted.js"), "export {};\n");
+    assert.match(refused(pin), /not of the archive: src\/planted\.js/);
+    rmSync(join(c.pkgDir, "src", "planted.js"));
+    rmSync(join(c.pkgDir, "LICENSE"));
+    assert.match(refused(pin), /missing: LICENSE/);
+    writeFileSync(join(c.pkgDir, "LICENSE"), GENUINE.get("LICENSE"));
+    symlinkSync(build, join(c.pkgDir, "src", "link.js"));
+    assert.match(refused(pin), /src\/link\.js is neither a file nor a directory/);
+    rmSync(join(c.pkgDir, "src", "link.js"));
+    assert.equal(refused(pin), null);
+
+    // npm installed another archive: its record names another integrity
+    writeFileSync(c.record, JSON.stringify({ packages: { "node_modules/runward-fleet": { version: lock.version, integrity: "sha512-AAAA" } } }));
+    assert.match(refused(pin), /npm installed an archive of integrity sha512-AAAA, the lock pins sha512-/);
+    writeFileSync(c.record, JSON.stringify({ packages: {} }));
+    assert.match(refused(pin), /npm recorded no integrity for it/);
+    rmSync(c.record);
+    assert.match(refused(pin), /npm recorded no integrity for it/);
+
+    // a lock without its file list proves nothing about the install
+    const bare = join(c.dir, "lock.json");
+    writeFileSync(c.record, JSON.stringify({ packages: { "node_modules/runward-fleet": { integrity: lock.integrity } } }));
+    writeFileSync(bare, JSON.stringify({ ...lock, files: undefined }));
+    assert.match(refused(() => fleetPin({ lockFile: bare, pkgDir: c.pkgDir })), /the lock pins no "files"/);
+  } finally { rmSync(c.dir, { recursive: true, force: true }); }
+});
