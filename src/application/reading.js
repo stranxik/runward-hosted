@@ -102,6 +102,9 @@ export function readingCases(ctx, identity) {
    * erased and every export it was built from is still held (the rule of context.js#eraseIndexVersions,
    * read here too, so that an archive never waits for the pass that applies it). Such a version keeps its
    * fleet.json and its digests in replay.json, which says `indexErased`.
+   * An export is held once its bytes were read, not on the word of its row (review finding C22 of
+   * 2026-11-10): after a restore, the database counts bytes the object store no longer has, and a version
+   * built from them is neither packed nor called replayable (`indexWithheld`, `why: "bytes missing"`).
    */
   async function buildArchive(tx) {
     const versions = (await tx.list("fleet_index")).sort((a, b) => a.version - b.version);
@@ -110,32 +113,33 @@ export function readingCases(ctx, identity) {
     const entries = await tx.ledgerAll();
     const chain = verifyChain(entries);
     const files = [];
-    const seen = new Set();
+    const asked = new Set(), held = new Set();
     let total = 0;
     for (const u of [...uploads, ...pendingKept]) {
       const name = exportPath(u.mission, u.kind, u.sha256);
-      if (seen.has(name)) continue;
-      seen.add(name);
+      if (asked.has(name)) continue;
+      asked.add(name);
       const b = await objects.getBytes(tx.tenantId, u.sha256);
       if (!b) continue;
+      held.add(name);
       total += b.length;
       if (total > ARCHIVE_MAX_BYTES) throw new Refusal("export-too-large");
       files.push({ name, bytes: b });
     }
-    const erased = new Set((await tx.list("upload")).filter((u) => u.erasedAt).map((u) => u.sha256));
-    const indexKept = (v) => !v.erasedAt && v.bytes.length > 0 && manifestExports(v.manifest).every((f) => seen.has(f));
+    const erased = new Set((await tx.list("upload")).filter((u) => u.erasedAt).map((u) => exportPath(u.mission, u.kind, u.sha256)));
+    const indexKept = (v) => !v.erasedAt && v.bytes.length > 0 && manifestExports(v.manifest).every((f) => held.has(f));
     const replay = {
       format: "runward-hosted-replay/0",
       how: "for each version: copy versions/<version>/fleet.json next to exports/, run `runward-fleet build fleet.json` with the runward-fleet version named, and compare the sha256 of index.json",
       head: chain.head ?? null,
       chainOk: chain.ok,
       versions: versions.map((v) => {
-        const missing = manifestExports(v.manifest).filter((f) => !seen.has(f));
-        return { version: v.version, seq: v.seq, indexSha256: v.sha256, manifestSha256: v.manifestSha256, runwardFleet: v.fleetVersion, runwardFleetArchiveSha256: v.fleetArchiveSha256, replayable: missing.length === 0, ...(missing.length ? { why: [...erased].length ? "content erased" : "bytes missing" } : {}), ...(indexKept(v) ? {} : { indexErased: true }) };
+        const missing = manifestExports(v.manifest).filter((f) => !held.has(f));
+        return { version: v.version, seq: v.seq, indexSha256: v.sha256, manifestSha256: v.manifestSha256, runwardFleet: v.fleetVersion, runwardFleetArchiveSha256: v.fleetArchiveSha256, replayable: missing.length === 0, ...(missing.length ? { why: missing.every((f) => erased.has(f)) ? "content erased" : "bytes missing" } : {}), ...(indexKept(v) ? {} : v.erasedAt || missing.some((f) => erased.has(f)) ? { indexErased: true } : { indexWithheld: true }) };
       }),
     };
     const out = [
-      { name: "README.txt", bytes: Buffer.from("runward hosted export. replay.json says, for each published index, which runward-fleet version rebuilds it from versions/<version>/fleet.json and exports/. journal.jsonl is the tenant's chained journal, one canonical entry per line. A version whose content was erased keeps its fleet.json and its digests; its index.json is not in the archive (replay.json: indexErased).\n") },
+      { name: "README.txt", bytes: Buffer.from("runward hosted export. replay.json says, for each published index, which runward-fleet version rebuilds it from versions/<version>/fleet.json and exports/. journal.jsonl is the tenant's chained journal, one canonical entry per line. A version whose content was erased keeps its fleet.json and its digests; its index.json is not in the archive (replay.json: indexErased). Nor is the index.json of a version when the bytes of an export it was built from cannot be read (replay.json: indexWithheld, why: bytes missing).\n") },
       { name: "replay.json", bytes: Buffer.from(`${JSON.stringify(replay, null, 2)}\n`) },
       { name: "journal.jsonl", bytes: Buffer.from(entries.map((e) => JSON.stringify({ seq: e.seq, prev: e.prev, hash: e.hash, body: e.body })).join("\n") + (entries.length ? "\n" : "")) },
       ...versions.flatMap((v) => [{ name: `versions/${v.version}/fleet.json`, bytes: v.manifest }, ...(indexKept(v) ? [{ name: `versions/${v.version}/index.json`, bytes: v.bytes }] : [])]),

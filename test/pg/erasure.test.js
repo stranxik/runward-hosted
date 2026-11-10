@@ -9,10 +9,11 @@
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
-import { harness, founder, gesture, sha, contentLeft, withoutIndexErasure, erasureScenario, GONE, KEEP, BRAVO } from "../helpers.js";
+import { harness, founder, gesture, send, sha, markedCheck, contentLeft, withoutIndexErasure, erasureScenario, GONE, KEEP, BRAVO } from "../helpers.js";
 import { replay } from "../../scripts/replay-export.mjs";
 import { untar } from "../../src/adapters/archive/tar.js";
 import { verifyChain } from "../../src/domain/ledger.js";
@@ -32,7 +33,28 @@ const open = new Map();
 const pool = () => { if (!open.has(role)) open.set(role, postgresStore({ url: urlAs(role), ssl: false })); return open.get(role); };
 const closeAll = async () => { for (const s of open.values()) await s.close(); open.clear(); };
 const plant = { on: false };
-const store = withoutIndexErasure({ kind: "postgres", tx: (tenant, fn) => pool().tx(tenant, fn), newId: () => randomUUID(), ping: () => pool().ping(), close: closeAll }, plant);
+// The interleaving of two real transactions, forced (review finding C21): the next transaction that
+// reaches `hold.at` (a store method and its arguments) waits there, on its own connection, until the test
+// releases it. What it holds then (the tenant lock, its uncommitted rows) it keeps while another runs.
+const hold = { at: null };
+function holdNext(at) {
+  const h1 = {};
+  h1.reached = new Promise((r) => { h1.arrive = r; });
+  h1.gate = new Promise((r) => { h1.release = r; });
+  Object.assign(hold, { at, arrive: h1.arrive, gate: h1.gate });
+  return h1;
+}
+const holding = (t) => new Proxy(t, {
+  get(target, k) {
+    const v = target[k];
+    if (typeof v !== "function") return v;
+    return async (...args) => {
+      if (hold.at?.(k, args)) { const { arrive, gate } = hold; hold.at = null; arrive(); await gate; }
+      return v.apply(target, args);
+    };
+  },
+});
+const store = withoutIndexErasure({ kind: "postgres", tx: (tenant, fn) => pool().tx(tenant, (t) => fn(holding(t))), newId: () => randomUUID(), ping: () => pool().ping(), close: closeAll }, plant);
 async function operator(fn) { role = "rw_maint"; try { return await fn(h.app.operator); } finally { role = "rw_app"; } }
 
 before(async () => {
@@ -83,6 +105,19 @@ async function inAnyVersion(markers) {
   for (const m of markers) for (const r of await adminDb`select tenant_id, version from rw.fleet_index where position(convert_to(${m}, 'UTF8') in bytes) > 0 order by tenant_id, version`) out.push(`${r.tenant_id} version ${r.version}: ${m}`);
   return out;
 }
+
+/** Wait until a transaction of this database waits for a tenant lock another holds: the erasure met the transaction in flight. */
+async function waitsForTheLock() {
+  for (let i = 0; i < 400; i++) {
+    const [r] = await adminDb`select count(*)::int as n from pg_locks l join pg_database d on d.oid = l.database where d.datname = ${DB} and l.locktype = 'advisory' and not l.granted`;
+    if (r.n > 0) return;
+    await new Promise((res) => setTimeout(res, 25));
+  }
+  throw new Error("no transaction waits for the tenant lock: the interleaving was not reached");
+}
+/** The same search, kept to one tenant's rows: the base is shared by the cases of this file, and an earlier one leaves its content whole. */
+const inVersionsOf = async (t, markers) => (await inAnyVersion(markers)).filter((w) => w.startsWith(`${t} `));
+const uploadsOf = async (t, repository) => (await h.store.tx(t, (tx) => tx.list("upload", { repositoryRef: repository }))).map((u) => ({ rank: u.rank, erased: u.erasedAt != null }));
 
 test("on PostgreSQL, as rw_app: erasing a repository's content empties every version built from it, in the table itself; the archive brings nothing back; another tenant is untouched", async () => {
   const A = await tenant("a"), B = await tenant("b");
@@ -214,4 +249,160 @@ test("the database holds a published version to what it is: as rw_app and as rw_
   } finally { await sql.end(); }
   assert.deepEqual(await versions(E.tenant), beforeE, "every attempt was refused or rolled back: the tenant's versions are what they were");
   assert.deepEqual(await versions(F.tenant), beforeF);
+});
+
+// ---------------------------------------------------------------- C21: a transaction in flight during an erasure
+// Review finding C21 of 2026-11-10. An erasure that reads the state before it holds the tenant lock does
+// not see what a transaction in flight is about to commit, and that transaction does not see the erasure:
+// a version built from the erased content is published whole. Each case forces that interleaving on two
+// real connections, and looks for the content as the server's superuser.
+
+test("C21: an upload in flight during an erasure commits first; the erasure then empties its version too, and names it", async () => {
+  const G = await tenant("g"), H = await tenant("h");
+  const { gone } = await erasureScenario(h, G, H, { ids: ["8701", "8702", "8801"], org: "race" });
+  await gesture(h, G.session, "content-erase", gone.id);
+  // the upload of the tenant's other repository: held when it publishes. It holds the tenant lock and has
+  // assembled its version from the current set, which still includes the upload about to be erased
+  const u = holdNext((k, a) => k === "insert" && a[0] === "fleet_index");
+  const upload = send(h, { repository: "race-a/keep", repository_id: "8701", run_number: "3", run_id: "448701" }, { mission: "race-keep", bytes: markedCheck("KEEP-RUN-3") });
+  await u.reached;
+  const erasing = h.app.repositories.eraseContent(await session(G), gone.id, {});
+  await waitsForTheLock();
+  u.release();
+  assert.equal((await upload).status, 201, "the upload in flight is accepted");
+  const out = await erasing;
+
+  assert.deepEqual(await inVersionsOf(G.tenant, GONE), [], "no version holds the erased content once the erasure answered: not the one the upload published either");
+  assert.deepEqual(shape(await versions(G.tenant)), [
+    { version: 1, bytes: true, erased: false }, { version: 2, bytes: true, erased: false },
+    { version: 3, bytes: false, erased: true }, { version: 4, bytes: false, erased: true }, { version: 5, bytes: false, erased: true },
+    { version: 6, bytes: false, erased: true }, { version: 7, bytes: true, erased: false },
+  ], "version 6, published by the upload from the content then erased, is emptied; version 7 is the erasure's");
+  const entries = await h.store.tx(G.tenant, (tx) => tx.ledgerAll());
+  const entry = entries.find((e) => e.seq === out.entry.seq);
+  assert.deepEqual([entry.body.what, entry.body.detail.indexVersions, entry.body.detail.indexVersion], ["content-erased", [3, 4, 5, 6], 7], "the entry names every version emptied");
+  assert.equal(verifyChain(entries).ok, true);
+  assert.deepEqual(await contentLeft(h, G.tenant, GONE), []);
+  const served = await h.app.reading.index(G.tenant);
+  assert.equal(served.version, 7);
+  assert.equal(served.bytes.includes("KEEP-RUN-3") && !GONE.some((m) => served.bytes.includes(m)), true, "the index served carries the upload in flight, and nothing erased");
+});
+
+test("C21: an upload of the erased repository itself, in flight during the erasure, is erased with the rest", async () => {
+  const I = await tenant("i"), J = await tenant("j");
+  const { gone } = await erasureScenario(h, I, J, { ids: ["8711", "8712", "8811"], org: "self" });
+  await gesture(h, I.session, "content-erase", gone.id);
+  const u = holdNext((k, a) => k === "insert" && a[0] === "fleet_index");
+  const upload = send(h, { repository: "self-a/gone", repository_id: "8712", run_number: "4", run_id: "448712" }, { mission: "self-gone", bytes: markedCheck("GONE-RUN-3") });
+  await u.reached;
+  const erasing = h.app.repositories.eraseContent(await session(I), gone.id, {});
+  await waitsForTheLock();
+  u.release();
+  assert.equal((await upload).status, 201);
+  await erasing;
+  const markers = [...GONE, "GONE-RUN-3"];
+  assert.deepEqual(await inVersionsOf(I.tenant, markers), [], "no version holds the repository's content, the upload in flight included");
+  assert.deepEqual(await contentLeft(h, I.tenant, markers), [], "nor an object: the bytes of the upload in flight left with the others");
+  assert.deepEqual((await uploadsOf(I.tenant, gone.id)).filter((x) => !x.erased), [], "every upload of the repository is erased");
+  assert.deepEqual(shape(await versions(I.tenant)).filter((v) => v.erased).map((v) => v.version), [3, 4, 5, 6]);
+});
+
+test("C21: a gesture in flight that republishes does not publish, after the erasure, a version assembled before it", async () => {
+  const K = await tenant("k"), L = await tenant("l");
+  const { gone } = await erasureScenario(h, K, L, { ids: ["8721", "8722", "8821"], org: "lang" });
+  // the language is changed (the index is rebuilt): held at its first request for the tenant lock, which
+  // it does not hold yet. The erasure then runs whole.
+  await gesture(h, K.session, null, null);
+  const g = holdNext((k) => k === "lockTenant");
+  const changing = h.app.repositories.settings(await session(K), { lang: "en" }, {});
+  await g.reached;
+  await gesture(h, K.session, "content-erase", gone.id);
+  await h.app.repositories.eraseContent(await session(K), gone.id, {});
+  g.release();
+  await changing;
+  assert.deepEqual(await inVersionsOf(K.tenant, GONE), [], "the version the gesture published after the erasure was assembled after it: it holds nothing erased");
+  assert.deepEqual(shape(await versions(K.tenant)), [
+    { version: 1, bytes: true, erased: false }, { version: 2, bytes: true, erased: false },
+    { version: 3, bytes: false, erased: true }, { version: 4, bytes: false, erased: true }, { version: 5, bytes: false, erased: true },
+    { version: 6, bytes: true, erased: false }, { version: 7, bytes: true, erased: false },
+  ]);
+  const served = await h.app.reading.index(K.tenant);
+  assert.equal(served.version, 7, "the gesture's version is the one served");
+  assert.equal(JSON.parse(served.bytes.toString("utf8")).missions.length, 2);
+  assert.deepEqual(await contentLeft(h, K.tenant, GONE), []);
+});
+
+test("C21: a restore in flight at the end of its window commits first; the retention pass, as rw_maint, then erases nothing of a repository that is back", async () => {
+  const M = await tenant("m"), N = await tenant("n");
+  const { gone } = await erasureScenario(h, M, N, { ids: ["8731", "8732", "8831"], org: "edge" });
+  await gesture(h, M.session, null, null);
+  await h.app.repositories.remove(await session(M), gone.id, {});
+  await gesture(h, M.session, null, null);
+  // the removal is dated 30 days ago less a few seconds, by the superuser: the restore is still open now,
+  // and the bytes expire while it is in flight
+  const MARGIN = 4000;
+  const [{ edge }] = await adminDb`update rw.repository set removed_at = now() - interval '30 days' + ${`${MARGIN} milliseconds`}::interval where id = ${gone.id} returning (extract(epoch from removed_at + interval '30 days') * 1000)::bigint as edge`;
+  await adminDb`update rw.forge_repository set removed_at = (select removed_at from rw.repository where id = ${gone.id}) where id = ${gone.id}`;
+  const r = holdNext((k, a) => k === "insert" && a[0] === "fleet_index");
+  const restoring = h.app.repositories.restore(await session(M), gone.id, {});
+  await r.reached;
+  assert.equal(Date.now() < Number(edge), true, "the restore passed its check inside the window");
+  await new Promise((res) => setTimeout(res, Math.max(0, Number(edge) - Date.now()) + 300));
+  const pass = operator((op) => op.retention());
+  await waitsForTheLock();
+  r.release();
+  await restoring;
+  const report = await pass;
+  const mine = report.find((x) => x.tenant === M.tenant);
+  assert.deepEqual([mine.failed ?? false, mine.erased, mine.indexVersions], [false, 0, 0], JSON.stringify(mine));
+  assert.deepEqual((await uploadsOf(M.tenant, gone.id)).filter((x) => x.erased), [], "the repository is back with its uploads: none is erased");
+  const left = await contentLeft(h, M.tenant, GONE);
+  assert.ok(left.includes("object sha256: GONE-RUN-2") && left.includes("fleet_index version 7 bytes: GONE-RUN-2"), `its bytes are held, and the version the restore published is built from them: ${JSON.stringify(left)}`);
+  assert.deepEqual(shape(await versions(M.tenant)).filter((v) => v.erased), [], "no version was emptied");
+  const served = await h.app.reading.index(M.tenant);
+  assert.equal(served.version, 7);
+  assert.equal(served.bytes.includes(GONE[1]), true, "what is served is built from content that is held");
+});
+
+// ---------------------------------------------------------------- C23, C24
+test("C23: the erasure's read of the versions returns their number and their fleet.json, for the tenant's versions not yet erased, as rw_app and as rw_maint", async () => {
+  const O = await tenant("o"), P = await tenant("p");
+  const { gone } = await erasureScenario(h, O, P, { ids: ["8741", "8742", "8841"], org: "narrow" });
+  const whole = await versions(O.tenant);
+  const read = async (t) => h.store.tx(t, (tx) => tx.indexVersionsWhole());
+  for (const as of ["rw_app", "rw_maint"]) {
+    role = as;
+    try {
+      const narrow = await read(O.tenant);
+      assert.deepEqual(narrow.map((v) => Object.keys(v).sort()), whole.map(() => ["manifest", "version"]), `${as}: two fields, no byte of the index`);
+      assert.deepEqual(narrow.map((v) => [v.version, sha(v.manifest)]), whole.map((v) => [v.version, v.manifest_bytes_sha256]), `${as}: every version, in order, with the fleet.json published`);
+      assert.deepEqual((await read(P.tenant)).map((v) => v.version), [1, 2], `${as}: the other tenant reads its own`);
+    } finally { role = "rw_app"; }
+  }
+  await erase(O, gone.id);
+  assert.deepEqual((await read(O.tenant)).map((v) => v.version), [1, 2, 6], "an erased version is no longer read");
+  // the statement itself: the bytes column is not asked for
+  const text = readFileSync(new URL("../../src/adapters/store/postgres.js", import.meta.url), "utf8");
+  assert.match(text, /select version, manifest from rw\.fleet_index where erased_at is null order by version/);
+});
+
+test("C24: the database dates an erasure itself: as rw_app and as rw_maint, a date in the past or at infinity is replaced by the transaction's", async () => {
+  const Q = await tenant("q"), R = await tenant("r");
+  await erasureScenario(h, Q, R, { ids: ["8751", "8752", "8851"], org: "date" });
+  const before = await versions(Q.tenant);
+  for (const as of ["rw_app", "rw_maint"]) {
+    const sql = postgres(urlAs(as), { max: 1, onnotice: () => {} });
+    try {
+      for (const given of ["1970-01-01", "infinity", "-infinity", "2999-12-31"]) {
+        let seen = null;
+        await sql.begin(async (q) => {
+          await q`select set_config('app.tenant', ${Q.tenant}, true)`;
+          seen = await q.unsafe(`update rw.fleet_index set bytes = ''::bytea, erased_at = '${given}' where version = 1 returning erased_at = now() as current, isfinite(erased_at) as finite`);
+          throw new Error("rollback");
+        }).catch((e) => { if (e.message !== "rollback") throw e; });
+        assert.deepEqual(seen.map((x) => ({ ...x })), [{ current: true, finite: true }], `${as}: an erasure dated ${given} is dated by the database`);
+      }
+    } finally { await sql.end(); }
+  }
+  assert.deepEqual(await versions(Q.tenant), before, "every attempt was rolled back");
 });

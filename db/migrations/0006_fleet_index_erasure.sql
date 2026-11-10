@@ -9,7 +9,9 @@
 -- row written once by its publication, whose only later change is that erasure. With it, the UPDATE the
 -- grants give (rw_app since 0001, rw_maint from this migration on, for the retention job and the replay
 -- after a restore) can empty a version and nothing else: not rewrite its bytes, not move a digest, not
--- bring an erased version back.
+-- bring an erased version back. The date of an erasure is the database's: the trigger writes now() over
+-- whatever date the statement gives, so that neither role can date an erasure in the past, or at
+-- infinity (review finding C24 of 2026-11-10).
 alter table rw.fleet_index add column erased_at timestamptz;
 alter table rw.fleet_index add constraint fleet_index_erased_holds_no_byte check (erased_at is null or octet_length(bytes) = 0);
 create function rw.fleet_index_written_once() returns trigger
@@ -25,6 +27,9 @@ begin
   end if;
   if old.erased_at is not null and new.erased_at is distinct from old.erased_at then
     raise exception 'a published index version is written once: an erasure is not undone';
+  end if;
+  if old.erased_at is null and new.erased_at is not null then
+    new.erased_at := now();
   end if;
   return new;
 end $$;

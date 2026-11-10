@@ -104,13 +104,15 @@ const REPLAY = new Map([
   // A bootstrap (or an invitation) was redeemed: the member it made is gone with the restore when it
   // happened after the backup, and the link must not open the tenant a second time.
   ["member-founded", (tx, e) => consumeLink(tx, e)],
-  // Content was erased: its bytes left the object store, which the restore does not bring back, and the
-  // restored database still counts them. The uploads are marked erased again, so that the next assembly
+  // Content was erased, on request or by the retention job 30 days after a removal (both write this
+  // event): its bytes left the object store, which the restore does not bring back, and the restored
+  // database still counts them. The uploads are marked erased again, so that the next assembly
   // leaves them out instead of failing on bytes that are gone. The restore also gave back the bytes of
   // the index versions built from them: they are erased again, by the rule of the erasure itself
-  // (context.js#eraseIndexVersions). rw_maint can empty a version and nothing else (the trigger of
-  // db/migrations/0006): when the last version is one of them, the tenant has no served index until the
-  // service's next gesture or upload publishes one.
+  // (context.js#eraseIndexVersions), at the date of the replay: the database dates an erasure itself.
+  // rw_maint can empty a version and nothing else (the trigger of db/migrations/0006): when the last
+  // version is one of them, the tenant has no served index until the service's next gesture or upload
+  // publishes one.
   ["content-erased", async (tx, e, { tenant, objects, eraseIndexVersions }) => {
     const digests = Array.isArray(e.digests) ? e.digests : [];
     const ups = (await tx.list("upload", { repositoryRef: e.repository })).filter((u) => !u.erasedAt && digests.includes(u.sha256) && u.receivedAt <= when(e));
@@ -127,7 +129,7 @@ const REPLAY = new Map([
       await objects.removeArchive(tenant, a.id);
       await tx.update("archive", { id: a.id }, { erasedAt: when(e) });
     }
-    const versions = await eraseIndexVersions(tx, when(e));
+    const versions = await eraseIndexVersions(tx);
     return ups.length > 0 || versions.length > 0;
   }],
 ]);
@@ -276,9 +278,15 @@ export function operatorCases(ctx) {
    * The daily job: expired declarations, bytes of repositories removed 30 days ago (their uploads and the
    * index versions built from them), archives older than 24 h. Each pass also erases the index versions
    * an earlier erasure left whole (erasures made before 0006 emptied none): `indexVersions` counts them.
+   * Each tenant's transaction takes the tenant lock before its first read (review finding C21 of
+   * 2026-11-10): a gesture in flight that publishes (a restore at the end of its window) commits first,
+   * and the pass then reads what it left. The 30-day erasure writes the security event of an erasure on
+   * request (`content-erased`, C22), before any byte leaves the object store: a restore from a backup of
+   * before the pass replays it, and a log that cannot be written erases nothing.
    */
   async function retention() {
     return eachTenant("retention", (tenant) => store.tx(tenant, async (tx) => {
+        await tx.lockTenant();
         let erased = 0, archives = 0, expired = 0, indexVersions = 0;
         for (const repo of await tx.list("repository")) {
           const f = await tx.get("forge_repository", { id: repo.id });
@@ -293,13 +301,17 @@ export function operatorCases(ctx) {
             if (!ups.length) continue;
             for (const u of ups) await tx.update("upload", { id: u.id }, { erasedAt: now() });
             const digests = [...new Set(ups.map((u) => u.sha256))];
+            const freed = [];
             for (const d of digests) {
               const b = await tx.get("blob", { sha256: d });
               const refs = Math.max(0, (b?.refs ?? 0) - ups.filter((u) => u.sha256 === d).length);
               await tx.update("blob", { sha256: d }, { refs, ...(refs === 0 ? { erasedAt: now() } : {}) });
-              if (refs === 0) await objects.removeBytes(tenant, d);
+              if (refs === 0) freed.push(d);
             }
-            const versions = await eraseIndexVersions(tx, now());
+            await security(tx, { what: "content-erased", repository: repo.id, digests, reason: "retention" });
+            for (const d of freed) await objects.removeBytes(tenant, d);
+            // one entry for the erasure, which names the repository, the digests and the versions emptied
+            const versions = await eraseIndexVersions(tx);
             await append(tx, { who: operator, what: "content-erased", object: repo.id, detail: { digests, indexVersions: versions, reason: "retention" } });
             erased += digests.length;
             indexVersions += versions.length;
@@ -307,7 +319,7 @@ export function operatorCases(ctx) {
         }
         for (const a of await tx.list("archive", { erasedAt: null })) if (archiveExpired(a, now())) { await objects.removeArchive(tenant, a.id); await tx.update("archive", { id: a.id }, { erasedAt: now() }); archives++; }
         // what an erasure of before left whole: no digest is erased here, the versions are
-        const late = await eraseIndexVersions(tx, now());
+        const late = await eraseIndexVersions(tx);
         if (late.length) await append(tx, { who: operator, what: "content-erased", detail: { digests: [], indexVersions: late, reason: "retention" } });
         indexVersions += late.length;
         return { erased, archives, expired, indexVersions };

@@ -157,13 +157,19 @@ test("30 days after a removal, the retention job erases the uploads' bytes and t
   assert.deepEqual((await h.app.operator.retention()).map((r) => [r.erased, r.indexVersions]), [[0, 0], [0, 0]], "within the 30 days nothing is erased: the repository can still be restored");
   assert.equal((await contentLeft(h, A.tenant, GONE)).length > 0, true);
   h.clock.advance(2 * DAY);
+  const journalled = (await h.store.tx(A.tenant, (tx) => tx.ledgerAll())).length;
   const report = await h.app.operator.retention();
   assert.deepEqual(report.map((r) => [r.tenant, r.erased, r.indexVersions]), [[A.tenant, 3, 3], [B.tenant, 0, 0]]);
   assert.deepEqual(await contentLeft(h, A.tenant, GONE), [], "no byte of the removed repository is left");
   assert.deepEqual(shape(await rows(h, A.tenant, "fleet_index")).filter((v) => v.erased).map((v) => v.version), [3, 4, 5], "the version published by the removal never carried it and is whole");
+  // one entry says it, and it is the one that names the repository: its digests and the versions emptied
+  // with them (review finding C26: an erasure that left the versions to the late pass wrote two entries,
+  // the first with no version, and no test told them apart)
   const entries = await h.store.tx(A.tenant, (tx) => tx.ledgerAll());
+  assert.equal(entries.length, journalled + 1, "the pass wrote one entry");
   const last = entries[entries.length - 1].body;
-  assert.deepEqual([last.what, last.detail.indexVersions, last.detail.reason], ["content-erased", [3, 4, 5], "retention"]);
+  assert.deepEqual([last.who.type, last.what, last.object, last.detail.indexVersions, last.detail.reason, last.detail.digests.length], ["operator", "content-erased", gone.id, [3, 4, 5], "retention", 3]);
+  assert.equal(verifyChain(entries).ok, true);
   assert.equal((await h.app.reading.index(A.tenant)).version, 6, "the index served is the one the removal published");
   assert.equal((await contentLeft(h, B.tenant, BRAVO)).length > 0, true, "the other tenant keeps its content");
 });
@@ -214,4 +220,107 @@ test("a published version is written once: the store refuses any change but the 
   const at = h.clock.now();
   assert.equal(await change({ bytes: Buffer.alloc(0), erasedAt: at }), null, "the erasure itself is accepted");
   assert.match(String(await change({ bytes: Buffer.alloc(0), erasedAt: at + 1 })), /written once/, "an erasure is not moved or undone");
+});
+
+test("the date of an erasure is the store's own: one given in the past, or at no instant, is not kept (C24)", async () => {
+  const h = harness();
+  const f = await founder(h);
+  await pinnedRepository(h, f);
+  await accepted(h, { run_number: "2", run_id: "39000000002" }, { bytes: markedCheck("SECOND") });
+  h.clock.advance(5000);
+  const erasedAt = async (version, given) => (await h.store.tx(f.tenant, (tx) => tx.update("fleet_index", { version }, { bytes: Buffer.alloc(0), erasedAt: given }))).erasedAt;
+  assert.equal(await erasedAt(1, 0), h.clock.now(), "an erasure dated 1970 is dated now");
+  assert.equal(await erasedAt(2, Infinity), h.clock.now(), "an erasure dated at infinity is dated now");
+  assert.deepEqual((await rows(h, f.tenant, "fleet_index")).map((v) => [v.version, v.bytes.length, v.erasedAt]), [[1, 0, h.clock.now()], [2, 0, h.clock.now()]]);
+});
+
+test("the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)", async () => {
+  const reads = { on: false, whole: 0, narrow: 0 };
+  const spy = (store) => Object.assign(Object.create(store), { tx: (tenant, fn) => store.tx(tenant, (t) => fn(new Proxy(t, {
+    get(target, k) {
+      if (k === "list") return (table, where) => { if (reads.on && table === "fleet_index") reads.whole++; return target.list(table, where); };
+      if (k === "indexVersionsWhole") return () => { if (reads.on) reads.narrow++; return target.indexVersionsWhole(); };
+      const v = target[k];
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  }))) });
+  const h = harness({ wrapStore: spy });
+  const { A, B, gone } = await twoTenants(h);
+  await gesture(h, A.session, null, null);
+  await h.app.repositories.remove(await session(h, A), gone.id, {});
+  h.clock.advance(31 * DAY);
+  // what the narrow read returns: every version not yet erased, in order, with two fields and no byte
+  const narrow = await h.store.tx(A.tenant, (tx) => tx.indexVersionsWhole());
+  const whole = await rows(h, A.tenant, "fleet_index");
+  assert.deepEqual(narrow.map((v) => Object.keys(v).sort()), whole.map(() => ["manifest", "version"]));
+  assert.deepEqual(narrow.map((v) => [v.version, sha(v.manifest)]), whole.map((v) => [v.version, v.manifestSha256]), "the fleet.json read is the one published");
+  reads.on = true;
+  const report = await h.app.operator.retention();
+  reads.on = false;
+  assert.deepEqual(report.map((r) => [r.tenant, r.erased, r.indexVersions]), [[A.tenant, 3, 3], [B.tenant, 0, 0]], "the pass erased what it had to");
+  assert.equal(reads.whole, 0, "the pass read no version whole");
+  assert.equal(reads.narrow > 0, true, "the control of the count: the pass did read the versions, through the narrow read");
+  assert.deepEqual((await h.store.tx(A.tenant, (tx) => tx.indexVersionsWhole())).map((v) => v.version), [1, 2, 6], "an erased version is no longer read at all");
+  assert.deepEqual((await h.store.tx(B.tenant, (tx) => tx.indexVersionsWhole())).map((v) => v.version), [1, 2], "and the read stops at the tenant's rows");
+});
+
+test("a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)", async () => {
+  const h = harness();
+  const { A, B, gone } = await twoTenants(h);
+  await gesture(h, A.session, null, null);
+  await h.app.repositories.remove(await session(h, A), gone.id, {});
+  h.clock.advance(31 * DAY);
+  // the session of 31 days ago has expired: the founder signs in again, before the backup
+  const o = await h.app.identity.signInOptions();
+  const again = await h.app.identity.signIn({ challengeId: o.challengeId, response: { id: A.creds[0], challenge: o.options.challenge } });
+  const A2 = { ...A, token: again.token, session: await h.app.identity.sessionFrom(again.token) };
+  // T: the backup, 31 days after the removal and before the daily pass
+  const since = ulid(h.clock.now()).slice(0, 10) + "0".repeat(16);
+  h.clock.advance(1000);
+  const s = h.store._state;
+  const backup = { rows: { ...s.rows }, ledger: s.ledger, operator: [...s.operator] };
+  h.clock.advance(1000);
+  assert.deepEqual((await h.app.operator.retention()).map((r) => [r.erased, r.indexVersions]), [[3, 3], [0, 0]]);
+  assert.deepEqual(await contentLeft(h, A.tenant, GONE), [], "the pass left nothing");
+  h.clock.advance(1000);
+  s.rows = { ...backup.rows }; s.ledger = backup.ledger; s.operator = [...backup.operator];
+  // the control: the restored database holds the erased content again, and counts uploads whose bytes are gone
+  assert.deepEqual(await contentLeft(h, A.tenant, GONE), ["fleet_index version 4 bytes: GONE-RUN-1", "fleet_index version 5 bytes: GONE-RUN-2"]);
+  assert.equal((await rows(h, A.tenant, "upload")).filter((u) => u.repositoryRef === gone.id && !u.erasedAt).length, 3);
+
+  // before the replay: an archive prepared on the restored database brings none of it back
+  const early = await exported(h, A2);
+  assert.deepEqual((await contentLeft(h, A.tenant, GONE, early.bytes)).filter((w) => !w.startsWith("fleet_index ")), [], "no object and no file of the archive holds the erased content");
+  const names = untar(early.bytes).map((f) => f.name);
+  for (const n of [4, 5]) assert.deepEqual([names.includes(`versions/${n}/index.json`), names.includes(`versions/${n}/fleet.json`)], [false, true], `version ${n}: its index.json is not packed`);
+  const plan = JSON.parse(untar(early.bytes).find((f) => f.name === "replay.json").bytes.toString("utf8"));
+  assert.deepEqual(plan.versions.filter((v) => v.version >= 4).map((v) => [v.version, v.replayable, v.why ?? null, v.indexWithheld ?? false]), [[4, false, "bytes missing", true], [5, false, "bytes missing", true], [6, true, null, false]], "replay.json calls replayable only what its exports can rebuild");
+  assert.equal(replay(early.bytes, "0.46.0").ok, true, JSON.stringify(replay(early.bytes, "0.46.0").results));
+
+  // the replay acts on the retention erasure as on an erasure on request
+  const report = await h.app.operator.restoreReplay({ since });
+  assert.deepEqual(report.map((r) => [r.tenant, r.replayed]), [[A.tenant, 1], [B.tenant, 0]]);
+  assert.deepEqual(await contentLeft(h, A.tenant, GONE), [], "the replayed erasure empties the versions again");
+  assert.deepEqual(shape(await rows(h, A.tenant, "fleet_index")).filter((v) => v.erased).map((v) => v.version), [3, 4, 5]);
+  assert.equal((await rows(h, A.tenant, "upload")).filter((u) => u.repositoryRef === gone.id && !u.erasedAt).length, 0);
+  assert.equal((await h.app.reading.index(A.tenant)).version, 6, "the index served is the one the removal published");
+  assert.deepEqual((await h.app.operator.retention()).map((r) => [r.erased, r.indexVersions]), [[0, 0], [0, 0]], "the next daily pass has nothing left to erase");
+  assert.equal(shape(await rows(h, B.tenant, "fleet_index")).every((v) => v.bytes && !v.erased), true, "the other tenant's versions are whole");
+});
+
+test("an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)", async () => {
+  const h = harness();
+  const { A } = await twoTenants(h);
+  const current = (await rows(h, A.tenant, "upload")).find((u) => u.rank === "current" && u.mission === "org-gone");
+  // the bytes leave the object store and every row stays: what a restore leaves, with no gesture to replay
+  await h.objects.removeBytes(A.tenant, current.sha256);
+  const a = await exported(h, A);
+  const names = untar(a.bytes).map((f) => f.name);
+  assert.deepEqual([names.includes("versions/5/index.json"), names.includes("versions/5/fleet.json"), names.includes("versions/4/index.json")], [false, true, true]);
+  assert.equal(names.some((n) => n.includes(current.sha256)), false, "no export file for the bytes that are gone");
+  const plan = JSON.parse(untar(a.bytes).find((f) => f.name === "replay.json").bytes.toString("utf8"));
+  assert.deepEqual(plan.versions.map((v) => [v.version, v.replayable, v.why ?? null, v.indexWithheld ?? false, v.indexErased ?? false]), [
+    [1, true, null, false, false], [2, true, null, false, false], [3, true, null, false, false], [4, true, null, false, false], [5, false, "bytes missing", true, false],
+  ], "only the version built from the missing bytes is left out, and it is not called erased");
+  assert.equal(replay(a.bytes, "0.46.0").ok, true);
 });

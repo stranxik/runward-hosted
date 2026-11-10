@@ -165,6 +165,9 @@ export function repositoryCases(ctx, identity) {
    * from them; the journal keeps the digests (PADR-0017 point 4), the versions keep theirs.
    */
   async function eraseIn(tx, s, id, requestId) {
+    // the tenant lock before the first read (C21): an upload in flight commits its version first, and
+    // the erasure then sees that version and that upload
+    await tx.lockTenant();
     const ups = (await tx.list("upload", { repositoryRef: id })).filter((u) => !u.erasedAt);
     const digests = [...new Set(ups.map((u) => u.sha256))];
     for (const u of ups) await tx.update("upload", { id: u.id }, { erasedAt: now() });
@@ -176,7 +179,7 @@ export function repositoryCases(ctx, identity) {
       await tx.update("blob", { sha256: d }, { refs, ...(refs === 0 ? { erasedAt: now() } : {}) });
       if (refs === 0) freed.push(d);
     }
-    const indexVersions = await ctx.eraseIndexVersions(tx, now());
+    const indexVersions = await ctx.eraseIndexVersions(tx);
     for (const a of await tx.list("archive", { erasedAt: null })) {
       if ((a.contains ?? []).some((d) => digests.includes(d))) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: now() }); }
     }

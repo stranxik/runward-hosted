@@ -104,23 +104,31 @@ export function context(ports, config) {
    * rule existed; applied twice, it changes nothing. The digests, the seq and the fleet.json stay: the
    * journal names them and replay.json says which index no longer replays. An archive prepared before
    * may carry those versions: every live archive goes with them. Returns the versions erased.
+   * The caller holds the tenant lock since before its first read (review finding C21 of 2026-11-10): the
+   * state read here is then the one every transaction that publishes has committed, and none can publish
+   * between this read and the caller's commit. It reads the versions not yet erased, and of each its
+   * number and its fleet.json only (C23): never the bytes, whose sum grows with every upload. The date
+   * of the erasure is the database's (C24): the store writes it, whatever is given.
    */
-  async function eraseIndexVersions(tx, at = clock.now()) {
+  async function eraseIndexVersions(tx) {
     const held = new Set((await tx.list("upload")).filter((u) => !u.erasedAt).map((u) => assembler.exportPath(u.mission, u.kind, u.sha256)));
     const erased = [];
-    for (const v of await tx.list("fleet_index")) {
-      if (v.erasedAt || manifestExports(v.manifest).every((f) => held.has(f))) continue;
-      await tx.update("fleet_index", { version: v.version }, { bytes: Buffer.alloc(0), erasedAt: at });
+    for (const v of await tx.indexVersionsWhole()) {
+      if (manifestExports(v.manifest).every((f) => held.has(f))) continue;
+      await tx.update("fleet_index", { version: v.version }, { bytes: Buffer.alloc(0), erasedAt: clock.now() });
       erased.push(v.version);
     }
     if (erased.length) {
-      for (const a of await tx.list("archive", { erasedAt: null })) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: at }); }
+      for (const a of await tx.list("archive", { erasedAt: null })) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: clock.now() }); }
     }
     return erased;
   }
 
   /** Reassemble after a gesture that changes the set (remove, restore, erase, language); never blocks it. */
   async function republish(tx, what, who, object, detail = {}) {
+    // the lock before the set is read (C21): a version assembled before another transaction's erasure
+    // committed would be published after it, whole, from content that is no longer held
+    await tx.lockTenant();
     const built = await assemble(tx);
     const pinDetail = { fleetVersion: assembler.pin.version, fleetArchiveSha256: assembler.pin.archiveSha256 };
     if (!built.ok) {
