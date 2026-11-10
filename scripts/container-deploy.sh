@@ -6,14 +6,19 @@
 # The container's plain environment is MERGED, never replaced: the API documents a merge for
 # secret_environment_variables only ("secret environment variables that are not specified in this field
 # will be kept unchanged", scaleway-sdk-go container/v1beta1 UpdateContainerRequest); environment_variables
-# is the whole map, so a PATCH that names only RW_IMAGE would erase DATABASE_SSL, DATABASE_CA and the rest.
+# is the whole map (no such sentence, and the hoster's own OpenTofu provider removes a variable by sending
+# the map without it: terraform-provider-scaleway v2.88.0, internal/services/container/helpers_container.go),
+# so a PATCH that names only RW_IMAGE would erase DATABASE_SSL, DATABASE_CA and the rest.
 # The current map is read, RW_IMAGE (and RW_COMMIT when given) set on it, and the whole map sent back.
 # Without a commit, RW_COMMIT is removed: the image's own RW_COMMIT (a build argument) then applies.
 set -euo pipefail
 id="$1" digest="$2" commit="${3:-}"
 [[ "$digest" =~ ^rg\.fr-par\.scw\.cloud/runward/runward-hosted@sha256:[0-9a-f]{64}$ ]] || { echo "container-deploy: not a digest of this registry: $digest"; exit 2; }
 [[ -n "${SCW_SECRET_KEY:-}" && -n "$id" ]] || { echo "container-deploy: SCW_SECRET_KEY and a container id are required"; exit 2; }
-api="https://api.scaleway.com/containers/v1beta1/regions/${REGION:-fr-par}/containers/$id"
+# the hoster's API; a test points it at a local stand-in (the loopback only: the key never leaves for another host)
+base="${SCW_API_URL:-https://api.scaleway.com}"
+[[ "$base" =~ ^(https://api\.scaleway\.com|http://127\.0\.0\.1:[0-9]+)$ ]] || { echo "container-deploy: SCW_API_URL is the hoster's API or a loopback stand-in"; exit 2; }
+api="$base/containers/v1beta1/regions/${REGION:-fr-par}/containers/$id"
 h=(-H "X-Auth-Token: $SCW_SECRET_KEY")
 current=$(curl -sSf --max-time 30 "${h[@]}" "$api")
 env=$(jq -c '.environment_variables // {}' <<<"$current")
