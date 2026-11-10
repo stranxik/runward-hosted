@@ -11,7 +11,7 @@ import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
 import { harness, founder, pinnedRepository, send, gesture, sha, token, claimsFor } from "../helpers.js";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { replay } from "../../scripts/replay-export.mjs";
+import { replay, replayPin } from "../../scripts/replay-export.mjs";
 
 const ADMIN = process.env.PG_ADMIN_URL;
 if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
@@ -220,7 +220,8 @@ test("the application on PostgreSQL: history, quarantine, removal and restore, e
   await h.app.repositories.restore(await h.app.identity.sessionFrom(A.token), repos[0].id, {});
   await gesture(h, s, "export", "");
   const a = await h.app.reading.prepareExport(await h.app.identity.sessionFrom(A.token), {});
-  const r = replay(a.bytes, "0.46.0");
+  const pin = replayPin();
+  const r = replay(a.bytes, pin.version, pin.archives);
   assert.equal(r.ok, true, JSON.stringify(r.results));
   const { verifyChain } = await import("../../src/domain/ledger.js");
   const all = await h.store.tx(A.tenant, (tx) => tx.ledgerAll());

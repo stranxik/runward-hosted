@@ -73,7 +73,8 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] },
   const verifier = githubVerifier({ fetch, clock });
   const assembler = fleetAssembler({ pin: fleetPin({ lockFile: LOCK }) });
   const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, ...config });
-  return { app, clock, store, objects, fetches };
+  // `assembler` is the one the app holds: a test that plays an earlier pin changes its `pin.archiveSha256`
+  return { app, clock, store, objects, fetches, assembler };
 }
 
 /** Open a tenant with a founder and two passkeys, signed in. Returns the session and credential ids. */
