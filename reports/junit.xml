@@ -199,6 +199,8 @@
 	<testcase name="operator-call.sh: the hoster's key and the operator's token reach the gateway, and neither is an argument of curl" classname="test"/>
 	<testcase name="container-deploy.sh: the hoster's key reaches the API on every call, and is never an argument of curl" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a secret in a curl header or user option, in a workflow or a script, and passes the tree" classname="test"/>
+	<testcase name="send.yml: each of its three jobs has a deadline of fifteen minutes or less" classname="test"/>
+	<testcase name="send.yml deadlines: the reader sees a job that has none (planted)" classname="test"/>
 	<testcase name="send.yml: an unavailable service is retried with backoff 2 s, 8 s, 30 s, four attempts, then the CI is warned, not failed" classname="test"/>
 	<testcase name="send.yml: a named refusal is never retried, and fails the run only under send-strict" classname="test"/>
 	<testcase name="send.yml: a 429 is retried like an unavailable service, and a later success is sent" classname="test"/>
@@ -222,9 +224,9 @@
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
-	<!-- tests 221 -->
+	<!-- tests 223 -->
 	<!-- suites 0 -->
-	<!-- pass 221 -->
+	<!-- pass 223 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
