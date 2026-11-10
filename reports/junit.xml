@@ -68,6 +68,7 @@
 	<testcase name="a write without this origin is refused before its body is read; a GET never writes" classname="test"/>
 	<testcase name="the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload, fleet, journal" classname="test"/>
 	<testcase name="the served assets: immutable names, views.js byte for byte the pinned one" classname="test"/>
+	<testcase name="the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app" classname="test"/>
 	<testcase name="the served views say « niveau non atteint » and &amp;quot;level not met&amp;quot; for level-not-met, from the pinned package (author's rule)" classname="test"/>
 	<testcase name="a request target that does not parse, or names its own authority, is answered 404 and is not a server error" classname="test"/>
 	<testcase name="under maintenance every write from a browser is answered 503 maintenance with Retry-After, the sign-in and link routes included; reads stay open" classname="test"/>
@@ -170,6 +171,7 @@
 	<testcase name="removing then restoring a repository, with an upload during the removal (AR)" classname="test"/>
 	<testcase name="a pending declaration expires after 7 days without an upload" classname="test"/>
 	<testcase name="the export replays: every published index is rebuilt byte for byte by runward-fleet (S1 b)" classname="test"/>
+	<testcase name="an index another runward-fleet archive built is never matched nor said different, under the same version (ADR-0021)" classname="test"/>
 	<testcase name="the hosted index never shows machine-established, even if an export claims it (PADR-0011 point 2, planted)" classname="test"/>
 	<testcase name="an export that breaks runward-fleet is kept in quarantine; the fleet goes on" classname="test"/>
 	<testcase name="the language of the index is the tenant's setting, and rebuilds it" classname="test"/>
@@ -222,9 +224,9 @@
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 221 -->
+	<!-- tests 223 -->
 	<!-- suites 0 -->
-	<!-- pass 221 -->
+	<!-- pass 223 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
