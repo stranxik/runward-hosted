@@ -3,7 +3,7 @@
 // that are not the service. Serverless Jobs cannot join a Private Network; this process runs in a second,
 // PRIVATE Serverless Container of the same image, attached to the private network, and runs one gesture
 // per authenticated call, as a child process that receives ONE database role's URL and nothing else:
-//   roles          scripts/roles.mjs              rw_admin  (ADMIN_URL)
+//   roles          scripts/roles.mjs [--grants]   rw_admin  (ADMIN_URL)
 //   migrate        scripts/migrate.mjs            rw_owner  (MIGRATE_URL)
 //   isolation      scripts/isolation-deployed.mjs rw_app    (DATABASE_URL)
 //   retention, verify-chains, open-bootstrap, open-recovery, reset-access, maintenance, restore-replay
@@ -52,7 +52,7 @@ const ROLES = {
 };
 const op = (name, args = {}, extra = {}) => ({ argv: ["src/operator.js", name], role: "rw_maint", s3: true, timeoutMs: 10 * MIN, args, ...extra });
 export const GESTURES = {
-  roles: { argv: ["scripts/roles.mjs"], role: "rw_admin", s3: false, timeoutMs: 2 * MIN, args: {} },
+  roles: { argv: ["scripts/roles.mjs"], role: "rw_admin", s3: false, timeoutMs: 2 * MIN, args: { grants: ["bool"] } },
   migrate: { argv: ["scripts/migrate.mjs"], role: "rw_owner", s3: false, timeoutMs: 10 * MIN, args: {} },
   isolation: { argv: ["scripts/isolation-deployed.mjs"], role: "rw_app", s3: false, timeoutMs: 5 * MIN, args: {} },
   retention: op("retention", {}, { scheduled: true, timeoutMs: 14 * MIN }),

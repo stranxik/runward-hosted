@@ -66,12 +66,25 @@ export function memoryStore({ clock }) {
         if (table === "link" && ["openedAt", "usableFrom", "expiresAt", "kind", "tokenHash"].some((c) => c in patch)) throw new Error("a link's dates, kind and token are written once");
         const i = state.rows[table].findIndex((r) => mine(r) && match(r, key));
         if (i < 0) return null;
+        // as the trigger of db/migrations/0006: a published version is written once, its only change is the
+        // erasure of its bytes, and the date of an erasure is the store's own, whatever date is given
+        if (table === "fleet_index") {
+          const was = state.rows[table][i];
+          const erasure = Object.keys(patch).every((c) => c === "bytes" || c === "erasedAt") && patch.bytes?.length === 0 && patch.erasedAt != null && (was.erasedAt == null || was.erasedAt === patch.erasedAt);
+          if (!erasure) throw new Error("a published index version is written once: only its bytes are erased");
+          if (was.erasedAt == null) patch = { ...patch, erasedAt: clock.now() };
+        }
         const next = { ...state.rows[table][i], ...patch };
         conflict(table, next, keyOf(table, state.rows[table][i]));
         state.rows[table] = state.rows[table].map((r, j) => (j === i ? next : r));
         return pick(next);
       },
       lockTenant() { need(); },
+      // the versions not yet erased, by number: the number and the fleet.json only, never the bytes
+      indexVersionsWhole() {
+        need();
+        return state.rows.fleet_index.filter((r) => mine(r) && r.erasedAt == null).sort((a, b) => a.version - b.version).map((r) => ({ version: r.version, manifest: r.manifest }));
+      },
       // ---- the journal: append only
       ledgerHead() {
         need();

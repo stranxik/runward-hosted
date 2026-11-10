@@ -10,7 +10,7 @@ The service has no model: nothing here is judged by a model. The capabilities ar
 |---|---|
 | Upload and order | a pinned upload is accepted, an old run stays history, each refusal has its code (`test/unit/ingest.test.js`) |
 | Identity | links in seven states, single-use challenges, sessions, gestures, recovery (`test/unit/identity.test.js`) |
-| Declarations and content | consent, erasure, quarantine, export and replay (`test/unit/repositories.test.js`, `test/pg/isolation.test.js`) |
+| Declarations and content | consent, erasure (every index version built from erased content emptied, the archive included), quarantine, export and replay (`test/unit/repositories.test.js`, `test/unit/erasure.test.js`, `test/pg/erasure.test.js`, `test/pg/isolation.test.js`) |
 | HTTP | hosts, origin, cookie, headers, assets (`test/unit/http.test.js`) |
 | Isolation | 0 row across two real tenants, catalog, planted controls (`test/pg/isolation.test.js`) |
 | The six measures | S1 to S6 on the deployed service (framing §3) |

@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- generated: node v22.23.4 linux -->
 <testsuites>
+	<testcase name="on PostgreSQL, as rw_app: erasing a repository's content empties every version built from it, in the table itself; the archive brings nothing back; another tenant is untouched" classname="test"/>
+	<testcase name="planted control on PostgreSQL: an erasure that does not reach the index versions (the code before 0006) leaves the content in rw.fleet_index, and both searches say so; the retention job, as rw_maint, then empties them" classname="test"/>
+	<testcase name="the database holds a published version to what it is: as rw_app and as rw_maint, the only change accepted is the erasure of its own tenant's bytes" classname="test"/>
+	<testcase name="C21: an upload in flight during an erasure commits first; the erasure then empties its version too, and names it" classname="test"/>
+	<testcase name="C21: an upload of the erased repository itself, in flight during the erasure, is erased with the rest" classname="test"/>
+	<testcase name="C21: a gesture in flight that republishes does not publish, after the erasure, a version assembled before it" classname="test"/>
+	<testcase name="C21: a restore in flight at the end of its window commits first; the retention pass, as rw_maint, then erases nothing of a repository that is back" classname="test"/>
+	<testcase name="C23: the erasure's read of the versions returns their number and their fleet.json, for the tenant's versions not yet erased, as rw_app and as rw_maint" classname="test"/>
+	<testcase name="C24: the database dates an erasure itself: as rw_app and as rw_maint, a date in the past or at infinity is replaced by the transaction's" classname="test"/>
 	<testcase name="the migration is idempotent: a second run applies nothing" classname="test"/>
 	<testcase name="two real tenants, made through the application under rw_app" classname="test"/>
 	<testcase name="S4: 0 row read or written outside its tenant, both ways, as rw_app" classname="test"/>
@@ -17,10 +26,12 @@
 	<testcase name="rw.daily_jobs() evaluates the last note of each job and no other, found through its index" classname="test"/>
 	<testcase name="a security definer function resolves no name in the caller's temporary schema: a planted pg_temp.jsonb never runs as rw_resolve" classname="test"/>
 	<testcase name="the roles gesture takes temporary objects away from the service's roles, and says whether it could" classname="test"/>
+	<testcase name="the roles gesture, with --grants, refuses a base whose grants for rw_app or rw_maint are not the snapshot's" classname="test"/>
 	<testcase name="catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order" classname="test"/>
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
 	<testcase name="a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed" classname="test"/>
+	<testcase name="a restore from a backup of before the retention erasure: under rw_maint the pass writes its event, the archive on the restored base packs nothing whose bytes are gone, and the replay empties the versions again" classname="test"/>
 	<testcase name="C12: run again with another `since`, each tenant's note says the same lost range and the same heads as its first" classname="test"/>
 	<testcase name="planted control: an unfilled slot of the page is seen" classname="test"/>
 	<testcase name="every slot of the page is filled, and every file it names is served with its media type" classname="test"/>
@@ -58,6 +69,17 @@
 	<testcase name="egress: one host's open circuit does not close the way to another" classname="test"/>
 	<testcase name="egress: a caller that gives up is not counted against the host" classname="test"/>
 	<testcase name="egress: the service's composition bounds the issuer and S3 fetches (deadline and circuit), through the ports themselves" classname="test"/>
+	<testcase name="erasing a repository's content empties every version of the index built from it: no byte is left in a version, an object or an archive, and the digests stay" classname="test"/>
+	<testcase name="another tenant is untouched by an erasure: its versions, its bytes and its archive are what they were" classname="test"/>
+	<testcase name="planted control: an erasure that does not reach the index versions (the code before 0006) leaves the content, and the search says where" classname="test"/>
+	<testcase name="the archive never waits for the pass: versions an earlier erasure left whole are not packed, and the retention job then empties them once" classname="test"/>
+	<testcase name="30 days after a removal, the retention job erases the uploads' bytes and the versions built from them" classname="test"/>
+	<testcase name="a restore gives the erased versions back; the replay empties them again, and nothing erased is served meanwhile" classname="test"/>
+	<testcase name="a published version is written once: the store refuses any change but the erasure of its bytes" classname="test"/>
+	<testcase name="the date of an erasure is the store's own: one given in the past, or at no instant, is not kept (C24)" classname="test"/>
+	<testcase name="the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)" classname="test"/>
+	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
+	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
 	<testcase name="the pre-commit hook is wired by npm install and runs the repository's own checks" classname="test"/>
 	<testcase name="the pre-commit plan: the format always, the lint of staged sources, the workflows' guards, the unit tests that reach what is staged" classname="test"/>
 	<testcase name="the hook, run in a throwaway clone: a staged lint error stops the commit, the fixed file passes" classname="test"/>
@@ -85,6 +107,8 @@
 	<testcase name="the security log is written before the database commits: a failing write fails the gesture" classname="test"/>
 	<testcase name="a passkey added is announced in the OTHER sessions, never in the one that added it (guard on a witness finding)" classname="test"/>
 	<testcase name="under maintenance no one signs in and no link is opened; the open sessions keep reading; it all comes back when maintenance ends" classname="test"/>
+	<testcase name="the privileges of rw_app and rw_maint are set at creation and left alone afterwards; rw_owner's level is still compared" classname="test"/>
+	<testcase name="the containers' memory is the value the hoster stores, a whole number of MB of 10^6 bytes, and is not ignored" classname="test"/>
 	<testcase name="a first upload of a pending repository is kept, not published; the confirmation publishes it" classname="test"/>
 	<testcase name="an accepted upload answers 201 with seq, head and the index digest the service then serves" classname="test"/>
 	<testcase name="an old run re-run later is kept as history, never as the current upload (T23)" classname="test"/>
@@ -221,6 +245,16 @@
 	<testcase name="send.yml: a 429 is retried like an unavailable service, and a later success is sent" classname="test"/>
 	<testcase name="send.yml: a token endpoint that does not answer is cut at its own deadline (10 s) and retried like an unavailable service" classname="test"/>
 	<testcase name="C15, send.yml: on a runner without Node.js 22 the send job says &amp;quot;not sent: this runner has no Node.js 22&amp;quot; and keeps runward's verdict; it fails only with send-strict" classname="test"/>
+	<testcase name="the TLS server name stays the origin's while Host names the service's default hostname, and the app's 421 passes" classname="test"/>
+	<testcase name="a 404 from the router is a fault, never the app's guard: an unknown host does not reach the app" classname="test"/>
+	<testcase name="a 421 that is not the app's refusal, and any other status, are faults" classname="test"/>
+	<testcase name="a failed handshake is a fault: a certificate that does not name the origin, an authority that is not trusted" classname="test"/>
+	<testcase name="the host to refuse is never the origin's own" classname="test"/>
+	<testcase name="which host is sent: the service's when given, elsewhere.example in plain http, and an https origin without it is refused" classname="test"/>
+	<testcase name="the script against the real application in plain http: sound; the app's own 421 is what passes, and a host the app serves is a fault" classname="test"/>
+	<testcase name="the script refuses an https origin without the service's host, exit 3, before asking anything" classname="test"/>
+	<testcase name="the guard: a workflow that runs the smoke gives it vars.RW_SERVICE_HOST and refuses, before any secret, when it is empty" classname="test"/>
+	<testcase name="service-host-check.sh: only the hostname the hoster reports for the service's container passes; anything unreadable is a refusal" classname="test"/>
 	<testcase name="database TLS: the instance's authority and an IP named in the IP SANs complete the handshake" classname="test"/>
 	<testcase name="database TLS: the migration and witness scripts verify the same way (DATABASE_CA)" classname="test"/>
 	<testcase name="database TLS: a certificate from another authority is refused (the client never sets rejectUnauthorized: false)" classname="test"/>
@@ -245,9 +279,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 244 -->
+	<!-- tests 278 -->
 	<!-- suites 0 -->
-	<!-- pass 244 -->
+	<!-- pass 278 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
