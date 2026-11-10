@@ -64,14 +64,26 @@ test("egress: a caller that gives up is not counted against the host", async () 
   assert.deepEqual(f.circuits()["token.actions.githubusercontent.com"], { open: false, failed: 0 });
 });
 
-test("egress: the service's composition bounds the issuer and S3 fetches (deadline and circuit)", async () => {
+// Review finding of 2026-11-10: this case called c.egress itself, so handing the raw fetchImpl to the
+// verifier or to the S3 adapter in src/main.js left it green. It goes through the two ports now, with a
+// fetch that never answers: a port given the raw fetch never sees a deadline, and the case goes red.
+test("egress: the service's composition bounds the issuer and S3 fetches (deadline and circuit), through the ports themselves", async () => {
   const { readConfig, compose } = await import("../../src/main.js");
   const { memoryStore } = await import("../../src/adapters/store/memory.js");
   const { silentLog } = await import("../../src/adapters/system/log.js");
+  const { token, claimsFor, ORIGIN } = await import("../helpers.js");
   const calls = [];
-  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_SEND_WORKFLOW_SHAS: "0".repeat(40) });
-  const c = compose(config, { log: silentLog, store: memoryStore({ clock: { now: () => 0 } }), fetchImpl: hanging(calls), egressOptions: { timeoutMs: 50 } });
-  await assert.rejects(c.egress(ISSUER), (e) => e instanceof EgressUnavailable && /no answer within 50 ms/.test(e.message));
-  assert.equal(calls.length, 1);
-  assert.ok(c.egress.circuits()["token.actions.githubusercontent.com"], "the issuer has a circuit");
+  const config = readConfig({
+    RW_STORE: "memory", RW_ORIGIN: ORIGIN, RW_SEND_WORKFLOW_SHAS: "0".repeat(40),
+    S3_ENDPOINT: "https://s3.fr-par.scw.cloud", S3_REGION: "fr-par", S3_BUCKET: "b", S3_ACCESS_KEY_ID: "AKIDTEST", S3_SECRET_ACCESS_KEY: ["test", "only"].join("-"),
+  });
+  const clock = { now: () => Date.now() };
+  const c = compose(config, { clock, log: silentLog, store: memoryStore({ clock }), fetchImpl: hanging(calls), egressOptions: { timeoutMs: 50 } });
+  assert.equal(c.objects.kind, "s3");
+  // without a deadline the call would wait for ever: the race names the defect instead of hanging the suite
+  const bounded = (p, what) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error(`${what} is not bounded: its port did not receive the egress-bound fetch (src/main.js#compose)`)), 3000).unref())]);
+  await assert.rejects(bounded(c.ports.verifier.verify(token(claimsFor(clock)), { audience: ORIGIN }), "the verifier's read of the issuer's keys"), (e) => e.code === undefined && /no answer within 50 ms/.test(e.message));
+  await assert.rejects(bounded(c.ports.objects.getBytes("0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70", "a".repeat(64)), "the object store's read"), (e) => e instanceof EgressUnavailable && /no answer within 50 ms/.test(e.message));
+  assert.deepEqual(calls.map((u) => new URL(u).host), ["token.actions.githubusercontent.com", "s3.fr-par.scw.cloud"]);
+  assert.deepEqual(Object.keys(c.egress.circuits()).sort(), ["s3.fr-par.scw.cloud", "token.actions.githubusercontent.com"], "each host has its circuit");
 });
