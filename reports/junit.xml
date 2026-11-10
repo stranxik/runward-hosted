@@ -271,6 +271,20 @@
 	<testcase name="planted controls: an import off the list, a name not exported, a bare specifier, a second module naming the pinned views, a default import, a cycle" classname="test"/>
 	<testcase name="no module of the shell uses a name it neither declares nor imports, or writes to a name it imports" classname="test"/>
 	<testcase name="planted controls: a name never imported, a write to an imported name, a module that does not parse" classname="test"/>
+	<testcase name="planted controls: an inline script, a style element, a handler, a javascript: address, a foreign stylesheet, an odd style attribute" classname="test"/>
+	<testcase name="planted controls: each forbidden use in a script is seen, and a comment that names one is not" classname="test"/>
+	<testcase name="every page answers 200 with the app's headers: the same content security policy, no-store, text/html; HEAD has no body" classname="test"/>
+	<testcase name="no page holds an inline script, an inline style element, an event handler or a javascript: address" classname="test"/>
+	<testcase name="every file a page names is a file of the closed list, served with its media type and named by its digest; the shell's own files for the structure and the layer, the same fonts" classname="test"/>
+	<testcase name="the closed list of the site is its scripts and stylesheets on disk: none off the list, none missing" classname="test"/>
+	<testcase name="a source of the site is never served: the template, the fragments, the data, the stylesheet by its plain name" classname="test"/>
+	<testcase name="the site's scripts write no HTML from a string, evaluate nothing, call no network and set no cookie" classname="test"/>
+	<testcase name="the texts served are the 324 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)" classname="test"/>
+	<testcase name="planted controls: one character changed in a fragment changes the texts; a pair left untreated and a slot left empty are refused" classname="test"/>
+	<testcase name="the data of the public view and the summary comes from one file, web/site/donnees.json, escaped as text; a state off the lexicon is refused" classname="test"/>
+	<testcase name="the contact is a mailto: to one address, and nothing is posted: no form action, no network call, the policy forbids a form's action" classname="test"/>
+	<testcase name="the stand page carries the QR code of web/site/pages/_qr.svg, its matrix unchanged since it was decoded to https://app.runward.dev/stand" classname="test"/>
+	<testcase name="the shell keeps its addresses: /app and /lien serve it, and an address of the app (#/...) is sent from the site to /app" classname="test"/>
 	<testcase name="the TLS server name stays the origin's while Host names the service's default hostname, and the app's 421 passes" classname="test"/>
 	<testcase name="a 404 from the router is a fault, never the app's guard: an unknown host does not reach the app" classname="test"/>
 	<testcase name="a 421 that is not the app's refusal, and any other status, are faults" classname="test"/>
@@ -293,6 +307,8 @@
 	<testcase name="database TLS in production: verify-full with the authority, or the service does not start" classname="test"/>
 	<testcase name="database TLS: every PostgreSQL client of the tree goes through the verifying configuration" classname="test"/>
 	<testcase name="no literal colour outside web/couche-runward-app.css" classname="test"/>
+	<testcase name="no literal colour in the public site either: its stylesheet, its scripts and its pages take every colour from the layer (ADR-0022)" classname="test"/>
+	<testcase name="every custom property the public site uses is defined by the family's structure, the layer, the site's stylesheet, or set by its pages and its script" classname="test"/>
 	<testcase name="planted control: a literal colour is seen" classname="test"/>
 	<testcase name="every custom property used is defined by the family structure or the app's layer" classname="test"/>
 	<testcase name="the layer fills the family's contract in both themes, with the contrasts measured, no banned value and no green" classname="test"/>
@@ -305,9 +321,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 304 -->
+	<!-- tests 320 -->
 	<!-- suites 0 -->
-	<!-- pass 304 -->
+	<!-- pass 320 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
