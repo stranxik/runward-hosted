@@ -150,8 +150,10 @@ table.claims td{ overflow-wrap:anywhere; }
 .releve-d[open] > summary::before{ content:"−"; }
 @media (max-width: 759px){ .releve th, .releve td{ border:0 !important; } }
 
-/* every relevé in Departure Mono at one size, the fleet views' included (their stylesheet says 11 and 10 px) */
+/* every relevé in the mono at one size, the fleet views' included (their stylesheet says 11 and 10 px) */
 .rv, .chart text{ font-size:var(--fs-releve); }
+/* the fleet stylesheet sets code at .86em: inside a 12 px relevé it read 10.3 px. Nothing under 12 px (U1 captures) */
+code, .hash{ font-size:max(var(--fs-releve), .86em); }
 
 /* ============================================================================================================
    Direction A, « la coque » (the author's choice of 2026-11-06): the public home, the signed-in shell with its
