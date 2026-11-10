@@ -8,9 +8,9 @@
 // inventory is named fleet.json, and each export is at exports/<mission>/<kind>-<sha256>.json: an export
 // of the tenant, with that fleet.json, rebuilds the same index on a clean machine (S1, PADR-0011 6 bis).
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { buildIndex, BuildError, MANIFEST_FORMAT } from "runward-fleet";
 import { checkIndex } from "runward-fleet/rules";
 import { renderPage } from "runward-fleet/site";
@@ -19,13 +19,44 @@ import { renderPage } from "runward-fleet/site";
 const PKG_DIR = dirname(dirname(fileURLToPath(import.meta.resolve("runward-fleet"))));
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 
-/** What is pinned (PADR-0011 point 6): version, the release archive's digest, the digest of views.js served. */
-export function fleetPin({ lockFile }) {
+/** The files under `dir`, by relative name, with their sha256; anything that is not a file or a directory is named. */
+function installedFiles(dir) {
+  const files = new Map();
+  const odd = [];
+  for (const e of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    const rel = relative(dir, join(e.parentPath, e.name)).split(sep).join("/");
+    if (e.isDirectory()) continue;
+    if (e.isFile()) files.set(rel, sha256(readFileSync(join(dir, rel))));
+    else odd.push(rel);
+  }
+  return { files, odd };
+}
+
+/**
+ * What is pinned (PADR-0011 point 6): version, the release archive's digest, the digest of views.js served.
+ * The archive digest is written on every published index and names the build that replays it (ADR-0021),
+ * so it is returned only when what is installed IS that archive, and the service does not start otherwise:
+ * the integrity npm recorded at install (node_modules/.package-lock.json) is the lock's, and the installed
+ * files are the lock's "files", name for name and digest for digest. The version alone names two archives.
+ */
+export function fleetPin({ lockFile, pkgDir = PKG_DIR }) {
   const lock = JSON.parse(readFileSync(lockFile, "utf8"));
-  const pkg = JSON.parse(readFileSync(join(PKG_DIR, "package.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(pkgDir, "package.json"), "utf8"));
   if (pkg.version !== lock.version) throw new Error(`runward-fleet: installed ${pkg.version}, pinned ${lock.version}`);
-  const views = readFileSync(join(PKG_DIR, "ui", "views.js"));
-  return { version: pkg.version, commit: lock.commit, archiveSha256: lock.tarballSha256, viewsSha256: sha256(views), dir: PKG_DIR };
+  const refuse = (why) => new Error(`runward-fleet: the installed package is not the pinned archive ${String(lock.tarballSha256).slice(0, 12)}: ${why}. Nothing is served or published with it; install again with npm ci`);
+  let recorded = null;
+  try { recorded = JSON.parse(readFileSync(join(dirname(pkgDir), ".package-lock.json"), "utf8")).packages?.["node_modules/runward-fleet"]?.integrity ?? null; } catch { recorded = null; }
+  if (typeof lock.integrity !== "string" || recorded !== lock.integrity) throw refuse(recorded ? `npm installed an archive of integrity ${recorded}, the lock pins ${lock.integrity}` : "npm recorded no integrity for it in node_modules/.package-lock.json");
+  const pinned = lock.files;
+  if (!pinned || typeof pinned !== "object" || !Object.keys(pinned).length) throw refuse('the lock pins no "files"');
+  const { files, odd } = installedFiles(pkgDir);
+  if (odd.length) throw refuse(`${odd[0]} is neither a file nor a directory`);
+  const extra = [...files.keys()].filter((f) => !Object.hasOwn(pinned, f));
+  const missing = Object.keys(pinned).filter((f) => !files.has(f));
+  const changed = [...files.keys()].filter((f) => Object.hasOwn(pinned, f) && files.get(f) !== pinned[f]);
+  if (extra.length || missing.length || changed.length) throw refuse([changed.length ? `changed: ${changed.join(", ")}` : "", missing.length ? `missing: ${missing.join(", ")}` : "", extra.length ? `not of the archive: ${extra.join(", ")}` : ""].filter(Boolean).join("; "));
+  const views = readFileSync(join(pkgDir, "ui", "views.js"));
+  return { version: pkg.version, commit: lock.commit, archiveSha256: lock.tarballSha256, viewsSha256: sha256(views), dir: pkgDir };
 }
 
 export const exportPath = (mission, kind, digest) => `exports/${mission}/${kind}-${digest}.json`;

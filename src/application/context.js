@@ -8,6 +8,8 @@ import { Refusal } from "../domain/refusals/index.js";
 export const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 export const newToken = () => randomBytes(32).toString("base64url");
 export const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
+/** The export files a published version was built from, as its fleet.json names them. */
+export const manifestExports = (manifest) => JSON.parse(manifest.toString("utf8")).missions.flatMap((m) => Object.values(m.exports ?? {}).map((e) => e.file));
 
 /**
  * The ports and settings a use case reads. `ports`: store, objects, verifier, authn, assembler, clock,
@@ -75,7 +77,8 @@ export function context(ports, config) {
     await tx.lockTenant();
     const versions = await tx.list("fleet_index");
     const last = versions.reduce((a, v) => (v.version > (a?.version ?? 0) ? v : a), null);
-    if (last && last.sha256 === built.sha256 && last.manifestSha256 === built.manifestSha256) return { version: last.version, sha256: last.sha256, unchanged: true };
+    // an erased version is never the one served again: the same index, rebuilt, is a new version with its bytes
+    if (last && !last.erasedAt && last.sha256 === built.sha256 && last.manifestSha256 === built.manifestSha256) return { version: last.version, sha256: last.sha256, unchanged: true };
     const version = (last?.version ?? 0) + 1;
     await tx.insert("fleet_index", {
       version, sha256: built.sha256, bytes: built.bytes, manifestSha256: built.manifestSha256, manifest: built.manifest,
@@ -84,13 +87,48 @@ export function context(ports, config) {
     return { version, sha256: built.sha256 };
   }
 
+  /** The version served: the last one published, or none when its bytes were erased and nothing was published since. */
   async function latestIndex(tx) {
     const versions = await tx.list("fleet_index");
-    return versions.reduce((a, v) => (v.version > (a?.version ?? 0) ? v : a), null);
+    const last = versions.reduce((a, v) => (v.version > (a?.version ?? 0) ? v : a), null);
+    return last && !last.erasedAt ? last : null;
+  }
+
+  /**
+   * Erase the bytes of every published version built from an export that is no longer held (ADR-0009,
+   * lot E1 of 2026-11-10). A version's bytes are the projection of the uploads its fleet.json names: once
+   * one of them is erased, the version carries content the tenant asked to erase. The rule reads the
+   * state, not the gesture: a version keeps its bytes only while, for each export it names, an upload of
+   * that mission, kind and digest is still held. So it is the same after an erasure on demand, after the
+   * retention job, after a replayed erasure on a restored database, and for an erasure made before this
+   * rule existed; applied twice, it changes nothing. The digests, the seq and the fleet.json stay: the
+   * journal names them and replay.json says which index no longer replays. An archive prepared before
+   * may carry those versions: every live archive goes with them. Returns the versions erased.
+   * The caller holds the tenant lock since before its first read (review finding C21 of 2026-11-10): the
+   * state read here is then the one every transaction that publishes has committed, and none can publish
+   * between this read and the caller's commit. It reads the versions not yet erased, and of each its
+   * number and its fleet.json only (C23): never the bytes, whose sum grows with every upload. The date
+   * of the erasure is the database's (C24): the store writes it, whatever is given.
+   */
+  async function eraseIndexVersions(tx) {
+    const held = new Set((await tx.list("upload")).filter((u) => !u.erasedAt).map((u) => assembler.exportPath(u.mission, u.kind, u.sha256)));
+    const erased = [];
+    for (const v of await tx.indexVersionsWhole()) {
+      if (manifestExports(v.manifest).every((f) => held.has(f))) continue;
+      await tx.update("fleet_index", { version: v.version }, { bytes: Buffer.alloc(0), erasedAt: clock.now() });
+      erased.push(v.version);
+    }
+    if (erased.length) {
+      for (const a of await tx.list("archive", { erasedAt: null })) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: clock.now() }); }
+    }
+    return erased;
   }
 
   /** Reassemble after a gesture that changes the set (remove, restore, erase, language); never blocks it. */
   async function republish(tx, what, who, object, detail = {}) {
+    // the lock before the set is read (C21): a version assembled before another transaction's erasure
+    // committed would be published after it, whole, from content that is no longer held
+    await tx.lockTenant();
     const built = await assemble(tx);
     const pinDetail = { fleetVersion: assembler.pin.version, fleetArchiveSha256: assembler.pin.archiveSha256 };
     if (!built.ok) {
@@ -104,5 +142,5 @@ export function context(ports, config) {
     return { entry: e, index: pub };
   }
 
-  return { ports, config, store, objects, clock, append, security, assemble, publish, latestIndex, republish, currentSet };
+  return { ports, config, store, objects, clock, append, security, assemble, publish, latestIndex, eraseIndexVersions, republish, currentSet };
 }

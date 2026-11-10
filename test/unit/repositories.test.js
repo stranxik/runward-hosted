@@ -2,8 +2,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { harness, founder, pinnedRepository, send, gesture, FIXTURE_CHECK } from "../helpers.js";
-import { replay } from "../../scripts/replay-export.mjs";
+import { replay, replayPin } from "../../scripts/replay-export.mjs";
+import { untar } from "../../src/adapters/archive/tar.js";
+import { readFileSync } from "node:fs";
+import { LOCK } from "../helpers.js";
 import { DAY } from "../../src/domain/identity.js";
+
+const PIN = replayPin();
 
 const refusal = async (p) => { try { await p; return null; } catch (e) { return e.code ?? e.message; } };
 const fresh = async (h, f) => { await gesture(h, f.session, null, null); return h.app.identity.sessionFrom(f.token); };
@@ -89,7 +94,7 @@ test("the export replays: every published index is rebuilt byte for byte by runw
   assert.equal(await refusal(h.app.reading.prepareExport(f.session, {})), "gesture-required");
   await gesture(h, f.session, "export", "");
   const a = await h.app.reading.prepareExport(await h.app.identity.sessionFrom(f.token), {});
-  const r = replay(a.bytes, "0.46.0");
+  const r = replay(a.bytes, PIN.version, PIN.archives);
   assert.equal(r.ok, true, JSON.stringify(r.results));
   assert.ok(r.results.filter((x) => x.state === "same").length >= 3, JSON.stringify(r.results.map((x) => x.state)));
   assert.equal(r.chainOk, true);
@@ -98,6 +103,40 @@ test("the export replays: every published index is rebuilt byte for byte by runw
   assert.equal(dl.sha256, a.sha256);
   h.clock.advance(DAY);
   assert.equal(await refusal(h.app.reading.downloadExport(live, a.id)), "not-found", "an archive lives 24 h");
+});
+
+test("an index another runward-fleet archive built is never matched nor said different, under the same version (ADR-0021)", async () => {
+  const lock = JSON.parse(readFileSync(LOCK, "utf8"));
+  assert.notEqual(lock.previous.tarballSha256, lock.tarballSha256, "the previous pin is another archive of the same version");
+  // a fleet whose first `olds` publications happened under the previous pin: the service recorded that
+  // archive on the index and in the journal (the review of 3afe41d, C41: a label in replay.json alone
+  // takes nothing out of the comparison; test/unit/pin.test.js plants those cases)
+  const fleet = async (olds) => {
+    const h = harness();
+    const f = await founder(h);
+    const pinned = h.assembler.pin.archiveSha256;
+    const under = async (n, step) => { h.assembler.pin.archiveSha256 = n <= olds ? lock.previous.tarballSha256 : pinned; await step(); h.assembler.pin.archiveSha256 = pinned; };
+    await under(1, () => pinnedRepository(h, f));
+    await under(2, () => send(h, { run_number: "2", run_id: "40000000102" }, { bytes: Buffer.from(FIXTURE_CHECK.toString("utf8").replace('"gaps"', '"clean"')) }));
+    await under(3, () => send(h, { run_number: "3", run_id: "40000000103" }));
+    await gesture(h, f.session, "export", "");
+    const a = await h.app.reading.prepareExport(await h.app.identity.sessionFrom(f.token), {});
+    return { bytes: a.bytes, plan: JSON.parse(untar(a.bytes).find((x) => x.name === "replay.json").bytes.toString("utf8")) };
+  };
+  const now = await fleet(0);
+  assert.equal(now.plan.versions.length, 3);
+  assert.ok(now.plan.versions.every((v) => v.runwardFleetArchiveSha256 === lock.tarballSha256), "each published index records the archive that built it");
+  const repinned = await fleet(1);
+  const mixed = replay(repinned.bytes, PIN.version, PIN.archives);
+  assert.deepEqual(mixed.results.map((x) => x.state), ["other-archive", "same", "same"]);
+  assert.equal(mixed.results[0].runwardFleetArchiveSha256, lock.previous.tarballSha256);
+  assert.equal(mixed.ok, true, "the indexes this pin built replay; the other one is named, not judged");
+  const old = await fleet(3);
+  const allOld = replay(old.bytes, PIN.version, PIN.archives);
+  assert.deepEqual([...new Set(allOld.results.map((x) => x.state))], ["other-archive"]);
+  assert.equal(allOld.ok, false, "nothing replayed is never a pass");
+  // planted control: without the lock's archives the replay rebuilds them all, as before
+  assert.equal(replay(old.bytes, PIN.version).results.every((x) => x.state === "same"), true);
 });
 
 test("the hosted index never shows machine-established, even if an export claims it (PADR-0011 point 2, planted)", async () => {

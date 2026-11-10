@@ -89,6 +89,13 @@ export function postgresStore({ url, max = 4, ssl }) {
         return rowOut(table, rows[0]);
       },
       async lockTenant() { need(); await q`select pg_advisory_xact_lock(hashtext(${tenantId}))`; },
+      // the versions not yet erased, by number: the number and the fleet.json only. The bytes of every
+      // version of a tenant are never read together here: their sum grows with each upload.
+      async indexVersionsWhole() {
+        need();
+        const rows = await q`select version, manifest from rw.fleet_index where erased_at is null order by version`;
+        return rows.map((r) => ({ version: Number(r.version), manifest: Buffer.from(r.manifest) }));
+      },
       async ledgerHead() {
         need();
         const [r] = await q`select seq, hash from rw.ledger order by seq desc limit 1`;

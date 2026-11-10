@@ -152,6 +152,11 @@ test("arguments: a closed list per gesture, each checked, passed as argv (never 
   assert.throws(() => argvOf("open-bootstrap", { hash: "x; rm -rf /" }), /expected form/);
   assert.throws(() => argvOf("open-recovery", { hash, tenant }), /needs member/);
   assert.throws(() => argvOf("migrate", { dir: "/tmp" }), /takes no argument dir/);
+  // roles, after migrate, compares the grants with the snapshot (C28): one boolean, nothing else
+  assert.deepEqual(argvOf("roles", {}), ["scripts/roles.mjs"]);
+  assert.deepEqual(argvOf("roles", { grants: true }), ["scripts/roles.mjs", "--grants"]);
+  assert.throws(() => argvOf("roles", { grants: "yes" }), /grants is a boolean/);
+  assert.throws(() => argvOf("roles", { snapshot: "/tmp/x" }), /takes no argument snapshot/);
   assert.throws(() => argvOf("maintenance", { on: true, off: true }), /exactly one/);
   assert.throws(() => argvOf("maintenance", { reason: "a\nb", on: true }), /expected form/);
   const seen = [];

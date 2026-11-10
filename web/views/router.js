@@ -27,7 +27,10 @@ import { viewPanne } from "./panne.js";
 import { viewLegal } from "./legal.js";
 import { view404 } from "./introuvable.js";
 
-/** The fleet's screens: the dashboard, a mission, and the views of the pinned runward-fleet. */
+// The views of runward-fleet this app shows. The decision reading (`decision`, runward's ADR-0125) came with
+// the pin of ADR-0021 and is not a screen of this app yet: its route answers like any unknown one.
+const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");
+/** The fleet's screens: the dashboard, a mission, and the views of the pinned runward-fleet this app shows. */
 const FLEET = { view: (sub, route) => viewFleet(route, sub ? decodeURIComponent(sub) : ""), reads: "fleet", signedIn: true };
 /** The screens, by route: its view (given the rest of the address), what it reads, whether it asks a session. */
 const SCREENS = {
@@ -41,7 +44,7 @@ const SCREENS = {
   panne: { view: (sub) => viewPanne(sub) },
   legal: { view: (sub) => (sub ? null : viewLegal()) },
 };
-const isFleet = (route) => route === "" || route === "vue" || ROUTES.includes(route);
+const isFleet = (route) => route === "" || route === "vue" || FLEET_ROUTES.includes(route);
 const screenOf = (route) => (Object.hasOwn(SCREENS, route) ? SCREENS[route] : isFleet(route) ? FLEET : null);
 
 /** The reads of a screen at its opening: `key` names the opening (the same key is not read twice), `load` reads. */

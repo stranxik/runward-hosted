@@ -8,7 +8,7 @@ import { memoryStore } from "../src/adapters/store/memory.js";
 import { memoryObjects } from "../src/adapters/objects/objects.js";
 import { githubVerifier, GITHUB_ISSUER } from "../src/adapters/oidc/github.js";
 import { fleetAssembler, fleetPin } from "../src/adapters/fleet/assembler.js";
-import { tar } from "../src/adapters/archive/tar.js";
+import { tar, untar } from "../src/adapters/archive/tar.js";
 import { manualClock } from "../src/adapters/system/clock.js";
 import { silentLog } from "../src/adapters/system/log.js";
 import { ulid } from "../src/adapters/system/ulid.js";
@@ -63,9 +63,9 @@ export function fakeAuthn() {
 export const sha = (b) => createHash("sha256").update(b).digest("hex");
 export const digestHeader = (b) => `sha-256=:${createHash("sha256").update(b).digest("base64")}:`;
 
-export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false, config = {}, keysFetch = null } = {}) {
+export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false, config = {}, keysFetch = null, wrapStore = (s) => s } = {}) {
   const clock = realTime ? { now: () => Date.now(), set() {}, advance() { throw new Error("real time: cannot advance"); } } : manualClock(Date.parse("2026-11-06T12:00:00Z"));
-  const store = given ?? memoryStore({ clock });
+  const store = wrapStore(given ?? memoryStore({ clock }));
   const objects = memoryObjects();
   const fetches = [];
   // `keysFetch`: how the issuer answers for its keys (default: the test key set, every time)
@@ -73,7 +73,8 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] },
   const verifier = githubVerifier({ fetch, clock });
   const assembler = fleetAssembler({ pin: fleetPin({ lockFile: LOCK }) });
   const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, ...config });
-  return { app, clock, store, objects, fetches };
+  // `assembler` is the one the app holds: a test that plays an earlier pin changes its `pin.archiveSha256`
+  return { app, clock, store, objects, fetches, assembler };
 }
 
 /** Open a tenant with a founder and two passkeys, signed in. Returns the session and credential ids. */
@@ -125,4 +126,70 @@ export async function send(h, over = {}, { mission = "dropyour", kind = "check",
     if (e.code && e.constructor.name === "Refusal") return { refusal: e.code, extra: e.extra };
     throw e;
   }
+}
+
+// ---------------------------------------------------------------- erasure (ADR-0009, db/migrations/0006)
+/** A check.json whose content carries a marker the index projects (a deliverable's name): bytes a test can look for. */
+export function markedCheck(marker) {
+  const doc = JSON.parse(FIXTURE_CHECK.toString("utf8"));
+  doc.deliverables[0].artifact = `Framing note ${marker}`;
+  return Buffer.from(`${JSON.stringify(doc, null, 2)}\n`);
+}
+
+/**
+ * Where bytes of a content still are, for a tenant: each place that holds one of the markers. The places
+ * are everything the service keeps: every version of the index (its bytes and its fleet.json), the
+ * journal, every object of the tenant (the bytes received, the security log, the prepared archives), and,
+ * when given, an archive just prepared (file by file). Empty when nothing is left.
+ */
+export async function contentLeft(h, tenant, markers, archive = null) {
+  const has = (bytes, m) => Buffer.from(bytes ?? "").includes(m);
+  const out = [];
+  const { versions, ledger } = await h.store.tx(tenant, async (tx) => ({ versions: await tx.list("fleet_index"), ledger: await tx.ledgerAll() }));
+  for (const m of markers) {
+    for (const v of versions) {
+      if (has(v.bytes, m)) out.push(`fleet_index version ${v.version} bytes: ${m}`);
+      if (has(v.manifest, m)) out.push(`fleet_index version ${v.version} manifest: ${m}`);
+    }
+    if (has(JSON.stringify(ledger.map((e) => e.body)), m)) out.push(`journal: ${m}`);
+    for (const [key, bytes] of h.objects._map) if (key.startsWith(`tenants/${tenant}/`) && has(bytes, m)) out.push(`object ${key.slice(`tenants/${tenant}/`.length).split("/")[0]}: ${m}`);
+    if (archive) for (const f of untar(archive)) if (has(f.bytes, m)) out.push(`archive ${f.name}: ${m}`);
+  }
+  return out;
+}
+
+/**
+ * The planted control of the erasure: a store whose index versions are never emptied while `plant.on`,
+ * which is the erasure as it was before 0006 (the uploads' bytes went, every published version stayed
+ * whole). A test that passes on it proves nothing.
+ */
+export function withoutIndexErasure(store, plant = { on: true }) {
+  const tx = (tenant, fn) => store.tx(tenant, (t) => fn(new Proxy(t, {
+    get(target, k) {
+      if (k === "update") return (table, key, patch) => (plant.on && table === "fleet_index" ? target.get(table, key) : target.update(table, key, patch));
+      const v = target[k];
+      return typeof v === "function" ? v.bind(target) : v;
+    },
+  })));
+  return Object.assign(Object.create(store), { tx, plant });
+}
+
+export const GONE = ["GONE-RUN-1", "GONE-RUN-2"], KEEP = ["KEEP-RUN-1"], BRAVO = ["BRAVO-RUN-1"];
+/**
+ * The scenario of the erasure tests, for two founders. Tenant A declares two repositories: `keep`
+ * (versions 1 and 2 of its index), then `gone` (versions 3, 4 and 5, each built from the upload of `gone`
+ * current then: its first one, GONE-RUN-1, GONE-RUN-2). Tenant B declares one. Every upload after a
+ * repository's first carries a marker. `ids`: the forge's repository ids, distinct per test on a shared base.
+ */
+export async function erasureScenario(h, A, B, { ids = ["8101", "8102", "8201"], org = "org" } = {}) {
+  const ok = async (claims, opts) => { const r = await send(h, claims, opts); if (r.status !== 201) throw new Error(`upload not accepted: ${JSON.stringify(r)}`); };
+  const [k, g, b] = ids;
+  const keep = await pinnedRepository(h, A, { name: `${org}-a/keep`, mission: `${org}-keep`, claims: { repository_id: k, run_id: `39${k}` } });
+  await ok({ repository: `${org}-a/keep`, repository_id: k, run_number: "2", run_id: `41${k}` }, { mission: `${org}-keep`, bytes: markedCheck(KEEP[0]) });
+  const gone = await pinnedRepository(h, A, { name: `${org}-a/gone`, mission: `${org}-gone`, claims: { repository_id: g, run_id: `39${g}` } });
+  await ok({ repository: `${org}-a/gone`, repository_id: g, run_number: "2", run_id: `42${g}` }, { mission: `${org}-gone`, bytes: markedCheck(GONE[0]) });
+  await ok({ repository: `${org}-a/gone`, repository_id: g, run_number: "3", run_id: `43${g}` }, { mission: `${org}-gone`, bytes: markedCheck(GONE[1]) });
+  const bravo = await pinnedRepository(h, B, { name: `${org}-b/bravo`, mission: `${org}-bravo`, claims: { repository_id: b, run_id: `39${b}` } });
+  await ok({ repository: `${org}-b/bravo`, repository_id: b, run_number: "2", run_id: `41${b}` }, { mission: `${org}-bravo`, bytes: markedCheck(BRAVO[0]) });
+  return { keep, gone, bravo };
 }

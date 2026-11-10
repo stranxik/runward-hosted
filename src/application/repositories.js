@@ -109,7 +109,7 @@ export function repositoryCases(ctx, identity) {
             quarantine = built.refusal;
           }
         }
-        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, ...(published ? { indexSha256: published.sha256, indexVersion: published.version } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
+        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, ...(published ? { indexSha256: published.sha256, indexVersion: published.version, fleetVersion: ctx.ports.assembler.pin.version, fleetArchiveSha256: ctx.ports.assembler.pin.archiveSha256 } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
         return { entry: e, published, quarantine, ...(quarantine ? { refusal: quarantine } : {}) };
       });
     } catch (e) {
@@ -160,8 +160,14 @@ export function repositoryCases(ctx, identity) {
     });
   }
 
-  /** Erase the bytes of a repository's uploads; the journal keeps the digests (PADR-0017 point 4). */
+  /**
+   * Erase the bytes of a repository's uploads, and of every published version of the index that was built
+   * from them; the journal keeps the digests (PADR-0017 point 4), the versions keep theirs.
+   */
   async function eraseIn(tx, s, id, requestId) {
+    // the tenant lock before the first read (C21): an upload in flight commits its version first, and
+    // the erasure then sees that version and that upload
+    await tx.lockTenant();
     const ups = (await tx.list("upload", { repositoryRef: id })).filter((u) => !u.erasedAt);
     const digests = [...new Set(ups.map((u) => u.sha256))];
     for (const u of ups) await tx.update("upload", { id: u.id }, { erasedAt: now() });
@@ -173,12 +179,13 @@ export function repositoryCases(ctx, identity) {
       await tx.update("blob", { sha256: d }, { refs, ...(refs === 0 ? { erasedAt: now() } : {}) });
       if (refs === 0) freed.push(d);
     }
+    const indexVersions = await ctx.eraseIndexVersions(tx);
     for (const a of await tx.list("archive", { erasedAt: null })) {
       if ((a.contains ?? []).some((d) => digests.includes(d))) { await objects.removeArchive(tx.tenantId, a.id); await tx.update("archive", { id: a.id }, { erasedAt: now() }); }
     }
     for (const d of freed) await objects.removeBytes(tx.tenantId, d);
     await security(tx, { what: "content-erased", repository: id, digests });
-    return republish(tx, "content-erased", human(s), id, { digests });
+    return republish(tx, "content-erased", human(s), id, { digests, indexVersions });
   }
 
   async function withdrawConsent(s, id, { erase = false, requestId }) {
