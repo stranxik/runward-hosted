@@ -86,3 +86,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing new. ADR-0020 stays proposed; its text is revised to say what the code now does.
 - Next: the author's decision on ADR-0020. This branch and the deploy-smoke branch both change `reports/junit.xml` and this journal (C27): the second to merge is rebased and its reports regenerated.
 - Blocked / to dig: `publish` and `latestIndex` read every version of a tenant whole on each upload and each index read (C23, second half); `eraseIn` removes the bytes from the object store before it writes its security event, where the retention pass now writes the event first.
+
+## 2026-11-10 - ADR-0020 accepted
+
+- Done: the author accepted ADR-0020 in chat, after the review of `8fae95e` and its fixes; the architecture note, the runbook and T24 name it as in force.
+- Decided: ADR-0020 accepted.
+- Next: the merge, after #6 and #9, with the reports and the schema snapshot regenerated on the merged tree.
