@@ -10,14 +10,15 @@ import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
 import { harness, founder, pinnedRepository, send, gesture, sha, token, claimsFor } from "../helpers.js";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { replay } from "../../scripts/replay-export.mjs";
 
 const ADMIN = process.env.PG_ADMIN_URL;
 if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
 const DB = `rw_test_${randomBytes(4).toString("hex")}`;
 const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.password = ""; u.pathname = `/${DB}`; return u.toString(); };
-let admin, adminDb, store, h, A, B;
+let admin, adminDb, store, h, A, B, firstRun;
+const MIGRATIONS = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
 const TENANT_TABLES = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
 
 before(async () => {
@@ -32,7 +33,7 @@ before(async () => {
   await admin.unsafe("grant rw_resolve to rw_owner");
   await admin.unsafe(`grant create, connect on database ${DB} to rw_owner; grant connect on database ${DB} to rw_app, rw_maint`);
   process.env.DATABASE_SSL = "disable";
-  await migrate(urlAs("rw_owner"), { log: () => {} });
+  firstRun = await migrate(urlAs("rw_owner"), { log: () => {} });
   store = postgresStore({ url: urlAs("rw_app"), ssl: false });
   const u = new URL(ADMIN); u.pathname = `/${DB}`;
   adminDb = postgres(u.toString(), { max: 1, onnotice: () => {} });
@@ -47,7 +48,13 @@ after(async () => {
 });
 
 test("the migration is idempotent: a second run applies nothing", async () => {
-  await migrate(urlAs("rw_owner"), { log: () => {} });
+  assert.deepEqual(firstRun.applied, MIGRATIONS, "the first run applied every committed migration, in order");
+  const lines = [];
+  const second = await migrate(urlAs("rw_owner"), { log: (l) => lines.push(l) });
+  assert.deepEqual(second.applied, [], "the second run applied no migration");
+  assert.deepEqual(lines, ["migrate: grants applied"], "it only re-applied the grants, which are idempotent");
+  const recorded = await adminDb`select name from rw_meta.migration order by name`;
+  assert.deepEqual(recorded.map((r) => r.name), MIGRATIONS, "each migration recorded once");
 });
 
 test("two real tenants, made through the application under rw_app", async () => {

@@ -29,6 +29,32 @@ test("migrations: a contracting statement is refused wherever it sits, in any sp
   ]) assert.ok(contracting(sql), `not refused: ${sql}`);
 });
 
+// Review finding of 2026-11-10: two spellings that hid a drop between two pieces the lexer took for one
+// literal. Each is refused now, and each control beside it shows the lexer still reads the same construct
+// as data where the server does.
+test("migrations: an escape string with \\' and a double-quoted identifier with ' no longer hide a statement", () => {
+  for (const sql of [
+    "select E'\\''; drop table rw.ledger; select ' ';",
+    "select \"a'b\"; drop table rw.ledger; select \"c'd\";",
+    "select e'\\\\'; drop table rw.ledger; select ' ';",
+    // é ends an identifier for the server, so caféE'...' is a name then a plain literal, where \ escapes nothing
+    "select caféE'\\'; drop table rw.ledger; --'",
+    // a dollar-quote tag may hold a non-ASCII letter: the ' inside its body is not a literal
+    "select $é$'$é$; drop table rw.ledger; select '1';",
+    // the settings that change how the server reads a string are refused wherever they are named
+    "set standard_conforming_strings = off;",
+    "select set_config('standard_conforming_strings', 'off', false);",
+    "set backslash_quote = on;",
+  ]) assert.ok(contracting(sql), `not refused: ${sql}`);
+  for (const sql of [
+    "insert into rw.n values (E'it\\'s; drop table rw.ledger');",
+    "create table rw.\"x'y\" (id int);",
+    "create table rw.\"drop me\" (\"truncate\" int);",
+  ]) assert.equal(contracting(sql), null, `refused, but the contracting words are data or names: ${sql}`);
+  assert.deepEqual(statements("select E'\\''; drop x"), ["select E''", "drop x"]);
+  assert.deepEqual(statements("select \"a'b\"; drop x; select \"c'd\""), ['select "_"', "drop x", 'select "_"']);
+});
+
 test("migrations: comments and quoted strings are not statements, and expansion passes", () => {
   for (const sql of [
     "-- drop table rw.ledger\ncreate table rw.y (id int);",

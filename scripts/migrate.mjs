@@ -16,19 +16,35 @@ const GRANTS = new URL("../db/grants.sql", import.meta.url).pathname;
 const sha = (s) => createHash("sha256").update(s).digest("hex");
 const NAME = /^(\d{4})_[a-z0-9_]+\.sql$/;
 
-/** The text as the server reads it: comments removed, single-quoted literals emptied; dollar-quoted
- * bodies are kept whole and raw (a function body is code: a contracting word in it, even in a comment,
- * is refused, the safe side). Split on the ; that end a statement, never on one inside a literal or a
- * dollar-quoted body. */
+/** A character the server reads as part of an identifier (its scanner's ident_cont: letters, digits, _,
+ * $, and every byte of a non-ASCII character). */
+const identChar = (ch) => ch !== undefined && (/[A-Za-z0-9_$]/.test(ch) || ch.charCodeAt(0) >= 0x80);
+
+/** The text as the server reads it: comments removed, single-quoted literals emptied (an escape string
+ * E'...' read with its backslash escapes, as the server reads it), double-quoted identifiers reduced to
+ * "_" (a word inside an identifier is a name, never a command); dollar-quoted bodies are kept whole and
+ * raw (a function body is code: a contracting word in it, even in a comment, is refused, the safe side).
+ * Split on the ; that end a statement, never on one inside a literal, an identifier or a dollar-quoted
+ * body. Review finding of 2026-11-10: an escape string holding \' and a double-quoted identifier holding
+ * a ' each opened what this lexer took for one long literal, and a drop between two of them was hidden
+ * (both cases are in test/unit/migrations.test.js). */
 export function statements(sql) {
   const out = []; let cur = ""; let i = 0;
   while (i < sql.length) {
     const c = sql[i], two = sql.slice(i, i + 2);
     if (two === "--") { const e = sql.indexOf("\n", i); i = e < 0 ? sql.length : e; continue; }
     if (two === "/*") { let depth = 0; do { if (sql.startsWith("/*", i)) { depth++; i += 2; } else if (sql.startsWith("*/", i)) { depth--; i += 2; } else i++; } while (depth > 0 && i < sql.length); cur += " "; continue; }
-    if (c === "'") { let j = i + 1; while (j < sql.length) { if (sql[j] === "'" && sql[j + 1] === "'") j += 2; else if (sql[j] === "'") break; else j++; } cur += "''"; i = j + 1; continue; }
+    if (c === "'") {
+      // an escape string: E or e right before the quote, and that letter does not end an identifier
+      const escapes = /[eE]/.test(sql[i - 1] ?? "") && !identChar(sql[i - 2]);
+      let j = i + 1;
+      while (j < sql.length) { if (escapes && sql[j] === "\\") j += 2; else if (sql[j] === "'" && sql[j + 1] === "'") j += 2; else if (sql[j] === "'") break; else j++; }
+      cur += "''"; i = j + 1; continue;
+    }
+    if (c === '"') { let j = i + 1; while (j < sql.length) { if (sql[j] === '"' && sql[j + 1] === '"') j += 2; else if (sql[j] === '"') break; else j++; } cur += '"_"'; i = j + 1; continue; }
     if (c === "$") {
-      const m = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
+      // a tag as the server reads it: a letter or _ (any non-ASCII character counts as a letter), then letters, digits, _
+      const m = /^\$([A-Za-z_\u0080-￿][A-Za-z0-9_\u0080-￿]*)?\$/.exec(sql.slice(i));
       if (m) { const end = sql.indexOf(m[0], i + m[0].length); const stop = end < 0 ? sql.length : end; cur += `$$${sql.slice(i + m[0].length, stop)}$$`; i = stop + m[0].length; continue; }
     }
     if (c === ";") { if (cur.trim()) out.push(cur.trim()); cur = ""; i++; continue; }
@@ -48,8 +64,13 @@ const CONTRACTING = [
   ["type change", /\balter\s+(?:column\s+)?(?:"[^"]+"|\w+)\s+(?:set\s+data\s+)?type\b/i],
 ];
 
-/** The first contracting statement of a migration, as "<kind>: <statement>", or null. */
+/** The first contracting statement of a migration, as "<kind>: <statement>", or null. A file that names
+ * a setting that changes how the server reads a string (standard_conforming_strings, backslash_quote) is
+ * refused whole, wherever the name sits, a literal included: the lexer above could no longer read the file
+ * as the server does, so it does not try. */
 export function contracting(sql) {
+  const reading = /standard_conforming_strings|backslash_quote/i.exec(sql);
+  if (reading) return `string reading: the file names ${reading[0].toLowerCase()}`;
   for (const st of statements(sql)) for (const [kind, re] of CONTRACTING) if (re.test(st)) return `${kind}: ${st.replace(/\s+/g, " ").slice(0, 120)}`;
   return null;
 }
@@ -93,12 +114,15 @@ export async function migrate(url, { log = console.log } = {}) {
     await sql`create table if not exists rw_meta.migration (name text primary key, sha256 text not null, applied_at timestamptz not null default now())`;
     const done = new Map((await sql`select name, sha256 from rw_meta.migration`).map((r) => [r.name, r.sha256]));
     const files = readdirSync(DIR).filter((x) => x.endsWith(".sql")).map((name) => ({ name, text: readFileSync(DIR + name, "utf8") }));
+    const applied = [];
     for (const f of planMigrations(files, done)) {
       await sql.begin(async (q) => { await q.unsafe(f.text); await q`insert into rw_meta.migration (name, sha256) values (${f.name}, ${sha(f.text)})`; });
+      applied.push(f.name);
       log(`migrate: applied ${f.name}`);
     }
     await sql.unsafe(readFileSync(GRANTS, "utf8"));
     log("migrate: grants applied");
+    return { applied };
   } finally { await sql.end({ timeout: 5 }); }
 }
 
