@@ -432,3 +432,93 @@ test("a recovery is opened for one stranded member, as open-recovery opens it; i
   assert.deepEqual({ failed: bad.failed, tenant: bad.tenant }, { failed: true, tenant: again.fs[0].tenant });
   assert.equal(notes(again.h, "restore-replayed")[0].detail.failed, 1, "the recovery that was not opened is in the operator journal");
 });
+
+// ---------------------------------------------------------------- defect 3: each tenant has its own chain
+
+const head = async (h, tenant) => { const e = (await journal(h, tenant)).pop(); return { seq: e.seq, hash: e.hash }; };
+const replayNote = async (h, tenant) => (await journal(h, tenant)).filter((e) => e.body.what === "restore-replayed").pop().body.detail;
+
+test("each tenant's note carries the head its own journal had before the loss, anchored by the system: never one head for all", async () => {
+  const h = harness();
+  const fs = [await founder(h, { passkeys: 3, prefix: "a" }), await founder(h, { passkeys: 2, prefix: "b" }), await founder(h, { passkeys: 1, prefix: "c" })];
+  const b = backup(h);
+  // after T the three journals grow, each by its own number of entries
+  await removePasskey(h, fs[0], "a-2");
+  await removePasskey(h, fs[0], "a-3");
+  await removePasskey(h, fs[1], "b-2");
+  tick(h);
+  // before the database is replaced, while it can still be read: the heads are anchored in the object store
+  const entries = h.store._state.ledger.length;
+  const anchored = await h.app.operator.restoreReplay({ anchor: true });
+  const appended = h.store._state.ledger.length - entries;
+  const noted = notes(h, "restore-anchored").map((n) => [n.detail.failed, n.detail.report.length]);
+  const heads = [];
+  for (const f of fs) heads.push(await head(h, f.tenant));
+  restore(h, b);
+  await h.app.operator.restoreReplay({ since: b.since });
+
+  for (const [i, f] of fs.entries()) {
+    const d = await replayNote(h, f.tenant);
+    assert.deepEqual({ seq: d.headBefore?.seq, hash: d.headBefore?.hash }, heads[i], `tenant ${i}: its note carries the head of its own journal before the loss`);
+  }
+  assert.equal(new Set(heads.map((x) => x.hash)).size, 3, "the control: the three heads differ, one head could not be right for the three");
+  // the anchor itself: one object per tenant in that tenant's security log, and nothing appended to a journal
+  assert.deepEqual(anchored.map((r) => [r.tenant, r.seq, r.failed]), fs.map((f, i) => [f.tenant, heads[i].seq, undefined]));
+  assert.equal(appended, 0, "anchoring appended nothing to a journal: an anchor that moved the head would not be the head");
+  for (const [i, f] of fs.entries()) {
+    const mine = (await h.objects.securitySince(f.tenant, b.since)).filter((x) => x.event.what === "journal-anchored");
+    assert.deepEqual(mine.map((x) => [x.id, x.event.seq, x.event.hash]), [[anchored[i].anchor, heads[i].seq, heads[i].hash]]);
+    assert.equal((await replayNote(h, f.tenant)).headBefore.anchor, anchored[i].anchor, "the note names the anchor it read");
+  }
+  assert.deepEqual(noted, [[0, 3]], "the anchoring was in the operator journal before the loss (the restore then took that note with it)");
+});
+
+test("without an anchor, or with one that is behind the restored journal, the head before the loss is said unknown, not invented", async () => {
+  // no anchor: the database was lost before anyone could read it
+  const h = harness();
+  const f = await founder(h);
+  const b = backup(h);
+  await removePasskey(h, f, "cred-2");
+  restore(h, b);
+  await h.app.operator.restoreReplay({ since: b.since });
+  assert.equal((await replayNote(h, f.tenant)).headBefore, null);
+
+  // an anchor older than the backup's snapshot (inside the margin of `since`): it is not the head before this loss
+  const h2 = harness();
+  const f2 = await founder(h2);
+  const since = mark(h2);
+  await h2.app.operator.restoreReplay({ anchor: true });
+  tick(h2);
+  await signIn(h2, "cred-1");
+  const b2 = snapshot(h2);
+  await removePasskey(h2, f2, "cred-2");
+  restore(h2, b2);
+  await h2.app.operator.restoreReplay({ since });
+  assert.equal((await replayNote(h2, f2.tenant)).headBefore, null);
+
+  // an anchor that is the restored head itself: nothing was lost, and the note says which head that is
+  const h3 = harness();
+  const f3 = await founder(h3);
+  const b3 = backup(h3);
+  await h3.app.operator.restoreReplay({ anchor: true });
+  const at = await head(h3, f3.tenant);
+  restore(h3, b3);
+  await h3.app.operator.restoreReplay({ since: b3.since });
+  const d = await replayNote(h3, f3.tenant);
+  assert.deepEqual({ seq: d.headBefore.seq, hash: d.headBefore.hash }, at);
+});
+
+test("restore-replay's arguments: an anchor or a `since`, never a head for every tenant", async () => {
+  const h = harness();
+  await founder(h);
+  const since = mark(h);
+  assert.match(await refusal(h.app.operator.restoreReplay({})), /--since is malformed/);
+  assert.match(await refusal(h.app.operator.restoreReplay({ since: "yesterday" })), /--since is malformed/);
+  assert.match(await refusal(h.app.operator.restoreReplay({ since, recoveryHash: "abc" })), /--recovery-hash is malformed/);
+  assert.match(await refusal(h.app.operator.restoreReplay({ anchor: true, since })), /--anchor takes no other argument/);
+  assert.equal(h.store._state.operator.filter((n) => n.what.startsWith("restore-")).length, 0, "a refused call wrote nothing");
+  const { parse, restoreArgs } = await import("../../src/operator.js");
+  assert.deepEqual(restoreArgs(parse(["restore-replay", "--anchor"]).o), { since: null, anchor: true, recoveryHash: null });
+  assert.deepEqual(restoreArgs(parse(["restore-replay", "--since", since, "--recovery-hash", "a".repeat(64)]).o), { since, anchor: false, recoveryHash: "a".repeat(64) });
+  assert.throws(() => restoreArgs(parse(["restore-replay", "--since", since, "--head-before", "a".repeat(64)]).o), /--head-before is no longer taken/);
+});

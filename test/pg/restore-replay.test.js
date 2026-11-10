@@ -121,6 +121,11 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   assert.equal(await refusal(signIn("c-1")), "passkey-unknown", "before the loss: the reset withdrew C's passkey");
   assert.equal(await refusal(signIn("a-3")), "passkey-unknown", "before the loss: a-3 opens nothing");
 
+  // before the loss, while the database can still be read: each tenant's head is anchored in the object store
+  await operator((op) => op.restoreReplay({ anchor: true }));
+  const heads = new Map();
+  for (const f of [A, B, C]) heads.set(f.tenant, await store.tx(f.tenant, (tx) => tx.ledgerHead()));
+
   await restore();
   // the control (what the drill found at 7f00128): the restore alone gives the withdrawn accesses back
   assert.deepEqual([await live(C.tenant, "member"), await live(C.tenant, "passkey")], [1, 1], "the restore gave C's member and passkey back");
@@ -147,6 +152,12 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   const sent = await send(h, { repository: "drill/beta", repository_id: "7001", run_number: "7", run_id: "40000000007" }, { mission: "drill-beta" });
   assert.equal(sent.status, 201);
 
+  // each tenant's note carries the head of its own journal before the loss (the drill found tenant A's in the three)
+  for (const f of [A, B, C]) {
+    const [note] = await replayNotes(f.tenant, since);
+    assert.deepEqual({ seq: note.body.detail.headBefore?.seq, hash: note.body.detail.headBefore?.hash }, heads.get(f.tenant), "the note carries the head of its own tenant's journal before the loss");
+  }
+  assert.equal(new Set([...heads.values()].map((x) => x.hash)).size, 3, "the control: three chains, three heads");
   // every chain holds, from its first entry to the note
   const chains = await operator((op) => op.verifyChains());
   assert.deepEqual(chains.map((c) => c.ok), [true, true, true]);

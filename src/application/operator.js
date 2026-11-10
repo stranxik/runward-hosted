@@ -9,6 +9,7 @@ import { iso } from "./context.js";
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const operator = { type: "operator", id: "operateur" };
 
 // ---------------------------------------------------------------- the replay of the security log (T24)
@@ -135,7 +136,23 @@ export const SECURITY_NOT_REPLAYED = {
   "recovery-opened": "a recovery opened after the backup is gone with the restore: nothing is given back",
   "session-closed": "the replay closes every session",
   "sessions-closed-others": "the replay closes every session",
+  "journal-anchored": "not a gesture: the head of the tenant's journal, written before a loss and read for the note (headBefore)",
 };
+
+/**
+ * The head of a tenant's journal before the loss, as the system itself wrote it: the last `journal-anchored`
+ * of the tenant's own security log (restore-replay --anchor, run while the database could still be read)
+ * that is not behind the restored journal. Null when there is none: nothing is taken on anyone's word.
+ */
+function anchoredHead(events, restored) {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const { id, event: e } = events[i];
+    if (e.what !== "journal-anchored" || !Number.isSafeInteger(e.seq) || !HEX64.test(String(e.hash))) continue;
+    const seq = restored?.seq ?? 0;
+    if (e.seq > seq || (e.seq === seq && e.hash === restored?.hash)) return { seq: e.seq, hash: e.hash, anchor: id };
+  }
+  return null;
+}
 
 /** Waits between the attempts of a daily job on one tenant: three attempts in all. */
 export const JOB_RETRY_WAITS = [1000, 4000];
@@ -270,16 +287,21 @@ export function operatorCases(ctx) {
   /**
    * After a database restore (PADR-0014 note, T24): close every session of every tenant, replay from the
    * object store the gestures after `since` (ULID order, the REPLAY table above), and say so in each
-   * tenant's journal. A member left with no passkey is reported `stranded` (a recovery is opened for the
+   * tenant's journal, with the head that tenant's journal had before the loss when it was anchored
+   * (`anchor`, run before the database is replaced). A member left with no passkey is reported `stranded` (a recovery is opened for the
    * first one when `recoveryHash` is given); a tenant left with no member is reported `memberless`: the
    * operator opens its bootstrap again. Refused whole, before any write, when a tenant's security log
    * cannot be read (`security-log-unreadable`); a tenant whose replay fails is recorded and the others
    * are still replayed.
    */
-  async function restoreReplay({ since, headBefore = null, recoveryHash = null }) {
-    let tenants;
-    try { tenants = await store.tx(null, (tx) => tx.tenantIds()); }
-    catch (e) { await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, report: [], failed: 1, error: why(e), stage: "tenant list" })); throw e; }
+  async function restoreReplay({ since = null, anchor = false, recoveryHash = null }) {
+    if (anchor) {
+      if (since !== null || recoveryHash !== null) throw new Error("--anchor takes no other argument");
+      return anchorHeads();
+    }
+    need(ULID, since, "--since");
+    if (recoveryHash !== null) need(HEX64, recoveryHash, "--recovery-hash");
+    const tenants = await tenantList("restore-replayed", { since });
     // Every tenant's log is read before the first write. A log that cannot be read whole refuses the
     // gesture whole, with a code: nothing is closed, replayed or written to a tenant's journal on a log
     // read in part, and the refusal is in the operator journal.
@@ -298,16 +320,7 @@ export function operatorCases(ctx) {
     // others as the restore gave them back. The operator journal receives the note in every case, and the
     // run ends non-zero (src/operator.js#jobIncomplete); run again, the gesture replays every tenant again,
     // which changes nothing where it had succeeded.
-    const report = [];
-    for (const tenant of tenants) {
-      for (let attempt = 1; ; attempt++) {
-        try { report.push({ tenant, ...(await store.tx(tenant, (tx) => replayTenant(tx, tenant, logs.get(tenant), { since, headBefore }))), attempts: attempt }); break; }
-        catch (e) {
-          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), attempts: attempt }); break; }
-          await sleep(waits[attempt - 1]);
-        }
-      }
-    }
+    const report = await perTenant(tenants, (tenant) => store.tx(tenant, (tx) => replayTenant(tx, tenant, logs.get(tenant), since)));
     // One recovery, for the first member left without a passkey, opened as the operator's own gesture
     // opens it (openRecovery: its own transaction, the security log, the tenant's journal, usable in 24 h),
     // after the replay and apart from it: a digest already taken fails the recovery, never a tenant's
@@ -321,8 +334,48 @@ export function operatorCases(ctx) {
     return report;
   }
 
+  /** The tenants, or the failure to read them noted in the operator journal before the gesture stops (as eachTenant). */
+  async function tenantList(what, detail) {
+    try { return await store.tx(null, (tx) => tx.tenantIds()); }
+    catch (e) { await store.tx(null, (tx) => tx.operatorNote(what, { ...detail, report: [], failed: 1, error: why(e), stage: "tenant list" })); throw e; }
+  }
+
+  /** `fn` on each tenant, retried as a daily job's (eachTenant): one row per tenant, its result or its failure. */
+  async function perTenant(tenants, fn) {
+    const report = [];
+    for (const tenant of tenants) {
+      for (let attempt = 1; ; attempt++) {
+        try { report.push({ tenant, ...(await fn(tenant)), attempts: attempt }); break; }
+        catch (e) {
+          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), attempts: attempt }); break; }
+          await sleep(waits[attempt - 1]);
+        }
+      }
+    }
+    return report;
+  }
+
+  /**
+   * Before a database is replaced, while it can still be read (restore-replay --anchor): the head of each
+   * tenant's journal is written to that tenant's security log in the object store (`journal-anchored`:
+   * seq, hash), which the restore does not touch. The replay reads it back as the head before the loss.
+   * Each tenant has its own chain, so each has its own anchor; nothing leaves the private network and no
+   * head is taken on the operator's word. Nothing is appended to a journal: an anchor that moved the head
+   * would not be the head.
+   */
+  async function anchorHeads() {
+    const tenants = await tenantList("restore-anchored", {});
+    const report = await perTenant(tenants, (tenant) => store.tx(tenant, async (tx) => {
+      await tx.lockTenant();
+      const head = await tx.ledgerHead();
+      return head ? { seq: head.seq, anchor: await security(tx, { what: "journal-anchored", seq: head.seq, hash: head.hash }) } : { seq: 0 };
+    }));
+    await store.tx(null, (tx) => tx.operatorNote("restore-anchored", { report, failed: report.filter((r) => r.failed).length }));
+    return report;
+  }
+
   /** One tenant's replay, in its transaction: the sessions closed, the gestures replayed in ULID order, the note in its journal. */
-  async function replayTenant(tx, tenant, events, { since, headBefore }) {
+  async function replayTenant(tx, tenant, events, since) {
     let closed = 0, replayed = 0;
     for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
     for (let i = 0; i < events.length; i++) {
@@ -333,7 +386,7 @@ export function operatorCases(ctx) {
     const stranded = [];
     for (const m of members) if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
     const head = await tx.ledgerHead();
-    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: headBefore ?? "", headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
+    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: anchoredHead(events, head), headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
     return { closed, replayed, stranded, memberless: members.length === 0, seq: e.seq };
   }
 

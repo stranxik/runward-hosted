@@ -144,7 +144,9 @@ test("one gesture at a time: a second call while one runs is refused 409", async
 test("arguments: a closed list per gesture, each checked, passed as argv (never through a shell)", async () => {
   const hash = "a".repeat(64), tenant = "0b9f6b0e-3c2a-4d7e-9f1a-2b3c4d5e6f70";
   assert.deepEqual(argvOf("open-bootstrap", { hash, witness: true, title: "Witness A" }), ["src/operator.js", "open-bootstrap", "--hash", hash, "--witness", "--title", "Witness A"]);
-  assert.deepEqual(argvOf("restore-replay", { since: "01JC0000000000000000000000", headBefore: hash }), ["src/operator.js", "restore-replay", "--since", "01JC0000000000000000000000", "--head-before", hash]);
+  assert.deepEqual(argvOf("restore-replay", { since: "01JC0000000000000000000000", recoveryHash: hash }), ["src/operator.js", "restore-replay", "--since", "01JC0000000000000000000000", "--recovery-hash", hash]);
+  assert.deepEqual(argvOf("restore-replay", { anchor: true }), ["src/operator.js", "restore-replay", "--anchor"]);
+  assert.throws(() => argvOf("restore-replay", { since: "01JC0000000000000000000000", headBefore: hash }), /takes no argument headBefore/, "one head for every tenant is no longer an argument");
   assert.deepEqual(argvOf("maintenance", { off: true }), ["src/operator.js", "maintenance", "--off"]);
   assert.throws(() => argvOf("open-bootstrap", {}), /needs hash/);
   assert.throws(() => argvOf("open-bootstrap", { hash: "x; rm -rf /" }), /expected form/);
