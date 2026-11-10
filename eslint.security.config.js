@@ -3,7 +3,8 @@
 // eslint.config.js on purpose: that one states the hexagon, this one is a scan, each in its own report.
 //
 // The configuration boundary (config-secrets-boundary): the environment, where every secret of the
-// service lives, is read by the two composition roots only (src/main.js, src/operator.js). No domain,
+// service lives, is read by the three composition roots only (src/main.js, src/operator.js,
+// src/operator-gateway.js: ENV_READERS below). No domain,
 // application, adapter or HTTP file reads process.env: they receive typed configuration. A file that
 // starts reading the environment, a secret included, is refused by no-restricted-properties.
 //
