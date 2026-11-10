@@ -1,6 +1,7 @@
 # The hourly probe (PADR-0018 points 1 and 9): public, no secret, no tenant data. It reads /api/health and
 # /api/version, and raises the error-rate alert (more than 5 % of answers at 500 or more over five minutes)
-# and the daily jobs' alert (a run that did not complete, or no run for more than a day), both judged by
+# and the daily jobs' alert (a run that did not complete, or no run for more than a day), and the alert on
+# calls the budgets of failures served untracked (the limiter's tables were full), all judged by
 # scripts/probe-verdict.mjs; after two failures in a row it opens (or updates) an issue "service unavailable", and
 # closes it when the service answers again. It also watches the certificate (14 days) and its own
 # disabling by GitHub after 60 days without activity (a warning issue at 45). Off until the service is
@@ -21,7 +22,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with: { persist-credentials: false }
       - id: read
-        name: read /api/health and /api/version, judge them (availability, error rate, daily jobs)
+        name: read /api/health and /api/version, judge them (availability, error rate, daily jobs, untracked calls)
         run: |
           set +e
           h=$(curl -s -o "$RUNNER_TEMP/health.json" -w '%{http_code}' --max-time 30 "$SERVICE/api/health")

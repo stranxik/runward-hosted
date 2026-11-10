@@ -7,7 +7,7 @@ import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
 import { Refusal, REFUSALS, refusal as refusalBody, statusOf } from "../domain/refusals.js";
 import { MAX_EXPORT_BYTES } from "../domain/workload.js";
-import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS } from "./limits.js";
+import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS, OVERFLOW_HISTORY_MINUTES } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
 const JSON_LIMIT = 64 * 1024;
@@ -125,8 +125,12 @@ export function createHttp({ app, config, assets, version, health, log, clock })
   const at = { now: () => clock.now() };
   const limiters = {
     writes: rateLimiter({ ...limits.writes, ...at }), reads: rateLimiter({ ...limits.reads, ...at }),
-    machine: failureLimiter({ ...limits.machine, everyCall: true, ...at }), signedOut: failureLimiter({ ...limits.signedOut, ...at }),
+    machine: failureLimiter({ ...limits.machine, everyCall: true, ...at, onUntracked: () => untracked("machine") }), signedOut: failureLimiter({ ...limits.signedOut, ...at, onUntracked: () => untracked("signedOut") }),
   };
+  // the budgets of failures are off for the calls that found no place in the tables (limits.js, C14): said
+  // once a window for each budget, without an address, and counted in /api/health for the probe
+  function untracked(budget) { log.warn("limits.untracked", { detail: { budget, state: "the tables of addresses and of prefixes are full: calls are served untracked in this window" } }); }
+  const overflow = () => ({ windowSeconds: OVERFLOW_HISTORY_MINUTES * 60, machine: limiters.machine.overflow(), signedOut: limiters.signedOut.overflow() });
   const validCookies = recentlyValid(at);
 
   const baseHeaders = (requestId) => ({
@@ -266,7 +270,7 @@ export function createHttp({ app, config, assets, version, health, log, clock })
           if (!body || typeof body !== "object" || Array.isArray(body)) return fail("body-invalid");
         }
       }
-      const q = { headers: req.headers, url, body, session, requestId, lang, config, version, health: async () => { const h = await health.body(); return { ...h, body: { ...h.body, errors: errors.read() } }; },
+      const q = { headers: req.headers, url, body, session, requestId, lang, config, version, health: async () => { const h = await health.body(); return { ...h, body: { ...h.body, errors: errors.read(), limits: overflow() } }; },
         readRaw: (limit) => readLimited(req, Math.min(limit, MAX_EXPORT_BYTES)) };
       const out = await r.h(q, params);
       const shaped = out && typeof out === "object" && ("status" in out && ("body" in out || "raw" in out)) ? out : { status: 200, body: out };

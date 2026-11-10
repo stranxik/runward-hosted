@@ -21,15 +21,22 @@
 // of someone else's traffic. What a flood of addresses can then cost is one failure each, and the table of
 // addresses is bounded. A session cookie that resolved a moment ago is not asked at all (recentlyValid),
 // so a signed-in person is not refused either for the failures of whoever shares their address.
-// Past the bound of the table, an address that is not in it is served untracked, at the cost of one lookup
+// Past the bound of the table, an address that is not in it is never refused for what the others did
 // (code review of 2026-11-10, C11: the addresses past the bound shared one counter, spent after 30
 // failures, so 10,030 dead cookies a minute, one per address, refused every valid session that came from
-// an address not yet in the table, and 10,060 junk uploads every upload). Nothing is known against such an
-// address, so nothing is held against it: the budgets of failures refuse an address for what it did, never
-// for what the others did. What is given up is said: past 10,000 keys in one minute, a caller that is not
-// in the table is no longer bounded by these two budgets (each of its calls still costs it a request, and
-// costs the service one RSA check or one read), which a caller holding that many addresses already was
-// not: 10,000 keys already buy 300,000 dead cookies or 600,000 junk uploads a minute.
+// an address not yet in the table, and 10,060 junk uploads every upload). It is not left unbounded either
+// (same review, C14: past the bound the two budgets were off for every key not in the table, and 10,000
+// /64s, which fit in one IPv6 /48, filled it with one cheap call each). Two things, one level up:
+//   - one prefix (an IPv6 /48, an IPv4 /24: prefixKey) holds at most `maxPerPrefix` keys of the table
+//     (256, a whole /24), so a single /48 cannot fill it: 40 prefixes are needed;
+//   - a key that has no place in the table, because its prefix holds its share or because the table is
+//     full, is counted with its prefix, on a larger allowance (`perPrefix`, eight times the address's by
+//     default). It can be refused for what the keys of its own /48 or /24 that had no place did, never for
+//     what another prefix did; an address that has its place is never judged on its prefix.
+// The table of prefixes is bounded like the table of addresses. Only past it (keys without a place from
+// more prefixes than it holds in one window) is a call served untracked, and that state is no longer
+// silent: the limiter says so once a window (onUntracked, a log line without an address), and keeps the
+// counts of the last OVERFLOW_HISTORY_MINUTES for /api/health, where the hourly probe alerts on them.
 export const RATE_LIMITS = {
   writes: { perAddress: 30, global: 600 },
   reads: { perAddress: 120, global: 3000 },
@@ -77,6 +84,20 @@ export function addressKey(address) {
   return `${h.slice(0, 4).map((x) => x.toString(16)).join(":")}::/64`;
 }
 
+/** The prefix a key (addressKey) is counted with when it has no place of its own: the /48 of an IPv6 /64,
+ *  the /24 of an IPv4 address. What is not an IP address shares one prefix. */
+export function prefixKey(key) {
+  const v6 = /^([0-9a-f]{1,4}):([0-9a-f]{1,4}):([0-9a-f]{1,4}):[0-9a-f]{1,4}::\/64$/.exec(key);
+  if (v6) return `${v6[1]}:${v6[2]}:${v6[3]}::/48`;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.\d{1,3}$/.exec(key);
+  if (v4) return `${v4[1]}.${v4[2]}.${v4[3]}.0/24`;
+  return "(not an address)";
+}
+
+/** How long a limiter remembers that calls were counted with their prefix or served untracked: two probes
+ *  an hour apart both see it, and two failed probes in a row open the issue (probe.yml). */
+export const OVERFLOW_HISTORY_MINUTES = 130;
+
 export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
   let window = -1, counts = new Map(), total = 0;
   /** Where `address` stands in this window, without counting it. */
@@ -111,53 +132,107 @@ export function rateLimiter({ perAddress, global, windowMs = 60_000, maxAddresse
  *  and the calls that entered and are not settled yet count as failures until they are (review finding of
  *  2026-11-10: the budget was looked at, the session awaited, the failure counted after, so a burst of
  *  dead cookies sent at once all passed before any was counted).
- *  The table holds `maxAddresses` keys a window. A key that is not in it once it is full is served and not
- *  tracked (`tracked: false`): its failure counts for the instance and against no one (C11, above). */
-export function failureLimiter({ perAddress, global, everyCall = false, windowMs = 60_000, maxAddresses = 10_000, now = () => Date.now() }) {
-  let window = -1, calls = new Map(), fails = new Map(), totalFails = 0, untracked = 0;
+ *  The table holds `maxAddresses` keys a window, at most `maxPerPrefix` of them from one prefix. A key
+ *  without a place is counted with its prefix (`counted: "prefix"`, `tracked: false`), in the same way, on
+ *  `perPrefix`; past `maxPrefixes` prefixes it is served and not counted (`counted: "none"`), its failure
+ *  counting for the instance only, and `onUntracked` is called once a window (C11, C14, above). */
+export function failureLimiter({ perAddress, global, everyCall = false, windowMs = 60_000, maxAddresses = 10_000, maxPerPrefix = 256, perPrefix = perAddress * 8, maxPrefixes = maxAddresses, onUntracked = () => {}, now = () => Date.now() }) {
+  let window = -1, calls = new Map(), fails = new Map(), totalFails = 0;
+  let held = new Map(); // prefix → how many keys of the table are its own
+  let pCalls = new Map(), pFails = new Map(); // prefix → the calls and the failures of its keys without a place
+  let aggregated = 0, untracked = 0;
   const flying = new Map(); let totalFlying = 0; // entered, not settled yet: they outlive a window
+  const history = new Map(); // window → [counted with a prefix, untracked], the last OVERFLOW_HISTORY_MINUTES
+  const keep = Math.ceil((OVERFLOW_HISTORY_MINUTES * 60_000) / windowMs);
   const roll = () => {
     const t = now();
     const w = Math.floor(t / windowMs);
-    if (w !== window) { window = w; calls = new Map(); fails = new Map(); totalFails = 0; untracked = 0; }
+    if (w !== window) {
+      if (aggregated || untracked) history.set(window, [aggregated, untracked]);
+      for (const k of history.keys()) if (k <= w - keep) history.delete(k);
+      window = w; calls = new Map(); fails = new Map(); held = new Map(); pCalls = new Map(); pFails = new Map(); totalFails = 0; aggregated = 0; untracked = 0;
+    }
     return Math.max(1, Math.ceil(((w + 1) * windowMs - t) / 1000));
   };
-  /** Is `key` in the table, or is there room to put it there? */
-  const holds = (key) => calls.has(key) || calls.size < maxAddresses;
+  /** Where `key` is counted in this window: under its own name, with its prefix, or nowhere. */
+  const place = (key, prefix) => {
+    if (calls.has(key)) return "address";
+    if (calls.size < maxAddresses && (held.get(prefix) ?? 0) < maxPerPrefix) return "address";
+    if (pCalls.has(prefix) || pCalls.size < maxPrefixes) return "prefix";
+    return "none";
+  };
+  const land = (key, prefix) => { if (!calls.has(key)) { calls.set(key, 0); held.set(prefix, (held.get(prefix) ?? 0) + 1); } };
+  const takeOff = (k) => { if (everyCall) return; flying.set(k, (flying.get(k) ?? 0) + 1); totalFlying++; };
+  const touchDown = (k) => { if (everyCall) return; const n = flying.get(k) - 1; if (n > 0) flying.set(k, n); else flying.delete(k); totalFlying--; };
   return {
     enter(address) {
       const retryAfter = roll();
-      const key = addressKey(address);
+      const key = addressKey(address), prefix = prefixKey(key);
+      const where = place(key, prefix);
       let settled = false;
-      if (!holds(key)) {
-        untracked++;
-        return { ok: true, tracked: false, settle(didFail) { if (settled) return; settled = true; if (didFail) { roll(); totalFails++; } } };
+      if (where === "none") {
+        if (untracked++ === 0) onUntracked();
+        return { ok: true, tracked: false, counted: "none", settle(didFail) { if (settled) return; settled = true; if (didFail) { roll(); totalFails++; } } };
+      }
+      if (where === "prefix") {
+        // the keys of this prefix that have no place, as one caller with a larger allowance. The instance's
+        // budget is not asked here: nothing says this key failed, only that keys of its prefix did
+        if ((everyCall ? pCalls.get(prefix) ?? 0 : (pFails.get(prefix) ?? 0) + (flying.get(prefix) ?? 0)) >= perPrefix) return { ok: false, scope: "prefix", retryAfter };
+        aggregated++;
+        pCalls.set(prefix, (pCalls.get(prefix) ?? 0) + 1);
+        takeOff(prefix);
+        return {
+          ok: true,
+          tracked: false,
+          counted: "prefix",
+          settle(didFail) {
+            if (settled) return; settled = true;
+            touchDown(prefix);
+            if (!didFail) return;
+            roll();
+            totalFails++;
+            // the window may have turned while the call ran, and its table of prefixes be full
+            if (!pCalls.has(prefix)) { if (pCalls.size >= maxPrefixes) return; pCalls.set(prefix, 0); }
+            pFails.set(prefix, (pFails.get(prefix) ?? 0) + 1);
+          },
+        };
       }
       const failed = fails.get(key) ?? 0;
       if ((everyCall ? calls.get(key) ?? 0 : failed + (flying.get(key) ?? 0)) >= perAddress) return { ok: false, scope: "address", retryAfter };
       if (totalFails + totalFlying >= global && failed > 0) return { ok: false, scope: "global", retryAfter };
-      calls.set(key, (calls.get(key) ?? 0) + 1);
-      if (!everyCall) { flying.set(key, (flying.get(key) ?? 0) + 1); totalFlying++; }
+      land(key, prefix);
+      calls.set(key, calls.get(key) + 1);
+      takeOff(key);
       return {
         ok: true,
         tracked: true,
+        counted: "address",
         settle(didFail) {
           if (settled) return; settled = true;
-          if (!everyCall) { const n = flying.get(key) - 1; if (n > 0) flying.set(key, n); else flying.delete(key); totalFlying--; }
+          touchDown(key);
           if (!didFail) return;
           roll();
           totalFails++;
-          // the window may have turned while the call ran, and its table be full: the failure then counts
-          // for the instance only
-          if (!holds(key)) return;
-          if (!calls.has(key)) calls.set(key, 0);
+          // the window may have turned while the call ran, and its table be full, or its prefix's share
+          // taken: the failure then counts for the instance only
+          if (place(key, prefix) !== "address") return;
+          land(key, prefix);
           fails.set(key, (fails.get(key) ?? 0) + 1);
         },
       };
     },
     size: () => calls.size,
-    /** The calls of this window served without a place in the table. */
+    /** The calls of this window served without being counted anywhere but for the instance. */
     untracked: () => { roll(); return untracked; },
+    /** The calls of this window counted with their prefix. */
+    aggregated: () => { roll(); return aggregated; },
+    /** The same two counts over the last OVERFLOW_HISTORY_MINUTES, this window included: what /api/health says. */
+    overflow() {
+      roll();
+      let a = aggregated, u = untracked;
+      for (const [x, y] of history.values()) { a += x; u += y; }
+      return { countedByPrefix: a, untracked: u };
+    },
   };
 }
 
