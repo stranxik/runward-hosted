@@ -21,6 +21,7 @@
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
 	<testcase name="a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed" classname="test"/>
+	<testcase name="C12: run again with another `since`, each tenant's note says the same lost range and the same heads as its first" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
 	<testcase name="the charter: every script it names exists and can be run, and its shell scripts parse" classname="test"/>
@@ -112,6 +113,9 @@
 	<testcase name="a cookie that resolved a moment ago is exempt from the budget, never from the read of its session; the table is bounded and forgets" classname="test"/>
 	<testcase name="a session closed a moment ago is refused at once, though its cookie was seen valid, and it is counted as a failure" classname="test"/>
 	<testcase name="a burst of dead cookies sent at once from one address reads the database no more than its budget allows" classname="test"/>
+	<testcase name="C11: past the table's bound, an address not seen in this window is served, never refused for the others' failures (10,030 dead cookies, 10,060 junk uploads, one per address)" classname="test"/>
+	<testcase name="C11, through the routes: after dead cookies and junk uploads from more addresses than the table holds, a valid session and a signed upload from a new address are served" classname="test"/>
+	<testcase name="an IPv6 address is counted by its /64, an IPv4 address as it is, whichever way it is written" classname="test"/>
 	<testcase name="the hexagon is refused by the linter: each forbidden arrow, planted in its layer, is an error" classname="test"/>
 	<testcase name="the hexagon's allowed arrows pass, and the tree as it is lints clean" classname="test"/>
 	<testcase name="the security scan refuses a read of the environment outside the composition roots, and eval" classname="test"/>
@@ -124,6 +128,8 @@
 	<testcase name="migrations: comments and quoted strings are not statements, and expansion passes" classname="test"/>
 	<testcase name="migrations: every committed migration is expansion only and the directory is a closed sequence" classname="test"/>
 	<testcase name="migrations: a gap, a duplicate number, a bad name, a reordering, a vanished or changed file are refused" classname="test"/>
+	<testcase name="migrations: a statement built at run time, and code given as a quoted string, are refused; a trigger's execute function and the execute privilege are not" classname="test"/>
+	<testcase name="migrations: the one file exempt from the dynamic-statement rule is exempt by the sha256 of its bytes, and only as committed" classname="test"/>
 	<testcase name="the object store is ok only when an object written to the bucket reads back: a bucket that does not exist, though it accepts writes, is down" classname="test"/>
 	<testcase name="the health check costs the store at most one write and one read per period, whatever the traffic; a failure is checked again sooner" classname="test"/>
 	<testcase name="/api/health answers 503 with objectStore down when the bucket does not read back" classname="test"/>
@@ -188,6 +194,8 @@
 	<testcase name="restore-replay's arguments: an anchor or a `since`, never a head for every tenant" classname="test"/>
 	<testcase name="the note says which entries are lost, by their seq, from the restored head to the tenant's head before the loss (runbook §3)" classname="test"/>
 	<testcase name="the range is open when the head before the loss was not anchored, and the same when the gesture runs again" classname="test"/>
+	<testcase name="C12: run again with another `since`, the note says the same lost range and the same heads as the first" classname="test"/>
+	<testcase name="C12: run again with a `since` that no longer reaches the anchor, the note carries the first note's range forward; a note of an earlier restore is never taken for this one's" classname="test"/>
 	<testcase name="operator-call.sh: the hoster's key and the operator's token reach the gateway, and neither is an argument of curl" classname="test"/>
 	<testcase name="container-deploy.sh: the hoster's key reaches the API on every call, and is never an argument of curl" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a secret in a curl header or user option, in a workflow or a script, and passes the tree" classname="test"/>
@@ -212,9 +220,11 @@
 	<testcase name="the tokens keep the identity: no indigo, no #0A0A0A or #FAFAFA, near-square corners" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in Departure Mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 211 -->
+	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
+	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
+	<!-- tests 221 -->
 	<!-- suites 0 -->
-	<!-- pass 211 -->
+	<!-- pass 221 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
