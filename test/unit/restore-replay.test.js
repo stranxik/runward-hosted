@@ -345,3 +345,90 @@ test("restore-replay is refused whole when one tenant's log cannot be read: noth
   const report = await h.app.operator.restoreReplay({ since: b.since });
   assert.deepEqual(report.map((r) => r.replayed), [1, 1]);
 });
+
+// ---------------------------------------------------------------- defect 5: one tenant's failure
+
+test("a tenant whose replay fails is rolled back whole and recorded; the next tenants are still replayed; the run is said incomplete", async () => {
+  const h = harness({ config: { jobRetryWaits: [0, 0] } });
+  const a = await founder(h, { prefix: "a" }), bt = await founder(h, { prefix: "b" }), c = await founder(h, { prefix: "c" });
+  const b = backup(h);
+  for (const [f, cred] of [[a, "a-2"], [bt, "b-2"], [c, "c-2"]]) await removePasskey(h, f, cred);
+  restore(h, b);
+  // B's transaction fails at its end, after every write of the replay, three times
+  const real = h.store.tx.bind(h.store);
+  let armed = true, attempts = 0;
+  h.store.tx = (tenant, fn) => (armed && tenant === bt.tenant ? real(tenant, async (tx) => { await fn(tx); attempts++; throw new Error(`planted failure ${attempts}`); }) : real(tenant, fn));
+
+  const report = await h.app.operator.restoreReplay({ since: b.since }).catch((e) => e);
+  armed = false;
+  assert.ok(Array.isArray(report), `the gesture reports instead of stopping at the failing tenant: ${report.message}`);
+  const of = (f) => report.find((r) => r.tenant === f.tenant);
+  assert.deepEqual({ failed: of(bt).failed, attempts: of(bt).attempts, error: of(bt).error }, { failed: true, attempts: 3, error: "planted failure 3" });
+  assert.equal(attempts, 3, "bounded: three attempts, no more");
+  // B: atomic, nothing of the failed replay is left
+  assert.equal(await openSessions(h, bt.tenant), 1, "B's session is still open");
+  assert.equal((await passkey(h, bt.tenant, "b-2")).removedAt, null);
+  assert.equal((await journal(h, bt.tenant)).filter((e) => e.body.what === "restore-replayed").length, 0);
+  // A before it and C after it are replayed
+  for (const [f, cred] of [[a, "a-2"], [c, "c-2"]]) {
+    assert.deepEqual({ failed: of(f).failed, replayed: of(f).replayed, attempts: of(f).attempts }, { failed: undefined, replayed: 1, attempts: 1 });
+    assert.equal(await openSessions(h, f.tenant), 0);
+    assert.equal(await refusal(signIn(h, cred)), "passkey-unknown", "the tenant after the failing one is replayed too");
+  }
+  // traced: the operator journal, and the run's status
+  const [note] = notes(h, "restore-replayed");
+  assert.deepEqual({ failed: note.detail.failed, rows: note.detail.report.length, since: note.detail.since }, { failed: 1, rows: 3, since: b.since });
+  const { jobIncomplete, incompleteReason } = await import("../../src/operator.js");
+  assert.equal(jobIncomplete(report), true, "the run ends non-zero");
+  assert.match(incompleteReason("restore-replay", report), /restore-replay did not complete: 1 tenant\(s\) failed or broken; first reason: planted failure 3/);
+  // run again once the cause is gone: B is replayed, A and C end where they were
+  const again = await h.app.operator.restoreReplay({ since: b.since });
+  assert.equal(jobIncomplete(again), false);
+  assert.equal(await refusal(signIn(h, "b-2")), "passkey-unknown");
+  for (const cred of ["a-2", "c-2"]) assert.equal(await refusal(signIn(h, cred)), "passkey-unknown");
+  for (const cred of ["a-1", "b-1", "c-1"]) assert.ok((await signIn(h, cred)).token);
+});
+
+/** Two tenants, each with a member whose recovery was redeemed after the backup: both stranded after the replay. */
+async function twoStranded() {
+  const h = harness({ config: { jobRetryWaits: [0, 0] } });
+  const fs = [await founder(h, { prefix: "a" }), await founder(h, { prefix: "b" })];
+  const tokens = [tok(), tok()];
+  for (const [i, f] of fs.entries()) await h.app.operator.openRecovery({ hash: sha(Buffer.from(tokens[i])), tenant: f.tenant, member: f.session.memberId });
+  h.clock.advance(DAY);
+  const b = backup(h);
+  for (const [i, t] of tokens.entries()) {
+    tick(h);
+    const o = await h.app.identity.linkOptions({ token: t });
+    await h.app.identity.redeemLink({ token: t, challengeId: o.challengeId, response: { id: `new-${i}`, challenge: o.options.challenge } });
+  }
+  restore(h, b);
+  return { h, fs, since: b.since };
+}
+
+test("a recovery is opened for one stranded member, as open-recovery opens it; it never fails a tenant's replay", async () => {
+  const { h, fs, since } = await twoStranded();
+  const t = tok();
+  const report = await h.app.operator.restoreReplay({ since, recoveryHash: sha(Buffer.from(t)) }).catch((e) => e);
+  assert.ok(Array.isArray(report), `one digest for two stranded members must not stop the replay: ${report.message}`);
+  assert.deepEqual(report.map((r) => [r.failed, r.stranded]), fs.map((f) => [undefined, [f.session.memberId]]), "both tenants are replayed, each with its stranded member");
+  for (const cred of ["a-1", "a-2", "b-1", "b-2"]) assert.equal(await refusal(signIn(h, cred)), "passkey-unknown");
+  // one recovery, for the first: in its tenant's journal and security log, usable in 24 h
+  assert.ok(report[0].recovery, "the report names the recovery it opened");
+  assert.equal(report[1].recovery, undefined, "the second member waits for the operator's open-recovery");
+  assert.equal((await h.app.identity.inspectLink({ token: t })).state, "link-not-yet");
+  const opened = (await journal(h, fs[0].tenant)).filter((e) => e.body.what === "recovery-opened").pop();
+  assert.equal(opened.body.object, report[0].recovery, "the member reads the recovery in the journal, as for any recovery");
+  assert.ok((await h.objects.securitySince(fs[0].tenant, since)).some((x) => x.event.what === "recovery-opened" && x.event.link === report[0].recovery));
+  assert.equal(notes(h, "restore-replayed")[0].detail.failed, 0);
+
+  // a digest already taken: the recovery fails and is said, the tenants are replayed all the same
+  const again = await twoStranded();
+  const taken = sha(Buffer.from(tok()));
+  await again.h.app.operator.openBootstrap({ hash: taken });
+  const r2 = await again.h.app.operator.restoreReplay({ since: again.since, recoveryHash: taken });
+  assert.deepEqual(again.fs.map((f) => r2.find((r) => r.tenant === f.tenant && !r.stage)).map((r) => [r.failed, r.replayed]), [[undefined, 1], [undefined, 1]]);
+  const bad = r2.find((r) => r.stage === "recovery");
+  assert.deepEqual({ failed: bad.failed, tenant: bad.tenant }, { failed: true, tenant: again.fs[0].tenant });
+  assert.equal(notes(again.h, "restore-replayed")[0].detail.failed, 1, "the recovery that was not opened is in the operator journal");
+});

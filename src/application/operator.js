@@ -270,12 +270,16 @@ export function operatorCases(ctx) {
   /**
    * After a database restore (PADR-0014 note, T24): close every session of every tenant, replay from the
    * object store the gestures after `since` (ULID order, the REPLAY table above), and say so in each
-   * tenant's journal. A member left with no passkey gets a recovery opened at once; a tenant left with no
-   * member is reported `memberless`: the operator opens its bootstrap again. Refused whole, before any
-   * write, when a tenant's security log cannot be read (`security-log-unreadable`).
+   * tenant's journal. A member left with no passkey is reported `stranded` (a recovery is opened for the
+   * first one when `recoveryHash` is given); a tenant left with no member is reported `memberless`: the
+   * operator opens its bootstrap again. Refused whole, before any write, when a tenant's security log
+   * cannot be read (`security-log-unreadable`); a tenant whose replay fails is recorded and the others
+   * are still replayed.
    */
   async function restoreReplay({ since, headBefore = null, recoveryHash = null }) {
-    const tenants = await store.tx(null, (tx) => tx.tenantIds());
+    let tenants;
+    try { tenants = await store.tx(null, (tx) => tx.tenantIds()); }
+    catch (e) { await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, report: [], failed: 1, error: why(e), stage: "tenant list" })); throw e; }
     // Every tenant's log is read before the first write. A log that cannot be read whole refuses the
     // gesture whole, with a code: nothing is closed, replayed or written to a tenant's journal on a log
     // read in part, and the refusal is in the operator journal.
@@ -288,30 +292,49 @@ export function operatorCases(ctx) {
       await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, refused: SECURITY_LOG_UNREADABLE, report: unread, failed: unread.length }));
       throw Object.assign(new Error(`${SECURITY_LOG_UNREADABLE}: the security log of ${unread.length} tenant(s) out of ${tenants.length} cannot be read; nothing was replayed; first reason: ${unread[0].error}`), { code: SECURITY_LOG_UNREADABLE });
     }
+    // Each tenant is one transaction, retried as a daily job's (eachTenant): its sessions, its gestures and
+    // its note are written together or not at all. A tenant that still fails is recorded with its error
+    // and the replay goes on to the next ones: one tenant's failure never leaves the accesses of the
+    // others as the restore gave them back. The operator journal receives the note in every case, and the
+    // run ends non-zero (src/operator.js#jobIncomplete); run again, the gesture replays every tenant again,
+    // which changes nothing where it had succeeded.
     const report = [];
     for (const tenant of tenants) {
-      const events = logs.get(tenant);
-      const r = await store.tx(tenant, async (tx) => {
-        let closed = 0, replayed = 0;
-        for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
-        for (let i = 0; i < events.length; i++) {
-          const act = REPLAY.get(events[i].event.what);
-          if (act && await act(tx, events[i].event, { tenant, objects, later: created(events.slice(i + 1)) })) replayed++;
+      for (let attempt = 1; ; attempt++) {
+        try { report.push({ tenant, ...(await store.tx(tenant, (tx) => replayTenant(tx, tenant, logs.get(tenant), { since, headBefore }))), attempts: attempt }); break; }
+        catch (e) {
+          if (attempt > waits.length) { report.push({ tenant, failed: true, error: why(e), attempts: attempt }); break; }
+          await sleep(waits[attempt - 1]);
         }
-        const stranded = [];
-        for (const m of (await tx.list("member")).filter((x) => !x.removedAt)) {
-          if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
-        }
-        const memberless = !(await tx.list("member")).some((x) => !x.removedAt);
-        if (stranded.length && recoveryHash) await tx.insert("link", { id: store.newId(), tokenHash: recoveryHash, kind: "recovery", memberId: stranded[0] });
-        const head = await tx.ledgerHead();
-        const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: headBefore ?? "", headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
-        return { tenant, closed, replayed, stranded, memberless, seq: e.seq };
-      });
-      report.push(r);
+      }
     }
-    await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, report }));
+    // One recovery, for the first member left without a passkey, opened as the operator's own gesture
+    // opens it (openRecovery: its own transaction, the security log, the tenant's journal, usable in 24 h),
+    // after the replay and apart from it: a digest already taken fails the recovery, never a tenant's
+    // replay. The other members left without a passkey are in the report: `open-recovery` for each.
+    const stranded = recoveryHash ? report.find((r) => !r.failed && r.stranded.length) : null;
+    if (stranded) {
+      try { stranded.recovery = (await openRecovery({ hash: recoveryHash, tenant: stranded.tenant, member: stranded.stranded[0] })).link; }
+      catch (e) { report.push({ tenant: stranded.tenant, stage: "recovery", failed: true, error: why(e), attempts: 1 }); }
+    }
+    await store.tx(null, (tx) => tx.operatorNote("restore-replayed", { since, report, failed: report.filter((r) => r.failed).length }));
     return report;
+  }
+
+  /** One tenant's replay, in its transaction: the sessions closed, the gestures replayed in ULID order, the note in its journal. */
+  async function replayTenant(tx, tenant, events, { since, headBefore }) {
+    let closed = 0, replayed = 0;
+    for (const s of await tx.list("session")) if (!s.closedAt) { await tx.update("session", { id: s.id }, { closedAt: now() }); closed++; }
+    for (let i = 0; i < events.length; i++) {
+      const act = REPLAY.get(events[i].event.what);
+      if (act && await act(tx, events[i].event, { tenant, objects, later: created(events.slice(i + 1)) })) replayed++;
+    }
+    const members = (await tx.list("member")).filter((x) => !x.removedAt);
+    const stranded = [];
+    for (const m of members) if (!(await tx.list("passkey", { memberId: m.id })).some((p) => !p.removedAt)) stranded.push(m.id);
+    const head = await tx.ledgerHead();
+    const e = await append(tx, { who: operator, what: "restore-replayed", object: null, detail: { since, headBefore: headBefore ?? "", headAfterRestore: head?.hash ?? "", closed, replayed, stranded } });
+    return { closed, replayed, stranded, memberless: members.length === 0, seq: e.seq };
   }
 
   return { openBootstrap, openRecovery, resetAccess, maintenance, retention, verifyChains, restoreReplay };

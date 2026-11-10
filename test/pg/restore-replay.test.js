@@ -75,6 +75,14 @@ after(async () => {
   await admin.end();
 });
 
+/** What the observer reads: the operator journal, as the server's superuser (no gesture uses this). */
+async function operatorNotes(what) {
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
+  const sql = postgres(u.toString(), { max: 1, onnotice: () => {} });
+  try { return (await sql`select detail from rw.operator_journal where what = ${what} order by seq desc`).map((r) => r.detail); } finally { await sql.end(); }
+}
+const replayNotes = async (t, since) => (await store.tx(t, (tx) => tx.ledgerAll())).filter((e) => e.body.what === "restore-replayed" && e.body.detail.since === since);
+
 async function tenant(prefix, passkeys) {
   const t = tok();
   const o = await operator((op) => op.openBootstrap({ hash: sha(Buffer.from(t)) }));
@@ -147,4 +155,32 @@ test("the drill of runbook §16: a reset, removals and an erasure after the back
   await operator((op) => op.openBootstrap({ hash: sha(Buffer.from(t)), tenant: C.tenant }));
   const again = await founder(h, { prefix: "c2", passkeys: 1, token: t, tenant: C.tenant });
   assert.ok(again.session, "C is opened again by its rightful founder");
+});
+
+test("a tenant whose replay fails is rolled back whole by PostgreSQL and recorded; the tenant after it is replayed", async () => {
+  const D = await tenant("d", 2), E = await tenant("e", 2);
+  const since = await backup();
+  await removePasskey(D, "d-2");
+  await removePasskey(E, "e-2");
+  await restore();
+  // D's transaction fails at its end, after every write of the replay, at each of its three attempts
+  const real = store.tx;
+  let attempts = 0;
+  store.tx = (t, fn) => (t === D.tenant ? real(t, async (tx) => { await fn(tx); attempts++; throw new Error(`planted failure ${attempts}`); }) : real(t, fn));
+  const report = await operator((op) => op.restoreReplay({ since })).catch((e) => e).finally(() => { store.tx = real; });
+  assert.ok(Array.isArray(report), `the gesture reports instead of stopping at the failing tenant: ${report.message}`);
+  const of = (f) => report.find((r) => r.tenant === f.tenant);
+  assert.deepEqual({ failed: of(D).failed, attempts: of(D).attempts, error: of(D).error }, { failed: true, attempts: 3, error: "planted failure 3" });
+  assert.equal((await rows(D.tenant, "session")).filter((x) => !x.closedAt).length, 1, "D: the session the failed replay closed is open again (rolled back)");
+  assert.equal((await passkey(D.tenant, "d-2")).removedAt, null, "D: the removal is not half replayed");
+  assert.equal((await replayNotes(D.tenant, since)).length, 0, "D: no note in its journal");
+  assert.deepEqual({ failed: of(E).failed, replayed: of(E).replayed }, { failed: undefined, replayed: 1 });
+  assert.equal(await refusal(signIn("e-2")), "passkey-unknown", "E, after the failing tenant, is replayed");
+  const [note] = await operatorNotes("restore-replayed");
+  assert.deepEqual({ since: note.since, failed: note.failed, rows: note.report.length }, { since, failed: 1, rows: report.length }, "the failure is in the operator journal");
+  // run again once the cause is gone
+  const again = await operator((op) => op.restoreReplay({ since }));
+  assert.equal(again.some((r) => r.failed), false);
+  assert.equal(await refusal(signIn("d-2")), "passkey-unknown");
+  assert.ok((await signIn("d-1")).token);
 });
