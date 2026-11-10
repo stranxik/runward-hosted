@@ -69,6 +69,7 @@
 	<testcase name="the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload, fleet, journal" classname="test"/>
 	<testcase name="the served assets: immutable names, views.js byte for byte the pinned one" classname="test"/>
 	<testcase name="the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app" classname="test"/>
+	<testcase name="/api/version names the archive that is installed: the digest of the tarball npm installed, not a line of the lock alone" classname="test"/>
 	<testcase name="the served views say « niveau non atteint » and &amp;quot;level not met&amp;quot; for level-not-met, from the pinned package (author's rule)" classname="test"/>
 	<testcase name="a request target that does not parse, or names its own authority, is answered 404 and is not a server error" classname="test"/>
 	<testcase name="under maintenance every write from a browser is answered 503 maintenance with Retry-After, the sign-in and link routes included; reads stay open" classname="test"/>
@@ -162,6 +163,18 @@
 	<testcase name="operator-link: the command printed is a gesture the gateway accepts, with the digest of the link printed, and names no workflow" classname="test"/>
 	<testcase name="operator-link: arguments the gateway would refuse are refused here, before a link is drawn or a command printed" classname="test"/>
 	<testcase name="operator-link: the printed command, run as printed from the repository's root, is answered 200 by a real gateway, which runs the gesture with the digest" classname="test"/>
+	<testcase name="C40: the vendored tarball passes both modes, and the offline mode says what it did not compare" classname="test"/>
+	<testcase name="C40: the review's tarball (a second root over src/build.js, LICENSE missing, the lock set to its digests) is refused in both modes" classname="test"/>
+	<testcase name="C40: a file of the package missing from the tarball, or a file added to it, is refused; offline only as far as the lock is honest" classname="test"/>
+	<testcase name="C40: a link, a duplicate name, a directory, an extended header and a name that climbs are each refused" classname="test"/>
+	<testcase name="C40: what the check cannot read at the commit is a cannot-tell, never a pass" classname="test"/>
+	<testcase name="C42: fleetPin gives the archive digest only when the install is the pinned archive: npm's integrity and every file" classname="test"/>
+	<testcase name="C41: the lock's archives are the pinned one and its previous chain, and nothing else" classname="test"/>
+	<testcase name="C41: the review's table. An index whose bytes changed is judged, or the fleet is not passed, whatever its entry says" classname="test"/>
+	<testcase name="C41: an index the previous archive built, the journal agreeing, is named and counted; a re-pin does not make a fleet red" classname="test"/>
+	<testcase name="C43: an index of another archive after one rebuilt here is red, with its cause: a rollback to an earlier pin" classname="test"/>
+	<testcase name="C43, C44: the witness reader's words are same, different and not rebuilt here, with counts; it passes the lock's archives to the replay" classname="test"/>
+	<testcase name="C44: the replay CLI exits 0 when every index rebuilt here is the same, 1 on a difference, 2 when it cannot tell" classname="test"/>
 	<testcase name="the 5 newest tags stay, the older ones go, whatever order the API answers in" classname="test"/>
 	<testcase name="a digest still named by a container or the rollback target is never deleted" classname="test"/>
 	<testcase name="nothing is guessed: an unreadable tag or protection stops the purge" classname="test"/>
@@ -224,9 +237,9 @@
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
-	<!-- tests 223 -->
+	<!-- tests 236 -->
 	<!-- suites 0 -->
-	<!-- pass 223 -->
+	<!-- pass 236 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
