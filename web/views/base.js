@@ -14,7 +14,7 @@ export const short = (h) => (h ? `${String(h).slice(0, 12)}…` : "");
 
 // The state of the page, one object: what was read (session, index, status, access, journal) and what a
 // gesture is doing (confirming, busy, failed). A module reads and writes it by its fields.
-export const S = { session: undefined, index: null, status: null, access: null, journal: null, intent: null, link: null, linkInfo: null, newVersion: false, confirming: null, busy: null, failed: null, error: null, export: null, offline: false };
+export const S = { session: undefined, index: null, status: null, access: null, journal: null, intent: null, link: null, linkInfo: null, newVersion: false, confirming: null, busy: null, failed: null, error: null, export: null, offline: false, origine: null, cibleVue: null, vuePeinte: null };
 
 /** The address as the router reads it: #/<route>/<sub>. */
 export const parts = () => { const h = location.hash.replace(/^#\/?/, ""); const p = h.split("/"); return { h, route: p[0], sub: p.slice(1).join("/") }; };

@@ -2,6 +2,7 @@
 import { esc } from "../base.js";
 import { when } from "../time.js";
 import { act } from "../marks.js";
+import { ancre, titreAncre } from "../liens.js";
 import { mots, appareil } from "../lexique.js";
 import { ask, confirmBox } from "../confirm.js";
 
@@ -12,5 +13,5 @@ export function sectionSessions(a) {
       <div class="small"><span class="k">${T.opened}</span>${when(s.createdAt, { sec: false })}</div>
       ${s.current ? `<div>${act("logout", W.frame.signOut, { q: true })}</div>` : `<div>${ask(`session:${s.id}`, T.close)}</div>`}${confirmBox(`session:${s.id}`)}</div>`).join("");
   const otherOpen = a.sessions.some((s) => !s.current);
-  return `<section class="blk"><h2>${T.h2}</h2>${ss}${otherOpen ? `<div class="actions" style="margin-top:12px">${ask("closeothers:all", T.closeOthers)}</div>${confirmBox("closeothers:all")}` : ""}</section>`;
+  return `<section class="blk"${ancre("sessions")}><h2${titreAncre("sessions")}>${T.h2}</h2>${ss}${otherOpen ? `<div class="actions" style="margin-top:12px">${ask("closeothers:all", T.closeOthers)}</div>${confirmBox("closeothers:all")}` : ""}</section>`;
 }

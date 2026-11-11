@@ -16,6 +16,7 @@ import { MARK, go, act } from "./marks.js";
 import { lang, mots, titreFlotte, appareil, studioUrl, siteUrl } from "./lexique.js";
 import { comptes, triees, verdictOf, nomCourt } from "./lignes.js";
 import { ask, confirmBox } from "./confirm.js";
+import { versSection } from "./liens.js";
 
 // The foot's first link is the public site, runward.dev, in the reader's language (ADR-0028): this origin has no
 // public page of its own, and the sign-in is where a visitor of app.runward.dev arrives.
@@ -56,7 +57,7 @@ function bandeaux() {
   const F = mots().frame, b = [], s = S.session;
   if (s?.recovery) b.push(`<div class="bandeau" role="alert"><p>${F.recovery(when(s.recovery.openedAt, { sec: false }), when(s.recovery.usableFrom, { sec: false }))}</p><div class="actions">${ask(`recovery:${s.recovery.id}`, F.recoveryCancel, false)}</div>${confirmBox(`recovery:${s.recovery.id}`)}</div>`);
   if (s && s.passkeys === 1) b.push(`<div class="bandeau"><p>${F.single}</p><div class="actions">${go(s.arrivalDone ? "#/acces/ajout" : "#/arrivee", F.addPasskey, { q: true })}</div></div>`);
-  for (const p of s?.addedElsewhere ?? []) b.push(`<div class="bandeau" role="alert"><p>${F.added(when(p.createdAt, { sec: false }), p.device ? esc(appareil(p.device)) : "", p.provider ? esc(appareil(p.provider)) : "")}</p><div class="actions">${go("#/acces", F.seePasskeys, { q: true })}</div></div>`);
+  for (const p of s?.addedElsewhere ?? []) b.push(`<div class="bandeau" role="alert"><p>${F.added(when(p.createdAt, { sec: false }), p.device ? esc(appareil(p.device)) : "", p.provider ? esc(appareil(p.provider)) : "")}</p><div class="actions">${go(versSection("cles"), F.seePasskeys, { q: true })}</div></div>`);
   if (S.newVersion) b.push(`<div class="bandeau"><p>${F.newVersion}</p><div class="actions">${act("reload", F.reload, { q: true })}</div></div>`);
   if (s?.maintenance) b.push(`<div class="bandeau"><p>${F.maintenance(s.maintenance.until ? when(s.maintenance.until, { sec: false }) : "")}</p></div>`);
   return b.join("");
@@ -156,5 +157,25 @@ function after(v) {
   const f = document.querySelector("[data-focus]") || keyed || (v.focus ? main.querySelector(v.focus) : null);
   (f ?? main).focus({ preventScroll: true });
   S.focusKey = null;
+  arrival(v);
+}
+/**
+ * A new address opens at the top of its screen; an address that names a place on it (`v.cible`, web/views/liens.js)
+ * opens on that place: brought into view and shown for a moment, once per arrival. The focus is already there (the
+ * screen names it as its `focus`), so a screen reader says it. The mark is a class the stylesheet draws with a
+ * transition, which reduced motion removes (web/famille.css); it is taken off after 1.6 s whatever happens.
+ */
+function arrival(v) {
+  const h = location.hash;
+  const fresh = S.vuePeinte !== h;
+  S.vuePeinte = h;
+  const el = v.cible && S.cibleVue !== h ? main.querySelector(v.cible) : null;
+  if (el) {
+    S.cibleVue = h;
+    el.scrollIntoView?.({ block: el.matches("button, a") ? "center" : "start" });
+    const zone = el.closest(".arow, section") ?? el;
+    zone.classList.add("cible");
+    setTimeout(() => zone.classList.remove("cible"), 1600);
+  } else if (fresh && !v.cible) window.scrollTo?.(0, 0);
 }
 export function say(msg) { annonceEl.textContent = ""; setTimeout(() => { annonceEl.textContent = msg; }, 60); }
