@@ -1,7 +1,7 @@
 # ADR-0024: runward-fleet re-pinned at main@d052814, where the grouped decision reading merged; an index of an earlier archive is read as published, ungrouped, until its next publication (refines ADR-0021)
 
 **Date**: 2026-11-11
-**Status**: proposed
+**Status**: accepted 2026-11-11 by the author in chat ("go à tout, oui à tout", in answer to a list that named this record); written by an agent session
 **Refines**: ADR-0021 (accepted 2026-11-11), which stays in force for everything this record does not change; through it, ADR-0018 and ADR-0002
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the two commits of runward, the two tarballs, the same inputs built by each pin through the real application, an export archive of each pin replayed by the other, an index of each pin read by the other's views, the screen captured under each pin), challenge, durable position
