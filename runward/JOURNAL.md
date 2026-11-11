@@ -331,3 +331,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`, section "Third pass".
 - Decided: nothing by the session; ADR-0029 and ADR-0030 stay proposed until the author accepts them.
 - Next: the author's acceptance; then the implementation of the port, written and reviewed on the critical model.
+
+## 2026-11-11 - ADR-0029 accepted, ADR-0030 accepted as a direction
+
+- Done: both records carry the author's acceptance.
+- Evidence: the author in chat, 2026-11-11: "j'accepte ADR-0029 et ADR-0030", after the three review passes recorded in `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`.
+- Decided: ADR-0029 accepted; ADR-0030 accepted as a direction, no rule before a real Entra token is read (the author).
+- Next: the implementation of the forge port and the GitLab adapter, written and reviewed on the critical model, witnessed on the self-managed GitLab instance.

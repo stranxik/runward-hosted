@@ -1,7 +1,7 @@
 # ADR-0029: A forge port: an upload is bound by the identity each forge gives, and its level of evidence is shown per application (refines ADR-0003 and ADR-0001)
 
 **Date**: 2026-11-11
-**Status**: proposed (written by an agent session; the author decided on 2026-11-11 that the service receives from forges other than GitHub and validated the plan this record writes down; revised twice the same day after two passes of an adversarial review, `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`; it awaits his acceptance, and no code follows it in this pull request)
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte ADR-0029 et ADR-0030"), after three passes of an adversarial review (`runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`); written by an agent session.
 **Refines**: ADR-0003 (accepted 2026-11-06), whose trigger "a first GitLab repository" this record answers and whose rules for an upload stay in force, unchanged, for GitHub; ADR-0001 (accepted 2026-11-06) on one point: "the only destination outside the hoster is the OIDC issuer's keys" becomes the keys of two public issuers
 **Scope**: the port, GitHub behind it, gitlab.com, and GitLab instances a tenant registers. Azure DevOps is ADR-0030, a direction without rules yet.
 **Deciders**: Thibault Souris (author). Written by an agent session.

@@ -1,7 +1,7 @@
 # ADR-0030: Azure DevOps sends by an Entra access token for runward's application: a direction, its rules fixed after a real token is read
 
 **Date**: 2026-11-11
-**Status**: proposed (written by an agent session). **A direction, not rules**: nothing of this record is to be implemented as a rule before a real Entra token has been read; the rules are then written in a record that refines this one.
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte ADR-0029 et ADR-0030") **as a direction, not rules**: nothing of this record is to be implemented as a rule before a real Entra token has been read; the rules are then written in a record that refines this one. Written by an agent session.
 **Depends on**: ADR-0029 (proposed), whose port, issuer keys, levels and confirmation this record uses
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop, stopped at its first step for want of a witness: the forge's documentation was read, no token was; the adversarial review of ADR-0029 (`runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`) asked that this part be split out
