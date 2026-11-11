@@ -7,6 +7,7 @@ import { S, esc } from "./base.js";
 import { hm } from "./time.js";
 import { mk, etq, go } from "./marks.js";
 import { mots } from "./lexique.js";
+import { versAccord } from "./liens.js";
 
 const SHAPE = { gaps: "inv", "level-not-met": "inv", "not-observed": "void", clean: "full" };
 const ORDER = { gaps: 0, "level-not-met": 1, "not-observed": 2, clean: 3 };
@@ -62,7 +63,7 @@ export function geste(m) {
   const W = mots(), v = verdictOf(m), st = ligne(m.id);
   if (v === "gaps" && m.latest.next?.command) return `<span class="k">${W.lines.next}</span><code class="cmd" translate="no">${esc(m.latest.next.command)}</code>`;
   if (v === "level-not-met") return go(`#/mission/${m.id}`, W.lines.seeDeclared, { q: true });
-  if (v === "not-observed") return st?.consent ? `<span class="small">${etq("full", W.common.consented)} ${W.lines.nextRead}</span>` : go("#/acces", W.lines.consentInAccess, { q: true });
+  if (v === "not-observed") return st?.consent ? `<span class="small">${etq("full", W.common.consented)} ${W.lines.nextRead}</span>` : go(versAccord(st), W.lines.consentInAccess, { q: true });
   return "";
 }
 export function comptes() {

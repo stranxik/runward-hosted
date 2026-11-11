@@ -7,6 +7,7 @@ import { KINDS } from "./confirm.js";
 import { mots } from "./lexique.js";
 import { say } from "./shell.js";
 import { forgetReads, refreshScreen, rerender } from "./router.js";
+import { retour, versSection, versDepot } from "./liens.js";
 
 export async function signIn(mode) {
   location.hash = "#/entree/attente";
@@ -58,7 +59,7 @@ async function refreshAfterAdd() {
   const onArrival = parts().route === "arrivee";
   await refreshScreen();
   if (onArrival && S.addError) location.hash = S.addError === "exists" ? "#/arrivee/seconde-existe" : "#/arrivee/seconde-annulee";
-  else if (!onArrival && !S.addError) location.hash = "#/acces";
+  else if (!onArrival && !S.addError) location.hash = retour(versSection("cles"));
   else rerender();
 }
 
@@ -108,4 +109,6 @@ export async function confirmGesture(k) {
   if ((kind === "passkey" && r.data?.closedCurrent) || (kind === "session" && r.data?.closedCurrent)) { S.session = null; S.closedBy = "passkey"; location.hash = "#/entree/session-fermee"; return; }
   S.focusKey = k;
   await refreshScreen();
+  // a repository removed from its confirmation (« ce n'est pas mon dépôt »): that screen has nothing left to do
+  if (kind === "repo" && parts().route === "declarer") location.hash = retour(versDepot(id));
 }

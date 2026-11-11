@@ -2,6 +2,7 @@
 import { esc } from "../base.js";
 import { when, DTF } from "../time.js";
 import { mk, go } from "../marks.js";
+import { ancre, titreAncre } from "../liens.js";
 import { mots, appareil } from "../lexique.js";
 import { ask, confirmBox } from "../confirm.js";
 
@@ -19,5 +20,5 @@ export function sectionPasskeys(a) {
       <div class="small"><span class="k">${P.lastUsed}</span>${when(p.lastUsedAt, { sec: false })}</div>${right}${confirmBox(`passkey:${p.id}`)}${confirmBox(`restore:${p.id}`)}</div>`;
   }).join("");
   const same = a.sameProvider ? `<p class="avert">${P.same}</p>` : "";
-  return `<section class="blk"><h2>${P.h2}</h2>${pk}${same}<div class="actions" style="margin-top:12px">${go("#/acces/ajout", W.frame.addPasskey, { q: true })}</div></section>`;
+  return `<section class="blk"${ancre("cles")}><h2${titreAncre("cles")}>${P.h2}</h2>${pk}${same}<div class="actions" style="margin-top:12px">${go("#/acces/ajout", W.frame.addPasskey, { q: true })}</div></section>`;
 }
