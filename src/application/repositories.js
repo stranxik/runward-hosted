@@ -98,7 +98,7 @@ export function repositoryCases(ctx, identity) {
           if (built.ok) { const head = await tx.ledgerHead(); published = await ctx.publish(tx, built, head.seq + 1); }
         } else {
           const u = await tx.get("upload", { id: r.pendingSend.uploadId });
-          const built = await ctx.assemble(tx, { mission: u.mission, repositoryRef: id, kind: u.kind, sha256: u.sha256, commit: u.commit });
+          const built = await ctx.assemble(tx, { mission: u.mission, repositoryRef: id, kind: u.kind, sha256: u.sha256, commit: u.commit, receivedAt: u.receivedAt });
           if (built.ok) {
             const head = await tx.ledgerHead();
             published = await ctx.publish(tx, built, head.seq + 1);

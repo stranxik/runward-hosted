@@ -30,6 +30,7 @@ Synchronous, pure (no clock, no network, no process: `read` is a map of preloade
 | missions[].path | string | no | relative, without `..` |
 | missions[].commit | string | no | the sha claim of the upload's token |
 | missions[].uploads | object kind → sha256 | yes | the current uploads only |
+| missions[].received | object kind → string | no | the date the service accepted each current upload, a label to the minute in the service's time with its offset (`2026-11-11 10:42 +01:00`, the form the app shows every time in), written as the export's `at` in fleet.json: the decision reading says it as the date of the last check received (runward's `docs/spec/runward-fleet-decision.md` §8); declared, never read from a clock by runward-fleet |
 | read | (sha256) → bytes \| null | yes | synchronous |
 
 ## Output schema
@@ -45,7 +46,7 @@ Synchronous, pure (no clock, no network, no process: `read` is a map of preloade
 
 ## Invariants
 
-The same inputs give the same bytes with the same archive of runward-fleet; another archive may give other bytes, under the same version (measured for 0.46.0, ADR-0021). An index never carries `machine-established` (no trust policy), nor a `names` field or a mission `not-available` (the adapter writes neither option); every export path is `exports/<mission>/<kind>-<sha256>.json`, so the archive replays (`scripts/replay-export.mjs`).
+The same inputs give the same bytes with the same archive of runward-fleet; another archive may give other bytes, under the same version (measured for 0.46.0, ADR-0021). An index never carries `machine-established` (no trust policy), nor a `names` field or a mission `not-available` (the adapter writes neither option); an export's `at` is the date the service accepted it, so the same uploads accepted at the same minutes give the same `fleet.json`; every export path is `exports/<mission>/<kind>-<sha256>.json`, so the archive replays (`scripts/replay-export.mjs`).
 
 ## Errors
 

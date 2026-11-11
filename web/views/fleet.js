@@ -27,7 +27,7 @@ function fleetHead() {
 export function viewFleet(route, sub) {
   if (S.fleetError) return { title: "Flotte injoignable", key: "fleet", signed: "in", html: `${head("runward hébergé · état du service", "")}<h1 class="v">La flotte ne s'affiche pas.</h1><p class="face">${mk("inv", "non affichée")} Votre session est ouverte, mais l'index n'a pas pu être lu. Le journal, lui, s'affiche.${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", "Réessayer")}${go("#/envois", "Voir les envois", { q: true })}</div>` };
   if (!S.status) return loadingView("Flotte");
-  if (route === "") return viewFlotte();
+  if (route === "flotte") return viewFlotte();
   if (route === "mission") return viewMissionDetail(sub);
   if (!S.index) return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: route, html: `${fleetHead()}<h1 class="v">Aucune mission publiée.</h1><p>Votre flotte compte les dépôts que vous déclarez, et seulement ceux-là. Une mission apparaît après son premier envoi confirmé.</p><div class="actions">${go("#/declarer", "Déclarer un dépôt")}</div>` };
   const titles = { vue: "Vue complète", history: "Historique", proof: "Preuve", signatures: "Signatures", pr: "Dans la PR", sources: "Sources" };

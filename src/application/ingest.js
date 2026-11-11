@@ -136,7 +136,7 @@ export function ingestCases(ctx) {
           return { status: 201, body: response };
         }
 
-        const built = await assemble(tx, { mission, repositoryRef: repo.id, kind, sha256: digest, commit: c.sha }, body);
+        const built = await assemble(tx, { mission, repositoryRef: repo.id, kind, sha256: digest, commit: c.sha, receivedAt: base.receivedAt }, body);
         if (!built.ok) {
           const code = built.refusal === "index-build-refused" && /private filesystem path/.test(built.field) ? "private-path" : built.refusal;
           const e = await append(tx, { who: workload(c), what: "send-quarantined", object: id, requestId, issued, detail: { ...detailBase, refusal: code, field: built.field } });

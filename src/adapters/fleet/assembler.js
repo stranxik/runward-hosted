@@ -66,7 +66,10 @@ export function fleetAssembler({ pin }) {
     pin,
     exportPath,
     /**
-     * Assemble an index. `missions`: [{ id, name, repository ("owner/repo"), path, commit, uploads: { kind: sha256 } }].
+     * Assemble an index. `missions`: [{ id, name, repository ("owner/repo"), path, commit, uploads: { kind: sha256 },
+     * received: { kind: label } }]. `received` is the date the service accepted each upload, written as the export's
+     * `at` label: the decision reading of runward-fleet says it as the date of the last check received (runward's
+     * ADR-0125, docs/spec/runward-fleet-decision.md §8); a mission with no label for a kind writes none.
      * `read(sha256)` returns the bytes kept for that digest. Returns { ok: true, index bytes and digests }
      * or { ok: false, refusal: "index-build-refused" | "index-rule-broken", field }.
      */
@@ -83,7 +86,7 @@ export function fleetAssembler({ pin }) {
           ...(m.path && m.path !== "." ? { path: m.path } : {}),
           ...(m.commit ? { commit: m.commit, commitSource: "the sha claim of the upload's workload identity token" } : {}),
           expects: ["check"],
-          exports: Object.fromEntries(Object.entries(m.uploads).map(([kind, digest]) => [kind, { file: exportPath(m.id, kind, digest), producedBy: "runward check --strict --json (send.yml)" }])),
+          exports: Object.fromEntries(Object.entries(m.uploads).map(([kind, digest]) => [kind, { file: exportPath(m.id, kind, digest), producedBy: "runward check --strict --json (send.yml)", ...(m.received?.[kind] ? { at: m.received[kind] } : {}) }])),
         })),
       };
       const manifest = Buffer.from(`${JSON.stringify(doc, null, 2)}\n`);

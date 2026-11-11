@@ -35,7 +35,7 @@ export function viewMissionDetail(id) {
   const attendus = (m.findings ?? []).filter((f) => f.file).map((f) => `<li><span class="h">attendu</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${esc(f.what)} attendu par l'inventaire, absent<span class="sub"><code>${esc(f.file)}</code></span></span></li>`).join("");
   const hist = (st?.activity ?? []).map(jLigne).join("");
   return { title: `Mission ${nomCourt(m)}`, key: "fleet", signed: "in", fleetRoute: "mission", html: `<div class="dash mission-d">
-    <p class="fil-d small soft"><a href="#/">Flotte</a> / <span translate="no">${esc(nomLong(m))}</span></p>
+    <p class="fil-d small soft"><a href="#/">Portefeuille</a> / <a href="#/decision/${esc(m.id)}" translate="no">${esc(nomLong(m))}</a> / <span>détail technique</span></p>
     <div>${chipOf(v)}<h1 translate="no">${esc(nomLong(m))}</h1><p class="cause-g">${cause(m)}</p><p class="src">${sourceLigne(m)}</p></div>
     ${suivant}
     ${l && portes ? `<section class="sect" aria-labelledby="h-pp"><header><h2 id="h-pp">${v === "gaps" ? "Ce qui manque, porte par porte" : "Livrables, porte par porte"}</h2></header><div class="manque">${portes}</div></section>` : ""}

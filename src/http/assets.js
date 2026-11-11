@@ -60,6 +60,7 @@ export const MODULES = Object.freeze([
   "views/envois.js",
   "views/fleet.js",
   "views/flotte.js",
+  "views/decision.js",
   "views/mission.js",
   "views/panne.js",
   "views/legal.js",

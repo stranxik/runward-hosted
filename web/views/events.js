@@ -4,6 +4,7 @@ import { S, mobEl, main, parts } from "./base.js";
 import { api, loadSession } from "./api.js";
 import { say } from "./shell.js";
 import { FIELD_OF } from "./declarer.js";
+import { setReadingLang } from "./decision.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write } from "./gestures.js";
 
@@ -18,6 +19,8 @@ document.addEventListener("click", async (e) => {
   if (what === "addpk") return addPasskey(k);
   if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; forgetReads(); location.hash = "#/entree/sortie"; say("Vous êtes déconnecté."); return; }
   if (what === "reload") { location.reload(); return; }
+  // the language of the decision reading, kept per viewer; the screen is painted again from what it already read
+  if (what === "lecture-lang") { setReadingLang(k); S.focusKey = `lecture-lang:${k}`; return rerender(); }
   if (what === "reload-screen") { S.error = null; S.session = undefined; forgetReads(); location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
   if (what === "copy") {
     const pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");

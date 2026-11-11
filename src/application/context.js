@@ -8,6 +8,20 @@ import { Refusal } from "../domain/refusals/index.js";
 export const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 export const newToken = () => randomBytes(32).toString("base64url");
 export const iso = (ms) => (ms == null ? null : new Date(ms).toISOString());
+/** The inventory's `asOf`: a label to the minute, in UTC. */
+export const minuteLabel = (ms) => `${iso(ms).slice(0, 16).replace("T", " ")} UTC`;
+const PARIS = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const PARIS_OFFSET = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Paris", timeZoneName: "longOffset" });
+/**
+ * The date the service accepted an upload, as each export's `at` says it: to the minute, in the service's time
+ * (Paris) with its offset, the form the app shows every time in (web/views/time.js#when), so that the reading's
+ * "last check received" and the service's own lines say the same instant the same way (`2026-11-11 10:42 +01:00`).
+ */
+export const receivedLabel = (ms) => {
+  const d = new Date(ms);
+  const offset = (PARIS_OFFSET.formatToParts(d).find((p) => p.type === "timeZoneName")?.value ?? "GMT").replace("GMT", "") || "+00:00";
+  return `${PARIS.format(d)} ${offset}`;
+};
 /** The export files a published version was built from, as its fleet.json names them. */
 export const manifestExports = (manifest) => JSON.parse(manifest.toString("utf8")).missions.flatMap((m) => Object.values(m.exports ?? {}).map((e) => e.file));
 
@@ -43,14 +57,15 @@ export function context(ports, config) {
     for (const r of repos.sort((a, b) => a.declaredAt - b.declaredAt || a.name.localeCompare(b.name))) {
       for (const m of missions.filter((x) => x.repositoryRef === r.id).sort((a, b) => a.addedAt - b.addedAt || a.id.localeCompare(b.id))) {
         const mine = uploads.filter((u) => u.mission === m.id && u.repositoryRef === r.id);
-        const byKind = {};
+        const byKind = {}, received = {};
         let commit = null;
-        for (const u of mine) { byKind[u.kind] = u.sha256; if (u.kind === "check") commit = u.commit; }
+        for (const u of mine) { byKind[u.kind] = u.sha256; received[u.kind] = receivedLabel(u.receivedAt); if (u.kind === "check") commit = u.commit; }
         if (override && override.mission === m.id && override.repositoryRef === r.id) {
           byKind[override.kind] = override.sha256;
+          received[override.kind] = receivedLabel(override.receivedAt);
           if (override.kind === "check") commit = override.commit;
         }
-        out.push({ id: m.id, name: r.name, repository: r.name, path: m.path, commit, uploads: byKind });
+        out.push({ id: m.id, name: r.name, repository: r.name, path: m.path, commit, uploads: byKind, received });
       }
     }
     return out;
@@ -68,7 +83,7 @@ export function context(ports, config) {
       if (!b) throw new Refusal("service-unavailable");
       bytes.set(digest, b);
     }
-    const asOf = `${iso(clock.now()).slice(0, 16).replace("T", " ")} UTC`;
+    const asOf = minuteLabel(clock.now());
     return assembler.assemble({ title: tenant.title, lang: tenant.lang, asOf, missions, read: (d) => bytes.get(d) ?? null });
   }
 
