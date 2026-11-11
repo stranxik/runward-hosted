@@ -5,7 +5,7 @@
 import { Refusal } from "../domain/refusals/index.js";
 import { readClaims, checkGenericClaims, checkRepositoryClaims, checkUploadHeaders, placeUpload, rateWindow, RUNS_PER_HOUR } from "../domain/workload.js";
 import * as gitlab from "../domain/gitlab.js";
-import { workloadId, levelOf } from "../domain/forge.js";
+import { workloadId, levelOf, MAX_TOKEN_AGE_S } from "../domain/forge.js";
 import { sha256, iso } from "./context.js";
 import { StoreConflict, VerifierUnavailable } from "../ports/errors.js";
 
@@ -90,7 +90,11 @@ export function ingestCases(ctx) {
     const rules = RULES[v.forge];
     const c = rules ? rules.read(v.claims) : null;
     if (!c) throw new Refusal("token-unreadable");
-    const fresh = await store.tx(null, (tx) => tx.useJti(c.jti, (v.claims.exp + 60) * 1000, v.issuer.key));
+    // kept until the token can no longer be accepted: its exp, and for GitLab its tenth minute when that
+    // comes first (past it the token is refused token-too-old whatever the store holds; an exp is its
+    // signer's to choose, and a registered key's holder must not grow a table every tenant shares: ADR-0031 i)
+    const until = v.forge === "github" ? v.claims.exp : Math.min(v.claims.exp, v.claims.iat + MAX_TOKEN_AGE_S);
+    const fresh = await store.tx(null, (tx) => tx.useJti(c.jti, (until + 60) * 1000, v.issuer.key));
     if (!fresh) throw new Refusal("token-replayed", words(v.forge));
     return { c, rules, forge: v.forge, issuer: v.issuer, kid: v.kid ?? null, thumbprint: v.thumbprint ?? null };
   }

@@ -1,7 +1,7 @@
 # ADR-0022: The public site is served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept
 
 **Date**: 2026-11-11
-**Status**: accepted 2026-11-11 by the author in chat ("j'accepte", in answer to a list that named ADR-0021 and ADR-0022); written by an agent session
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte", in answer to a list that named ADR-0021 and ADR-0022); written by an agent session; superseded 2026-11-11 by ADR-0028 (the public site is runward.dev; this origin carries the app only)
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the shell's boot, its router and the server's static paths at `4e54842`; the mini-site as built on 2026-11-11, rebuilt from its sources to the same bytes), challenge, durable position
 

@@ -33,7 +33,7 @@ ligne 22	line 22
 Dossier de sécurité : une preuve citée est refusée par le contrôle.	Security assessment: a cited piece of evidence is refused by the check.
 ligne 50	line 50
 La scène, sur un dépôt public	The scene, on a public repository
-Les tests disent que le code marche, pas qu’il est livrable.	Tests say the code works. They do not say it is shippable.
+Les tests disent que le code marche, pas qu’il est prêt à partir en production.	Tests say the code works. They do not say it is ready for production.
 Un changement de nom honnête, fait par un agent. Suivez-le jusqu’au moment où quelqu’un doit dire go.	One honest rename, made by an agent. Follow it to the moment someone has to say go.
 Un agent change un nom dans le code.	An agent changes a name in the code.
 Dans une application, un agent renomme guardFields en applyFieldGuards, partout où le code le connaît. Un changement propre, comme il s’en fait chaque jour.	In one application, an agent renames guardFields to applyFieldGuards, everywhere the code knows it. A clean change, the kind made every day.
@@ -276,7 +276,7 @@ Ce qui est en service.	What is in service.
 La forge	The forge
 L’écran partagé se branche sur GitHub.	The shared screen connects to GitHub.
 L’hébergement	Hosting
-En France, à Paris, chez Scaleway. Exploité par runward.	In France, in Paris, at Scaleway. Operated by runward.
+En France, à Paris, chez Scaleway. Service édité par Thibault Souris, à titre personnel.	In France, in Paris, at Scaleway. Service published by Thibault Souris, in a personal capacity.
 Une commande, dans n’importe quelle chaîne de livraison. Le moteur est sous licence MIT.	One command, in any delivery chain. The engine is under the MIT licence.
 Votre forge n’est pas GitHub, ou rien ne doit sortir de chez vous ? Dites-le dans votre demande d’essai.	Your forge is not GitHub, or nothing may leave your premises? Say so in your trial request.
 Code QR vers app.runward.dev/stand	QR code to app.runward.dev/stand

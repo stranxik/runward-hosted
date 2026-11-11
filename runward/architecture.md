@@ -21,7 +21,7 @@ A hosted view of runward missions: each declared repository's CI sends what runw
 | EntryPort (HTTP) | primary | receive uploads from CI, gestures and reads from browsers | v0 | ../src/http/server.js |
 | TenantStore and Ledger | secondary | persist under a tenant set by the server; append to the chained journal; resolve by exact key | v0 | ../src/adapters/store/tables.js |
 | ExportStore, SecurityLog, Archive | secondary | keep bytes by content; write the security log before commit; keep a prepared archive 24 h | v0 | ../src/adapters/objects/objects.js |
-| WorkloadVerifier | secondary | verify a CI's OIDC token, or name the refusal | v0 | ../src/adapters/oidc/github.js |
+| WorkloadVerifier | secondary | verify a CI's OIDC token and say which issuer signed it, or name the refusal | v0 | ../src/adapters/oidc/registry.js |
 | HumanAuthenticator | secondary | passkey ceremonies, a challenge bound to a purpose and a gesture | v0 | ../src/adapters/webauthn/simplewebauthn.js |
 | IndexAssembler | secondary | the fleet index by runward-fleet, or a named refusal | v0 | contracts/index-assembler.md |
 | Clock, Log | secondary | the service time, declared; one JSON line per event | v0 | ../src/adapters/system/log.js |
@@ -85,11 +85,13 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | The in-memory store as reference adapter | ADR-0015 |
 | The operator's gateway to the private database | ADR-0016, refined by ADR-0023 (the grants compared by a gesture of their own, under rw_owner), accepted 2026-11-11 |
 | No load test before the preview; the bounds are tested | ADR-0017 |
-| The public site served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept | decided: ADR-0022, accepted 2026-11-11 |
+| The public site served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept | superseded: ADR-0022, accepted 2026-11-11, superseded by ADR-0028 the same day |
 | The shell in the grammar of its public site: the scene as the ground, glass windows, one header; the haze drifts on the sign-in only | pending: ADR-0025 (refines ADR-0019, accepted 2026-11-10), proposed |
 | The app's layer is the house's visual base; runward keeps its own signs; the house signs the foot | pending: ADR-0026, proposed |
-| A forge port: an upload is bound by the identity each forge gives (GitHub, gitlab.com, registered GitLab instances), several issuers in one process, and the level of evidence it reaches is shown per application | pending: ADR-0029 (refines ADR-0003 and ADR-0001), proposed, revised after the two passes of its review; no code yet |
-| Azure DevOps by an Entra access token for runward's application: a direction, its rules fixed after a real token is read | pending: ADR-0030, proposed; no code, no rule yet |
+| The public site is runward.dev; the app's origin carries the app only: the shell at `/`, the sign-in for a signed-out visitor, the former public pages answering 308 to runward.dev | decided: ADR-0028, accepted 2026-11-11 (supersedes ADR-0022) |
+| A forge port: an upload is bound by the identity each forge gives (GitHub, gitlab.com, registered GitLab instances), several issuers in one process, and the level of evidence it reaches is shown per application | decided: ADR-0029 (refines ADR-0003 and ADR-0001), accepted 2026-11-11; implemented for GitHub, gitlab.com and registered GitLab instances, the witness of a registered instance partial until runward-fleet is re-pinned (`runward/JOURNAL.md`) |
+| The store of the forge port: the issuer key enters the values the indexes of 0001 hold; the choices ADR-0029 left to its implementation | pending: ADR-0031 (refines ADR-0029), proposed |
+| Azure DevOps by an Entra access token for runward's application: a direction, its rules fixed after a real token is read | direction: ADR-0030, accepted 2026-11-11 as a direction; no code, no rule before a real Entra token is read |
 
 ### Ratification
 - 2026-11-10 · rows: contracts-governance, hexa-adapter-pattern, hexa-architecture, hexa-typescript-native, process-adr-and-journal, security-mcp-server-pinning · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: contracts-governance@3819c661f85728cf, hexa-adapter-pattern@b76e0f90c6a7b5b3, hexa-architecture@611e39392ab4085f, hexa-typescript-native@c33865aec11fb9dd, process-adr-and-journal@6d0c6b5a4da8f56b, security-mcp-server-pinning@2e6d819f82f30657 · mode: agent

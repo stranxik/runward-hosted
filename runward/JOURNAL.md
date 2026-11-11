@@ -291,6 +291,23 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session.
 - Next: the committed reports regenerated in the reference environment (next commit); the same corrections reach the motion's branch by a merge.
 
+## 2026-11-11 - the app's origin carries the app only; its public pages answer 308 to runward.dev
+
+- Done: the author's decision of this evening, relayed to this session: runward.dev is the public site (the same pages, with the documentation and the news), app.runward.dev keeps the sign-in and the signed-in app. `/` serves the shell again; signed out, its root opens the sign-in (`#/entree`; it went to `/`, which would now reload the shell for ever). The eight former public pages and `/index.html` answer 308 to the same page of runward.dev, the query string kept, `/stand` included (the printed QR code); `?lang=en` names the English page, and `/en`, `/en/<page>` answer the same way (`src/http/moved.js`, a closed table). `/app` and `/lien` are unchanged. The shell's links to the public site name runward.dev in the reader's language (`siteUrl`, beside the lexicon): the foot's first link, the legal screen, "how to get in". Nothing of `web/site/` is served; its sources and their renderer stay until their removal.
+  - Not touched: identity, sessions, passkeys, the cookie, the content security policy, the tenant boundary, the API contract.
+  - `test/unit/site.test.js` reads the pages from the renderer (they are no longer served) and asks the server that none of them, none of the site's three files and no source is served. This is a change of what the guards hold, said here: the guards on the served pages' headers and on the served files' digests are replaced by guards that they are not served and by `test/unit/moved.test.js`.
+- Evidence: `test/unit/moved.test.js`, 6 cases (the table, each target, the query string, `?lang=en`, an encoded line end kept encoded, a path off the table 404, a write 404, a foreign host 421 first, the shell at `/`; planted: a page left out, the root moved, a source twice, another origin, an address of the app); `test/unit/site.test.js`; `test/unit/frame-lang.test.js` (the links by language, signed in and out, no `target`). On the local witness (runbook, memory store), one browser: `/` opens `/#/entree` with the two sign-in buttons, `#/acces` opens `#/entree/connexion`, the foot and the legal screen link runward.dev then runward.dev/en after the switch; `node scripts/smoke.mjs http://localhost:8797` sound. Each of the 18 targets answered 200 on runward.dev at 21:51 (CET), with `curl`. `npx -y runward@0.46.0 check --strict` exit 0.
+- Decided: nothing by the session. Proposed: ADR-0028, which supersedes ADR-0022 once accepted.
+- Blocked / to dig: the number 0027 is taken by the motion's open pull request (#22), hence 0028. That pull request edits `router.js`, `shell.js`, `lexique.js` and `assets.js` too: the second of the two to merge takes the other's lines.
+- Next: remove `web/site/`, `src/http/site.js`, the layer's section for the public pages and their tests, once the open pull request that edits `web/site/` (#23) is merged or closed; the committed reports regenerated in the reference environment.
+
+## 2026-11-11 - ADR-0028 accepted, with the two links to runward.dev
+
+- Done: ADR-0028 records its acceptance; ADR-0022 records that it is superseded by it.
+- Evidence: the author in chat, 2026-11-11: "j'accepte l'ADR-0028 et les deux liens" (the foot's first link and the legal screen's line to runward.dev, both added by this pull request).
+- Decided: ADR-0028 accepted (the author).
+- Next: the removal of `web/site/` and its renderer, once #23 is merged or closed.
+
 ## 2026-11-11 - a forge port, proposed: GitLab and Azure DevOps beside GitHub, the level of evidence said per application
 
 - Done: ADR-0029 is written, proposed, with no code: this pull request carries the record, this entry and the architecture note's row.

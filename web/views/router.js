@@ -75,12 +75,12 @@ export async function show() {
   if (S.session === undefined && !S.error) await loadSession();
   if (S.session === undefined && S.error) { if (route !== "panne") { location.replace(navigator.onLine === false ? "#/panne/hors-ligne" : "#/panne"); return; } }
   if (S.session && route === "entree" && sub !== "sortie") { location.replace(S.session.arrivalDone ? "#/" : "#/arrivee"); return; }
-  // signed out: the root opens the public site at / (web/site/, ADR-0022); any other protected address opens the
-  // sign-in, with its intent
+  // signed out: the root opens the sign-in (the public site is at runward.dev, ADR-0028: this origin has no public
+  // home); any other protected address opens the sign-in too, with its intent
   if (!S.session && screen?.signedIn) {
     S.intent = route === "" ? null : location.hash;
     if (S.session === null && S.closedBy === "passkey") location.replace("#/entree/session-fermee");
-    else if (route === "") location.replace("/");
+    else if (route === "") location.replace("#/entree");
     else location.replace("#/entree/connexion");
     return;
   }

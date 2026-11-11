@@ -15,6 +15,7 @@ import { readerRoutes } from "./routes/reader.js";
 import { journalRoutes } from "./routes/journal.js";
 import { exportRoutes } from "./routes/export.js";
 import { systemRoutes } from "./routes/system.js";
+import { movedTo } from "./moved.js";
 import { issuerRoutes, forgeRepositoryRoutes } from "./routes/forge.js";
 import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS, OVERFLOW_HISTORY_MINUTES } from "./limits.js";
 
@@ -139,9 +140,11 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       // reserved prefix of the origin, under which nothing is ever served, whatever the method
       if (path === "/send" || path.startsWith("/send/")) { route = "reserved"; return fail("not-found"); }
 
-      // ---- static files, the public site and the shell. The site's pages are public and read nothing (ADR-0022):
-      //      / is the landing for everyone; an address of the app (/#/...) is sent by the landing's first script to
-      //      /app, the shell's own path, which writes the address back to /#/...; /lien opens a link, as before.
+      // ---- static files, the shell, and the public pages that left this origin (ADR-0028, which supersedes
+      //      ADR-0022). / is the app: the shell, whose signed-out root opens the sign-in (web/views/router.js);
+      //      /app, the path the shell had while the landing held /, still serves it and writes the address back to
+      //      /#/...; /lien opens a link, as before. A public page this origin served answers 308 to the same page of
+      //      runward.dev, its query string kept (src/http/moved.js): the printed QR code of /stand keeps working.
       if (req.method === "GET" || req.method === "HEAD") {
         const a = assets.files.get(path);
         if (a) {
@@ -149,17 +152,18 @@ export function createHttp({ app, config, assets, version, health, log, clock })
           send(res, 200, { ...headers, "content-type": a.type, "cache-control": a.immutable ? "public, max-age=31536000, immutable" : "public, max-age=86400" }, req.method === "HEAD" ? undefined : a.bytes);
           return;
         }
-        const sitePage = assets.pages?.get(path);
-        if (sitePage) {
-          route = "site";
-          send(res, 200, { ...headers, "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }, req.method === "HEAD" ? undefined : sitePage);
-          log.info("http", { requestId, method: req.method, route, status: 200, ms: clock.now() - started });
-          return;
-        }
-        if (path === "/app" || path === "/lien") {
+        if (path === "/" || path === "/app" || path === "/lien") {
           route = "page";
           send(res, 200, { ...headers, "content-type": "text/html; charset=utf-8", "cache-control": "no-store" }, req.method === "HEAD" ? undefined : assets.page);
           log.info("http", { requestId, method: req.method, route, status: 200, ms: clock.now() - started });
+          return;
+        }
+        const moved = movedTo(path, url.search);
+        if (moved) {
+          route = "moved";
+          // an hour in a cache, not for ever: the table can change without waiting for every browser to forget it
+          send(res, 308, { ...headers, location: moved, "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=3600" }, req.method === "HEAD" ? undefined : `${moved}\n`);
+          log.info("http", { requestId, method: req.method, route, status: 308, ms: clock.now() - started });
           return;
         }
       }

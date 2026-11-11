@@ -525,7 +525,7 @@ test("the grants are compared in the service database only, by rw_owner; the adm
 
 test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
   const rows = await adminDb`select p.proname, p.proconfig from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`;
-  assert.equal(rows.length, 15);
+  assert.equal(rows.length, 21, "the fifteen of the floor and the six of the forge port (0007)");
   for (const r of rows) assert.deepEqual(r.proconfig, ["search_path=pg_catalog, rw, pg_temp"], r.proname);
 });
 

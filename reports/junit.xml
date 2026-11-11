@@ -107,6 +107,7 @@
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
 	<testcase name="the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot" classname="test"/>
+	<testcase name="the shell's links to the public site follow the reader's language: runward.dev in French, runward.dev/en in English, in the same tab" classname="test"/>
 	<testcase name="the foot carries the house's signature in the reader's language, signed in and signed out: « runward, par Another Framework », the name linking to the studio's page" classname="test"/>
 	<testcase name="planted control: one string of the frame left in French is found in the English frame" classname="test"/>
 	<testcase name="every screen of the shell, in each of its states, painted in English, carries no French word" classname="test"/>
@@ -209,6 +210,12 @@
 	<testcase name="C13: no `execute` passes inside a body, and a trigger's clause passes only in a create trigger statement (the four reproductions that dropped a table)" classname="test"/>
 	<testcase name="C13: a table moved to another schema is refused, a rename in effect" classname="test"/>
 	<testcase name="migrations: the one file exempt from the dynamic-statement rule is exempt by the sha256 of its bytes, and only as committed" classname="test"/>
+	<testcase name="the table: the eight public pages and the landing's other name, each to the same page of runward.dev; the English addresses to /en; the root is not in it" classname="test"/>
+	<testcase name="movedTo: the query string is kept, ?lang=en names the English page, one trailing slash is the same page; a path off the table is not moved" classname="test"/>
+	<testcase name="on a real socket: each address of the table answers 308 with its target and the app's headers, GET and HEAD; the answer is kept an hour, not for ever" classname="test"/>
+	<testcase name="on a real socket: the query string is kept as the URL parser wrote it, and nothing of a request reaches another origin or a second header" classname="test"/>
+	<testcase name="on a real socket: / is the app, not moved; a path off the table is answered as before; a write to a moved address is not a redirection; a foreign host is refused first" classname="test"/>
+	<testcase name="the shell's side: its signed-out root opens the sign-in, never / (the shell itself); the public site's origin is written once for the server and once for the shell" classname="test"/>
 	<testcase name="the object store is ok only when an object written to the bucket reads back: a bucket that does not exist, though it accepts writes, is down" classname="test"/>
 	<testcase name="the health check costs the store at most one write and one read per period, whatever the traffic; a failure is checked again sooner" classname="test"/>
 	<testcase name="/api/health answers 503 with objectStore down when the bucket does not read back" classname="test"/>
@@ -309,18 +316,18 @@
 	<testcase name="planted controls: a name never imported, a write to an imported name, a module that does not parse" classname="test"/>
 	<testcase name="planted controls: an inline script, a style element, a handler, a javascript: address, a foreign stylesheet, an odd style attribute" classname="test"/>
 	<testcase name="planted controls: each forbidden use in a script is seen, and a comment that names one is not" classname="test"/>
-	<testcase name="every page answers 200 with the app's headers: the same content security policy, no-store, text/html; HEAD has no body" classname="test"/>
+	<testcase name="no page of the site is served any more: / is the shell, each of the eight others answers a redirection, and the renderer still knows the nine" classname="test"/>
 	<testcase name="no page holds an inline script, an inline style element, an event handler or a javascript: address" classname="test"/>
-	<testcase name="every file a page names is a file of the closed list, served with its media type and named by its digest; the shell's own files for the structure and the layer, the same fonts" classname="test"/>
+	<testcase name="a rendered page names five files and nothing of another origin; none of the site's three files is served, under its digest or any name, and the shell names none" classname="test"/>
 	<testcase name="the closed list of the site is its scripts and stylesheets on disk: none off the list, none missing" classname="test"/>
 	<testcase name="a source of the site is never served: the template, the fragments, the data, the stylesheet by its plain name" classname="test"/>
 	<testcase name="the site's scripts write no HTML from a string, evaluate nothing, call no network and set no cookie" classname="test"/>
-	<testcase name="the texts served are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)" classname="test"/>
+	<testcase name="the texts rendered are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)" classname="test"/>
 	<testcase name="planted controls: one character changed in a fragment changes the texts; a pair left untreated and a slot left empty are refused" classname="test"/>
 	<testcase name="the data of the public view and the summary comes from one file, web/site/donnees.json, escaped as text; a state off the lexicon is refused" classname="test"/>
 	<testcase name="the contact is a mailto: to one address, and nothing is posted: no form action, no network call, the policy forbids a form's action" classname="test"/>
-	<testcase name="the stand page carries the QR code of web/site/pages/_qr.svg, its matrix unchanged since it was decoded to https://app.runward.dev/stand" classname="test"/>
-	<testcase name="the shell keeps its addresses: /app and /lien serve it, and an address of the app (#/...) is sent from the site to /app" classname="test"/>
+	<testcase name="the stand page carries the QR code of web/site/pages/_qr.svg, its matrix unchanged since it was decoded to https://app.runward.dev/stand; that address answers 308 to the stand page of runward.dev" classname="test"/>
+	<testcase name="the shell keeps its addresses: /, /app and /lien serve it; its signed-out root opens the sign-in; the site's first script, no longer served, is unchanged" classname="test"/>
 	<testcase name="the TLS server name stays the origin's while Host names the service's default hostname, and the app's 421 passes" classname="test"/>
 	<testcase name="a 404 from the router is a fault, never the app's guard: an unknown host does not reach the app" classname="test"/>
 	<testcase name="a 421 that is not the app's refusal, and any other status, are faults" classname="test"/>
@@ -357,9 +364,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 356 -->
+	<!-- tests 363 -->
 	<!-- suites 0 -->
-	<!-- pass 356 -->
+	<!-- pass 363 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

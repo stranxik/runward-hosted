@@ -10,7 +10,7 @@ import postgres from "postgres";
 import { migrate } from "../../scripts/migrate.mjs";
 import { postgresStore } from "../../src/adapters/store/postgres.js";
 import { scopedKey, GITHUB_ISSUER_KEY } from "../../src/domain/forge.js";
-import { harness, founder, gesture, send, pinnedRepository, sendToken, gitlabKey, gitlabClaims, registerIssuer, pinnedGitlab, INSTANCE, GITLAB_COM_KEY } from "../helpers.js";
+import { harness, founder, gesture, send, sha, pinnedRepository, sendToken, gitlabKey, gitlabClaims, registerIssuer, pinnedGitlab, INSTANCE, GITLAB_COM_KEY } from "../helpers.js";
 
 const ADMIN = process.env.PG_ADMIN_URL;
 if (!ADMIN) { test("PG_ADMIN_URL is set", () => assert.fail("PG_ADMIN_URL is required: this suite never skips silently")); }
@@ -46,8 +46,13 @@ before(async () => {
   const u = new URL(ADMIN); u.pathname = `/${DB}`;
   adminDb = postgres(u.toString(), { max: 1, onnotice: () => {} });
   h = harness({ store, realTime: true });
-  A = await founder(h, { prefix: "fa" });
-  B = await founder(h, { prefix: "fb" });
+  // rw_app cannot open a tenant: that is the operator's gesture, under rw_maint
+  const hm = harness({ store: maint, realTime: true });
+  const ta = randomBytes(32).toString("base64url"), tb = randomBytes(32).toString("base64url");
+  const oa = await hm.app.operator.openBootstrap({ hash: sha(Buffer.from(ta)) });
+  const ob = await hm.app.operator.openBootstrap({ hash: sha(Buffer.from(tb)) });
+  A = await founder(h, { prefix: "fa", token: ta, tenant: oa.tenant });
+  B = await founder(h, { prefix: "fb", token: tb, tenant: ob.tenant });
 });
 after(async () => {
   if (!ADMIN) return;
