@@ -66,6 +66,15 @@
 	<testcase name="the API contract served is the committed one: same routes, same refusals, same digest" classname="test"/>
 	<testcase name="planted control: one more route, or a route opened to the public, changes the digest" classname="test"/>
 	<testcase name="every row of every file of src/http/routes is in the route table, once" classname="test"/>
+	<testcase name="the date the service accepted an upload reaches the reading as the export's `at` label (spec §8): no « date non déclarée »" classname="test"/>
+	<testcase name="a later upload, accepted on the send path, dates the reading with its own acceptance; the first one's confirmation is said" classname="test"/>
+	<testcase name="the main screen is runward-fleet's reading, byte for byte, in the index's language and in the other one the viewer chooses" classname="test"/>
+	<testcase name="the five states, the reason, the refusals by kind with their text as written, the documents, the endorsements and the origin are all on the screen" classname="test"/>
+	<testcase name="« Vérifier par vous-même »: the command, built only from values that pass their pattern, never with an extension option" classname="test"/>
+	<testcase name="the checks received: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words" classname="test"/>
+	<testcase name="the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named" classname="test"/>
+	<testcase name="the service's lexicon: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
+	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue" classname="test"/>
 	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
 	<testcase name="the chain detects a changed entry, a gap and a reordering" classname="test"/>
 	<testcase name="the current upload: the highest run_number, then run_attempt; a regression of run_number opens an epoch" classname="test"/>
@@ -110,7 +119,7 @@
 	<testcase name="a write without this origin is refused before its body is read; a GET never writes" classname="test"/>
 	<testcase name="the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload, fleet, journal" classname="test"/>
 	<testcase name="the served assets: immutable names, views.js byte for byte the pinned one" classname="test"/>
-	<testcase name="the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app" classname="test"/>
+	<testcase name="the pin of ADR-0021: the decision reading is importable from the pinned package, and is the app's screen at #/ and #/decision" classname="test"/>
 	<testcase name="/api/version names the archive that is installed: the digest of the tarball npm installed, not a line of the lock alone" classname="test"/>
 	<testcase name="the served views say « niveau non atteint » and &amp;quot;level not met&amp;quot; for level-not-met, from the pinned package (author's rule)" classname="test"/>
 	<testcase name="a request target that does not parse, or names its own authority, is answered 404 and is not a server error" classname="test"/>
@@ -335,9 +344,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 334 -->
+	<!-- tests 343 -->
 	<!-- suites 0 -->
-	<!-- pass 334 -->
+	<!-- pass 343 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

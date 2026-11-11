@@ -8,8 +8,8 @@
 //     web/views/theme.js, and nothing else in the shell knows the theme.
 import { S, esc, setHTML, latEl, mobNavEl, bandEl, mobEl, stampEl, pubEl, topActEl, piedEl, parts, main, annonceEl } from "./base.js";
 import { when } from "./time.js";
-import { etq, MARK, go, act } from "./marks.js";
-import { comptes, triees, VERDICT_FR, verdictOf, nomCourt, MAILTO } from "./lexique.js";
+import { MARK, go, act, THEME_ICON } from "./marks.js";
+import { comptes, triees, verdictOf, nomCourt, MAILTO } from "./lexique.js";
 import { ask, confirmBox } from "./confirm.js";
 
 // --- the shell: the sidebar (desktop) and the menu (phone), the same links
@@ -18,9 +18,10 @@ function liensCoque(route, sub) {
   const exp = route === "acces" && /^export/.test(sub);
   const N = comptes();
   const a = (h, w, n, c) => `<a class="it" href="${h}"${cur(c)}>${w}${n != null ? `<span class="n0">${n}</span>` : ""}</a>`;
-  const principaux = [a("#/", "Flotte", S.index ? N.N : null, route === ""), a("#/envois", "Envois", S.status?.head?.seq ?? S.journal?.head?.seq ?? null, route === "envois"), a("#/acces", "Accès", null, route === "acces" && !exp), a("#/acces/export", "Export", null, exp)].join("");
-  const missions = triees().map((m) => { const [sh] = VERDICT_FR[verdictOf(m)] ?? ["void"]; return `<a class="it mis" href="#/mission/${esc(m.id)}"${cur(route === "mission" && sub === m.id)}>${etq(sh, nomCourt(m))}</a>`; }).join("");
-  const vues = [["vue", "Vue complète"], ["history", "Historique"], ["proof", "Preuve"], ["signatures", "Signatures"], ["pr", "Dans la PR"], ["sources", "Sources"]].map(([r, w]) => a(`#/${r}`, w, null, route === r)).join("");
+  const principaux = [a("#/", "Portefeuille", S.index ? N.N : null, route === "decision" && !sub), a("#/envois", "Envois", S.status?.head?.seq ?? S.journal?.head?.seq ?? null, route === "envois"), a("#/acces", "Accès", null, route === "acces" && !exp), a("#/acces/export", "Export", null, exp)].join("");
+  // the applications, each opening its decision reading, its state said by the reading's own mark (shape, then hue)
+  const missions = triees().map((m) => `<a class="it mis" href="#/decision/${esc(m.id)}"${cur((route === "decision" || route === "mission") && sub === m.id)}><span class="etq" data-state="${esc(verdictOf(m))}"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(nomCourt(m))}</span></span></a>`).join("");
+  const vues = [["flotte", "Tableau de bord"], ["vue", "Vue complète"], ["history", "Historique"], ["proof", "Preuve"], ["signatures", "Signatures"], ["pr", "Dans la PR"], ["sources", "Sources"]].map(([r, w]) => a(`#/${r}`, w, null, route === r)).join("");
   return { principaux, missions, vues };
 }
 function renderLat(route, sub) {
@@ -28,11 +29,11 @@ function renderLat(route, sub) {
   const s = S.session;
   setHTML(latEl, `<div class="lat-in"><a class="marque" href="#/" translate="no">${MARK}runward<span> hébergé</span></a>
     <nav aria-label="Vues du service">${L.principaux}</nav>
-    ${L.missions ? `<p class="sec">Missions</p><nav aria-label="Missions, dans l'ordre de ce qui attend">${L.missions}</nav>` : `<p class="sec">Missions</p><nav aria-label="Missions"><a class="it" href="#/">dans la flotte</a></nav>`}
-    <p class="sec">Vues runward-fleet</p><nav aria-label="Vues runward-fleet">${L.vues}</nav>
+    ${L.missions ? `<p class="sec">Applications</p><nav aria-label="Applications, refusées par le contrôle d'abord">${L.missions}</nav>` : `<p class="sec">Applications</p><nav aria-label="Applications"><a class="it" href="#/">dans le portefeuille</a></nav>`}
+    <p class="sec">Vues techniques</p><nav aria-label="Vues techniques">${L.vues}</nav>
     <div class="bas"><span><b>${esc(s.tenant.title)}</b><br>vous · ${esc(s.member.role === "owner" ? "propriétaire" : s.member.role)} · ${s.passkeys} passkey${s.passkeys > 1 ? "s" : ""}</span>
-      <span class="bas-act"><button class="lien-btn" type="button" data-do="logout">Se déconnecter</button><button class="theme" type="button" data-theme-btn aria-label="Changer de thème">thème</button></span></div></div>`);
-  setHTML(mobNavEl, `${L.principaux}${L.missions ? `<p class="sec">Missions</p>${L.missions}` : ""}<p class="sec">Vues runward-fleet</p>${L.vues}<button class="lien-btn" type="button" data-do="logout">Se déconnecter</button>`);
+      <span class="bas-act"><button class="lien-btn" type="button" data-do="logout">Se déconnecter</button><button class="theme" type="button" data-theme-btn aria-label="Changer de thème, clair ou sombre">${THEME_ICON}</button></span></div></div>`);
+  setHTML(mobNavEl, `${L.principaux}${L.missions ? `<p class="sec">Applications</p>${L.missions}` : ""}<p class="sec">Vues techniques</p>${L.vues}<button class="lien-btn" type="button" data-do="logout">Se déconnecter</button>`);
 }
 
 // ------------------------------------------------------------- banners and shell

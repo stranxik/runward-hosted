@@ -22,18 +22,24 @@ import { viewArrivee } from "./arrivee.js";
 import { viewDeclarer } from "./declarer.js";
 import { viewEnvois } from "./envois.js";
 import { viewFleet } from "./fleet.js";
+import { viewDecision } from "./decision.js";
 import { viewAcces } from "./acces.js";
 import { viewPanne } from "./panne.js";
 import { viewLegal } from "./legal.js";
 import { view404 } from "./introuvable.js";
 
-// The views of runward-fleet this app shows. The decision reading (`decision`, runward's ADR-0125) came with
-// the pin of ADR-0021 and is not a screen of this app yet: its route answers like any unknown one.
+// The views of runward-fleet this app shows. The decision reading (`decision`, runward's ADR-0125, pinned by
+// ADR-0021) is the app's own screen below, the one a signed-in member lands on (#/), with one application's
+// reading at #/decision/<id> (web/views/decision.js): the views' own `decision` route is never taken here.
 const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");
-/** The fleet's screens: the dashboard, a mission, and the views of the pinned runward-fleet this app shows. */
+/** The fleet's screens: the dashboard (#/flotte), a mission, and the views of the pinned runward-fleet this app shows. */
 const FLEET = { view: (sub, route) => viewFleet(route, sub ? decodeURIComponent(sub) : ""), reads: "fleet", signedIn: true };
+/** The decision reading: the portfolio at #/ and #/decision, an application at #/decision/<id>. It reads the index. */
+const DECISION = { view: (sub) => viewDecision(sub), reads: "fleet", signedIn: true };
 /** The screens, by route: its view (given the rest of the address), what it reads, whether it asks a session. */
 const SCREENS = {
+  "": DECISION,
+  decision: DECISION,
   entree: { view: (sub) => viewEntree(sub) },
   lien: { view: (sub) => viewLien(sub) },
   reprise: { view: (sub) => (sub ? null : viewReprise()) },
@@ -44,7 +50,7 @@ const SCREENS = {
   panne: { view: (sub) => viewPanne(sub) },
   legal: { view: (sub) => (sub ? null : viewLegal()) },
 };
-const isFleet = (route) => route === "" || route === "vue" || FLEET_ROUTES.includes(route);
+const isFleet = (route) => route === "vue" || route === "flotte" || FLEET_ROUTES.includes(route);
 const screenOf = (route) => (Object.hasOwn(SCREENS, route) ? SCREENS[route] : isFleet(route) ? FLEET : null);
 
 /** The reads of a screen at its opening: `key` names the opening (the same key is not read twice), `load` reads. */
@@ -78,7 +84,9 @@ export async function show() {
     else location.replace("#/entree/connexion");
     return;
   }
-  if (S.session && !S.session.arrivalDone && isFleet(route)) { location.replace("#/arrivee"); return; }
+  // before the first application is confirmed, the fleet's screens open the arrival; the decision reading opens
+  // as soon as the arrival is open (the second passkey, or the choice of one), with its empty state (the mock-up's)
+  if (S.session && !S.session.arrivalDone && (screen === DECISION ? !S.session.arrivalOpen : screen?.reads === "fleet")) { location.replace("#/arrivee"); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
   // the sidebar lists the missions from the index once this page has read it; a screen opened cold
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)

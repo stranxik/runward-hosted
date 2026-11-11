@@ -1,4 +1,5 @@
-// The dashboard of the fleet (signed in).
+// The dashboard of the fleet (signed in), at #/flotte: the uploads, the provenance and the activity. Since the
+// decision reading became the screen a member lands on (web/views/decision.js), it is one of the technical views.
 import { S, esc, short } from "./base.js";
 import { hm, DAY_FR } from "./time.js";
 import { go, etq, mk } from "./marks.js";
@@ -7,7 +8,7 @@ import { provLigne, jLigne, comptes, triees, verdictOf, chipOf, nomLong, cause, 
 export function viewFlotte() {
   const s = S.session;
   if (!S.index) {
-    return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "", html: `<div class="dash"><div class="titre-d"><div><h1>${esc(s.tenant.title)}</h1><p class="rv">${provLigne()}</p></div><div class="actions">${go("#/declarer", "Déclarer un dépôt")}</div></div>
+    return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "flotte", html: `<div class="dash"><div class="titre-d"><div><h1>${esc(s.tenant.title)}</h1><p class="rv">${provLigne()}</p></div><div class="actions">${go("#/declarer", "Déclarer un dépôt")}</div></div>
       <section class="sect"><h2>Aucune mission publiée.</h2><p class="note">Votre flotte compte les dépôts que vous déclarez, et seulement ceux-là. Une mission apparaît après son premier envoi confirmé.</p></section>
       ${S.status?.recent?.length ? `<section class="sect" aria-labelledby="h-act"><header><h2 id="h-act">Activité récente</h2><a href="#/envois">Tout le journal</a></header><ul class="journal-d">${S.status.recent.map(jLigne).join("")}</ul></section>` : ""}</div>` };
   }
@@ -28,7 +29,7 @@ export function viewFlotte() {
   const cpt = (v, n, chip) => { const id = first(v); return id ? `<a href="#/mission/${esc(id)}"><span class="v">${n}</span>${chip}</a>` : `<span class="cpt"><span class="v">${n}</span>${chip}</span>`; };
   const recent = S.status?.recent ?? [];
   const jour = recent[0]?.at ? DAY_FR.format(new Date(recent[0].at)) : "";
-  return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "", html: `<div class="dash">
+  return { title: "Flotte", key: "fleet", signed: "in", fleetRoute: "flotte", html: `<div class="dash">
     <div class="titre-d"><div><h1>${esc(s.tenant.title)}</h1><p class="rv">${provLigne()}</p></div>
       <div class="actions">${go("#/acces/export", "Exporter", { q: true })}${go("#/declarer", "Déclarer un dépôt")}</div></div>
     ${S.status?.quarantined ? `<p class="avert">${mk("inv", "non publié")} ${S.status.quarantined} envoi${S.status.quarantined > 1 ? "s" : ""} en quarantaine : la flotte montre le dernier index publié. <a href="#/envois">Voir les envois</a></p>` : ""}

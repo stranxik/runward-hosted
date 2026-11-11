@@ -155,7 +155,7 @@ test("the served assets: immutable names, views.js byte for byte the pinned one"
   assert.ok(js.includes(`from "${views}"`), "the shell imports the pinned views by their digest name");
 });
 
-test("the pin of ADR-0021: the decision reading is importable from the pinned package, and is not a screen of the app", async () => {
+test("the pin of ADR-0021: the decision reading is importable from the pinned package, and is the app's screen at #/ and #/decision", async () => {
   const views = await import("runward-fleet/views");
   const build = await import("runward-fleet");
   for (const name of ["decide", "renderDecision", "renderView", "renderNav", "ROUTES"]) assert.ok(name in views, `runward-fleet/views exports ${name}`);
@@ -171,7 +171,7 @@ test("the pin of ADR-0021: the decision reading is importable from the pinned pa
   const served = {};
   for (const f of MODULES) served[f] = await (await call("GET", `${folder}${f}`)).text();
   const js = served["views/router.js"];
-  assert.ok(js.includes('const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");'), "the shell leaves the decision route out");
+  assert.ok(js.includes('const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");'), "the views' own decision route is never taken: the app's screen is");
   for (const [f, text] of Object.entries(served)) assert.equal(/(?<!FLEET_)ROUTES\.includes\(|\.\.\.ROUTES\b/.test(text), false, `${f}: the router reads FLEET_ROUTES, never the views' own list`);
   assert.deepEqual(Object.keys(served).filter((f) => /\bROUTES\b/.test(served[f].replace(/FLEET_ROUTES/g, ""))).sort(), ["views/fleet-views.js", "views/router.js"], "no other module reads the views' own list");
   // the router itself, as served, run on the pinned ROUTES (the review of 3afe41d, C44: reading its source
@@ -184,15 +184,21 @@ test("the pin of ADR-0021: the decision reading is importable from the pinned pa
   const router = `${parts[1]}\n${js.slice(from, to)}`;
   assert.ok(router.includes("function resolve() {"));
   const screens = [...new Set(router.match(/\bview[A-Z]\w*/g))];
-  assert.ok(screens.includes("viewFleet"));
+  assert.ok(screens.includes("viewFleet") && screens.includes("viewDecision"));
   const location = { hash: "" };
   const resolve = new Function("ROUTES", "location", ...screens, `${router}\nreturn resolve;`)(views.ROUTES, location, ...screens.map((name) => (...args) => [name, ...args]));
   const at = (hash) => { location.hash = hash; return resolve(); };
-  for (const route of views.ROUTES.filter((r) => r !== "decision")) assert.deepEqual(at(`#/${route}`), ["viewFleet", route, ""], `the view ${route} is a screen of the app`);
-  assert.equal(views.ROUTES.filter((r) => r !== "decision").length, views.ROUTES.length - 1);
-  assert.deepEqual(at("#/"), ["viewFleet", "", ""]);
-  assert.equal(at("#/decision"), null, "the decision route answers like any unknown one");
-  assert.equal(at("#/decision/dropyour"), null);
+  // the technical views of runward-fleet: each a screen of the app; the dashboard moved to #/flotte
+  for (const route of views.ROUTES.filter((r) => r !== "decision" && r !== "")) assert.deepEqual(at(`#/${route}`), ["viewFleet", route, ""], `the view ${route} is a screen of the app`);
+  assert.equal(views.ROUTES.filter((r) => r !== "decision" && r !== "").length, views.ROUTES.length - 2);
+  assert.deepEqual(at("#/vue"), ["viewFleet", "vue", ""], "the views' fleet view, in full");
+  assert.deepEqual(at("#/flotte"), ["viewFleet", "flotte", ""], "the dashboard");
+  // the decision reading: the screen a member lands on, and one application's reading at a stable address
+  assert.deepEqual(at("#/"), ["viewDecision", ""]);
+  assert.deepEqual(at(""), ["viewDecision", ""]);
+  assert.deepEqual(at("#/decision"), ["viewDecision", ""]);
+  assert.deepEqual(at("#/decision/dropyour"), ["viewDecision", "dropyour"], "the application's id is given to the screen, which decodes it");
+  assert.deepEqual(at("#/decision/a%2Fb"), ["viewDecision", "a%2Fb"]);
   assert.equal(at("#/no-such-route"), null, "the control: an unknown route");
 });
 
