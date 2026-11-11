@@ -126,6 +126,35 @@ test("the frame follows the reader's language: in English, no French word in the
   assert.ok(frenchIn(fr).length > 20, "the detector sees French");
 });
 
+// ---- the public site (ADR-0028): runward.dev, French at /<page>, English at /en/<page>; the shell links to it in the
+//      reader's language, in the same tab, from the foot, the legal notice and the sign-in's « how to get in »
+test("the shell's links to the public site follow the reader's language: runward.dev in French, runward.dev/en in English, in the same tab", () => {
+  const links = (html) => [...html.matchAll(/<a\b[^>]*href="(https:\/\/runward\.dev[^"]*)"[^>]*>/g)].map((m) => m[0]);
+  const hrefs = (html) => links(html).map((a) => /href="([^"]*)"/.exec(a)[1]);
+  for (const [lang, home, legal] of [["fr", "https://runward.dev/", "https://runward.dev/mentions"], ["en", "https://runward.dev/en", "https://runward.dev/en/mentions"]]) {
+    state({ lang });
+    assert.equal(Lx.siteUrl(), home, lang);
+    assert.equal(Lx.siteUrl("mentions"), legal, lang);
+    assert.equal(Lx.siteUrl("stand"), lang === "en" ? "https://runward.dev/en/stand" : "https://runward.dev/stand", lang);
+    for (const signed of [true, false]) {
+      state({ lang }); if (!signed) S.session = null;
+      assert.deepEqual(hrefs(frame(signed, signed ? "decision" : "entree", "", {}).pied), [home], `${lang} ${signed}: the foot`);
+    }
+    state({ lang });
+    assert.deepEqual(hrefs(screens.legal().html), [legal], `${lang}: the legal notice`);
+    S.session = null;
+    assert.deepEqual(hrefs(screens.entree("sans-compte").html), [home], `${lang}: how to get in`);
+    // the same tab: no target on any of them
+    for (const a of [...links(frame(false, "entree", "", {}).pied), ...links(screens.legal().html), ...links(screens.entree("sans-compte").html)]) assert.equal(/\starget=/.test(a), false, a);
+  }
+  // no screen links to a public page of this origin: they answer a redirection now (src/http/moved.js)
+  const sources = MODULES.map((f) => readFileSync(join(WEB, f), "utf8")).join("\n");
+  assert.deepEqual([...sources.matchAll(/href=\\?"\/(pourquoi|comment|pour-qui|formats|donnees|stand|releve|mentions|index\.html)?["?#\\]/g)].map((m) => m[0]), []);
+  // planted control: the French address under the English reader is seen
+  state({ lang: "en" });
+  assert.notEqual(Lx.siteUrl("mentions"), "https://runward.dev/mentions");
+});
+
 // ---- the house's signature (ADR-0026): the same in every foot, "runward" in lower case, the house's name the link
 /** What is wrong with a foot's signature for `lang`; [] when it is the house's. */
 export function signatureFaults(html, lang) {

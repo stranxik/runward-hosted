@@ -1,10 +1,10 @@
-// The public site (ADR-0022): the landing at / and its eight pages, served by the app itself on a real socket. Each
-// page answers 200 with the app's own headers (the content security policy unchanged, no-store, text/html); every
-// file a page names is a file of the closed list, served with its media type and named by its digest; no page holds
-// an inline script, an inline style element, an event handler or a javascript: address; the site's scripts write no
-// HTML (no innerHTML, no other sink) and call no network; the contact is a mailto: to one address and posts nothing;
-// the texts served are the 325 validated ones, text for text; the data comes from one file; the shell keeps its
-// addresses (/app, /lien, /#/...). Each guard has a planted control.
+// The sources of the former public site (web/site/, ADR-0022), kept in the tree and no longer served (ADR-0028: the
+// public site is runward.dev; each former address answers a redirection, test/unit/moved.test.js). Until web/site/ is
+// removed, what the renderer writes is held as it was: no page holds an inline script, an inline style element, an
+// event handler or a javascript: address; the site's scripts write no HTML (no innerHTML, no other sink) and call no
+// network; the contact is a mailto: to one address and posts nothing; the texts rendered are the 325 validated ones,
+// text for text; the data comes from one file. And on a real socket: no page, no file and no source of the site is
+// served; the shell keeps its addresses (/, /app, /lien, /#/...). Each guard has a planted control.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -15,7 +15,8 @@ import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
 import { silentLog } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
-import { FONTS, SITE_FILES } from "../../src/http/assets.js";
+import { FONTS, SITE_FILES, buildAssets } from "../../src/http/assets.js";
+import { fleetPin } from "../../src/adapters/fleet/assembler.js";
 import { SITE_PAGES, renderSite, siteData, textsOf, textsTable } from "../../src/http/site.js";
 import { fakeAuthn, testJwk, sha, SEND_SHA } from "../helpers.js";
 
@@ -33,7 +34,8 @@ before(async () => {
 });
 after(() => new Promise((r) => c.http.server.close(r)));
 const get = (path, init) => fetch(`${base}${path}`, init);
-const pages = async () => Object.fromEntries(await Promise.all(PATHS.map(async (p) => [p, await (await get(p)).text()])));
+/** The nine pages as the renderer writes them (they were the served ones until ADR-0028), by their former path. */
+const pages = async () => Object.fromEntries(renderSite({ links: LINKS, data: siteData() }).pages);
 
 // ---- what a page may hold, written once and run on the served pages and on planted ones
 
@@ -80,23 +82,22 @@ test("planted controls: each forbidden use in a script is seen, and a comment th
   assert.deepEqual(scriptFaults("/* never innerHTML, never fetch() */\nel.replaceChildren(document.importNode(t.content, true)); // no innerHTML\n"), []);
 });
 
-test("every page answers 200 with the app's headers: the same content security policy, no-store, text/html; HEAD has no body", async () => {
+test("no page of the site is served any more: / is the shell, each of the eight others answers a redirection, and the renderer still knows the nine", async () => {
   const csp = (await get("/app")).headers.get("content-security-policy");
   assert.ok(csp.includes("script-src 'self'") && csp.includes("style-src-elem 'self'") && csp.includes("require-trusted-types-for 'script'") && csp.includes("trusted-types runward"));
-  for (const p of [...PATHS, "/index.html"]) {
-    const r = await get(p);
-    assert.equal(r.status, 200, p);
-    assert.equal(r.headers.get("content-type"), "text/html; charset=utf-8", p);
-    assert.equal(r.headers.get("cache-control"), "no-store", p);
+  const root = await get("/");
+  assert.equal(root.status, 200);
+  assert.equal(root.headers.get("content-security-policy"), csp, "/: the policy is the app's, unchanged");
+  const rootHtml = await root.text();
+  assert.match(rootHtml, /<script type="module" src="\/assets\/app\.[0-9a-f]{16}\/app\.js"><\/script>/, "/ is the shell");
+  assert.equal(/data-page="/.test(rootHtml), false, "/ is not a page of the site");
+  for (const p of PATHS.filter((x) => x !== "/")) {
+    const r = await get(p, { redirect: "manual" });
+    assert.equal(r.status, 308, p);
+    assert.equal(r.headers.get("location"), `https://runward.dev${p}`, p);
     assert.equal(r.headers.get("content-security-policy"), csp, `${p}: the policy is the app's, unchanged`);
-    assert.equal(r.headers.get("x-content-type-options"), "nosniff", p);
-    assert.equal(r.headers.get("referrer-policy"), "no-referrer", p);
-    assert.match(r.headers.get("runward-request-id"), /^r-[0-9a-f]{12}$/, p);
-    const h = await get(p, { method: "HEAD" });
-    assert.equal(h.status, 200, p);
-    assert.equal((await h.arrayBuffer()).byteLength, 0, `${p}: HEAD has no body`);
+    assert.equal(/data-page="/.test(await r.text()), false, `${p}: no page of the site in the answer`);
   }
-  assert.equal(await (await get("/index.html")).text(), await (await get("/")).text(), "/index.html is the landing");
   assert.deepEqual(SITE_PAGES.map(([p]) => p).sort(), [...PATHS].sort(), "the nine pages, and only these");
 });
 
@@ -104,32 +105,27 @@ test("no page holds an inline script, an inline style element, an event handler 
   for (const [p, html] of Object.entries(await pages())) assert.deepEqual(inlineFaults(html), [], p);
 });
 
-test("every file a page names is a file of the closed list, served with its media type and named by its digest; the shell's own files for the structure and the layer, the same fonts", async () => {
-  const shell = await (await get("/app")).text();
-  const shellCss = [...shell.matchAll(/href="(\/assets\/(?:famille|couche-runward-app)\.[0-9a-f]{16}\.css)"/g)].map((m) => m[1]);
-  assert.equal(shellCss.length, 2);
+test("a rendered page names five files and nothing of another origin; none of the site's three files is served, under its digest or any name, and the shell names none", async () => {
+  const shell = await (await get("/")).text();
   const named = new Set();
   for (const [p, html] of Object.entries(await pages())) {
     const refs = [...html.matchAll(/(?:href|src)="(\/[^"#]*)"/g)].map((m) => m[1]).filter((u) => u.startsWith("/assets/"));
-    assert.deepEqual(refs.slice(0, 2).length ? refs.filter((u) => u.endsWith(".css")).slice(0, 2) : [], shellCss, `${p}: the structure then the layer, the shell's very files`);
+    assert.deepEqual(refs.filter((u) => u.endsWith(".css")).slice(0, 2), [LINKS.famille, LINKS.couche], `${p}: the structure then the layer`);
     for (const u of refs) named.add(u);
     // nothing loaded from another origin: no script, stylesheet or image of a third party
     assert.equal(/<(?:script|link|img|iframe)\b[^>]*(?:src|href)="(?:https?:)?\/\//i.test(html), false, p);
   }
-  const expected = ["famille", "couche-runward-app", ...SITE_FILES.map(([f]) => f.split(".")[0])];
-  assert.deepEqual([...named].map((u) => u.replace(/^\/assets\/([a-z-]+)\.[0-9a-f]{16}\.(css|js)$/, "$1")).sort(), [...expected].sort(), "five files: the structure, the layer and the site's three");
-  for (const u of named) {
-    const r = await get(u);
-    assert.equal(r.status, 200, u);
-    assert.match(r.headers.get("content-type"), u.endsWith(".css") ? /^text\/css; charset=utf-8$/ : /^text\/javascript; charset=utf-8$/, u);
-    assert.match(r.headers.get("cache-control"), /immutable/, u);
-    const bytes = Buffer.from(await r.arrayBuffer());
-    assert.equal(u.slice(u.lastIndexOf(".", u.lastIndexOf(".") - 1) + 1, u.lastIndexOf(".")), sha(bytes).slice(0, 16), `${u}: named by its digest`);
-  }
+  assert.deepEqual([...named].sort(), Object.values(LINKS).sort(), "five files: the structure, the layer and the site's three");
   for (const [f] of SITE_FILES) {
-    const u = [...named].find((x) => x.startsWith(`/assets/${f.split(".")[0]}.`) && x.endsWith(`.${f.split(".")[1]}`));
-    assert.equal(sha(Buffer.from(await (await get(u)).arrayBuffer())), sha(readFileSync(`${WEB}site/${f}`)), `${f} byte for byte`);
+    const [name, ext] = f.split(".");
+    const digest = sha(readFileSync(`${WEB}site/${f}`)).slice(0, 16);
+    // the name it was served under until ADR-0028, then the names a guess would try
+    for (const u of [`/assets/${name}.${digest}.${ext}`, `/assets/${f}`, `/site/${f}`, `/${f}`]) assert.equal((await get(u)).status, 404, u);
+    assert.equal(shell.includes(`/assets/${name}.`), false, `the shell does not name ${f}`);
   }
+  const built = buildAssets({ pin: fleetPin({ lockFile: new URL("../../vendor/runward-fleet.lock.json", import.meta.url).pathname }), commit: "c0ffee" });
+  assert.deepEqual([...built.files.keys()].filter((u) => /\/assets\/(site|aiguillage)\./.test(u)), [], "no file of the site in the served list");
+  assert.equal("pages" in built, false, "no page of the site is built at start");
   // the fonts are the app's: the layer's faces, no other font file anywhere in the site
   const css = readFileSync(`${WEB}site/site.css`, "utf8");
   assert.equal(/@font-face|url\([^)]*\.woff2?\)/.test(css), false, "the site declares no font of its own");
@@ -142,7 +138,7 @@ test("the closed list of the site is its scripts and stylesheets on disk: none o
 });
 
 test("a source of the site is never served: the template, the fragments, the data, the stylesheet by its plain name", async () => {
-  for (const p of ["/pourquoi.html", "/index", "/stand/", "/gabarit.html", "/pages/_hero.html", "/web/site/pages/_hero.html", "/donnees.json", "/web/site/donnees.json", "/site/donnees.json",
+  for (const p of ["/pourquoi.html", "/index", "/stand.html", "/gabarit.html", "/pages/_hero.html", "/web/site/pages/_hero.html", "/donnees.json", "/web/site/donnees.json", "/site/donnees.json",
     "/textes_fr_en.tsv", "/web/site/site.js", "/site.js", "/assets/site.css", "/assets/site.js", "/assets/aiguillage.js", "/assets/site.0000000000000000.css", "/qr_stand.svg", "/pages/_qr.svg"]) {
     const r = await get(p);
     assert.equal(r.status, 404, p);
@@ -154,7 +150,7 @@ test("the site's scripts write no HTML from a string, evaluate nothing, call no 
   for (const [f] of SITE_FILES.filter(([f]) => f.endsWith(".js"))) assert.deepEqual(scriptFaults(readFileSync(`${WEB}site/${f}`, "utf8")), [], f);
 });
 
-test("the texts served are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)", async () => {
+test("the texts rendered are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)", async () => {
   const tsv = readFileSync(`${WEB}site/textes_fr_en.tsv`, "utf8");
   const rows = tsv.split("\n").filter(Boolean);
   assert.equal(rows.length, 325);
@@ -167,7 +163,7 @@ test("the texts served are the 325 validated ones, text for text, in French and 
   }
   // the renderer collects them in build.py's order: the table it gives is the file, byte for byte
   assert.equal(textsTable(renderSite({ links: LINKS, data: siteData() }).texts), tsv);
-  // and the served pages carry each of them, read back from their HTML: the French in the element, the English in its template
+  // and the rendered pages carry each of them, read back from their HTML: the French in the element, the English in its template
   const served = textsTable(Object.values(await pages()).flatMap((h) => textsOf(h))).split("\n").filter(Boolean);
   assert.deepEqual([...new Set(served)].sort(), [...rows].sort());
 });
@@ -208,7 +204,7 @@ test("the data of the public view and the summary comes from one file, web/site/
 test("the contact is a mailto: to one address, and nothing is posted: no form action, no network call, the policy forbids a form's action", async () => {
   const csp = (await get("/")).headers.get("content-security-policy");
   assert.match(csp, /(^|; )form-action 'none'(;|$)/);
-  for (const [p, html] of Object.entries(await pages())) {
+  for (const [p, html] of Object.entries(await pages())) { // the pages as rendered: none is served (ADR-0028)
     const mails = [...html.matchAll(/href="mailto:([^"?]*)/g)].map((m) => m[1]);
     assert.ok(mails.length >= 1, p);
     assert.deepEqual([...new Set(mails)], [CONTACT], p);
@@ -220,26 +216,31 @@ test("the contact is a mailto: to one address, and nothing is posted: no form ac
   assert.deepEqual(scriptFaults(js), []);
 });
 
-test("the stand page carries the QR code of web/site/pages/_qr.svg, its matrix unchanged since it was decoded to https://app.runward.dev/stand", async () => {
+test("the stand page carries the QR code of web/site/pages/_qr.svg, its matrix unchanged since it was decoded to https://app.runward.dev/stand; that address answers 308 to the stand page of runward.dev", async () => {
   const qr = readSite("pages/_qr.svg");
   const path = /<path d="([^"]+)" fill="currentColor"\/>/.exec(qr)[1];
   // decoded on 2026-11-11 with jsQR 1.4.0 (error correction included): https://app.runward.dev/stand, version 3, 29 modules
   // a matrix changed (a QR code generated again) changes this digest: decode the new one before changing it here
   assert.equal(sha(Buffer.from(path)), "2a7b4e50f0ca0417cec2ce61a939c7e01ffd832d48d7a593943e25ebfb9fde06");
   assert.equal([...path.matchAll(/M(\d+) (\d+)h1v1h-1z/g)].length, 423, "423 dark modules");
-  const stand = await (await get("/stand")).text();
+  const stand = (await pages())["/stand"];
   assert.ok(stand.includes(path), "the matrix is in the page");
   assert.match(stand, /aria-label="Code QR vers app\.runward\.dev\/stand" data-en-aria="QR code to app\.runward\.dev\/stand"/);
+  // the code is printed: what it holds is answered for as long as the paper exists (ADR-0028)
+  for (const p of ["/stand", "/stand/", "/stand?utm_source=qr"]) {
+    const r = await get(p, { redirect: "manual" });
+    assert.equal(r.status, 308, p);
+    assert.equal(r.headers.get("location"), `https://runward.dev/stand${p.includes("?") ? p.slice(p.indexOf("?")) : ""}`, p);
+  }
 });
 
-test("the shell keeps its addresses: /app and /lien serve it, and an address of the app (#/...) is sent from the site to /app", async () => {
-  for (const p of ["/app", "/lien"]) {
+test("the shell keeps its addresses: /, /app and /lien serve it; its signed-out root opens the sign-in; the site's first script, no longer served, is unchanged", async () => {
+  for (const p of ["/", "/app", "/lien"]) {
     const r = await get(p);
     assert.equal(r.status, 200, p);
     assert.match(await r.text(), /<script type="module" src="\/assets\/app\.[0-9a-f]{16}\/app\.js"><\/script>/, `${p} is the shell`);
   }
-  assert.doesNotMatch(await (await get("/")).text(), /\/assets\/app\.[0-9a-f]{16}\/app\.js/, "/ is the landing, not the shell");
-  // the landing's first script, run on the addresses a visitor may type
+  // the landing's first script as it was served (ADR-0022), run on the addresses a visitor could type: kept with web/site/
   const run = (hash, search = "", stored = null) => {
     const seen = { replaced: null, listeners: [], theme: null };
     const context = {
@@ -260,10 +261,11 @@ test("the shell keeps its addresses: /app and /lien serve it, and an address of 
   assert.equal(run("", "", "dark").theme, "dark", "the theme kept by the app is set before the first paint");
   assert.equal(run("", "?theme=dark").theme, "dark");
   assert.equal(run("", "", "light").theme, null);
-  // the shell writes the address back to /#/..., and its signed-out root opens the site
+  // the shell writes the address back to /#/..., and its signed-out root opens the sign-in, never / again (a loop)
   const app = readFileSync(`${WEB}app.js`, "utf8");
   assert.ok(app.includes('if (location.pathname === "/app") history.replaceState(null, "", `/${location.hash || "#/"}`);'));
   const router = readFileSync(`${WEB}views/router.js`, "utf8");
-  assert.ok(router.includes('else if (route === "") location.replace("/");'));
+  assert.ok(router.includes('else if (route === "") location.replace("#/entree");'));
+  assert.equal(/location\.replace\("\/"\)/.test(router), false, "the router never sends the shell to /, which is the shell");
   assert.ok(readFileSync(`${WEB}views/entree.js`, "utf8").includes('const v = V[sub || "connexion"];'), "#/entree alone opens the sign-in");
 });

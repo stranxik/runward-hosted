@@ -8,13 +8,11 @@
 // of values. The app's fonts (Geist, Geist Mono, SIL OFL 1.1) are served from web/fonts/, by a closed list:
 // nothing else in that folder, and nothing outside it, is ever served.
 //
-// The public site (ADR-0022): the landing at / and its pages are rendered here once, at start (src/http/site.js),
-// from web/site/; its three files (SITE_FILES) are served like the shell's, named by their digest, and its pages
-// link the very files the shell links for the family's structure and the app's layer, and the same fonts.
+// The public site left this origin (ADR-0028): its pages answer 308 to runward.dev (src/http/moved.js), and nothing
+// of web/site/ is served any more. Its sources stay in the tree until their removal, a change of its own.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { renderSite, siteData } from "./site.js";
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const WEB = new URL("../../web/", import.meta.url).pathname;
@@ -83,9 +81,10 @@ const SCRIPT = "text/javascript; charset=utf-8";
 const CSS = "text/css; charset=utf-8";
 
 /**
- * The files of web/site/ the public pages load, and only these: [file, its key in the pages' links, its media type].
- * The template, the page fragments and the data are read to render the pages; they are never served as files.
- * test/unit/site.test.js fails on a script or a stylesheet of web/site/ that is not listed.
+ * The scripts and the stylesheet of web/site/, the public site this origin served until ADR-0028: [file, its key in
+ * the pages' links, its media type]. None is served any more (test/unit/site.test.js asks each of them, 404); the list
+ * stays, with the sources, for the guards that still read them (test/unit/tokens.test.js, test/unit/site.test.js),
+ * until web/site/ is removed.
  */
 export const SITE_FILES = Object.freeze([
   ["site.css", "css", CSS],
@@ -154,10 +153,5 @@ export function buildAssets({ pin, commit }) {
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
     .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
     .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
-  // the public site: its files by digest, then its pages, rendered once from web/site/ and its one data file
-  const links = { famille, couche };
-  for (const [f, key, type] of SITE_FILES) { const [name, ext] = f.split("."); links[key] = add(name, ext, readFileSync(join(WEB, "site", f)), type); }
-  const pages = new Map(renderSite({ links, data: siteData() }).pages.map(([p, html]) => [p, Buffer.from(html)]));
-  pages.set("/index.html", pages.get("/"));
-  return { files, page, pages, viewsSha256: sha(views), viewsPath, modulesPath: folder };
+  return { files, page, viewsSha256: sha(views), viewsPath, modulesPath: folder };
 }
