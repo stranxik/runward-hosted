@@ -379,22 +379,27 @@ test("the roles gesture takes temporary objects away from the service's roles, a
 });
 
 // C28 (review of 2026-11-10): the level of rw_app and rw_maint at the hoster is ignored by OpenTofu after
-// creation, so nothing showed a right added to them by another hand. `roles --grants`, run after `migrate`
-// at each deploy, compares what the two roles may do IN EFFECT with the grant lines of the committed
-// snapshot. Each planted drift must be refused, named, and the base left as it was.
-test("the roles gesture, with --grants, refuses a base whose grants for rw_app or rw_maint are not the snapshot's", async () => {
+// creation, so nothing showed a right added to them by another hand. The gesture `grants`, run after
+// `migrate` at each deploy, compares what the two roles may do IN EFFECT with the grant lines of the
+// committed snapshot. It runs as rw_owner (scripts/grants.mjs), here as at the hoster: a role that is no
+// superuser, on its own URL, which names the service database. Each planted drift must be refused, named,
+// and the base left as it was.
+test("the grants gesture, as rw_owner, refuses a base whose grants for rw_app or rw_maint are not the snapshot's", async () => {
   process.env.RW_DATABASE = DB;
-  const { roles, expectedGrants } = await import("../../scripts/roles.mjs");
-  const u = new URL(ADMIN); u.pathname = `/${DB}`;
-  const run = () => roles(u.toString(), { log: () => {}, grants: true }).then((r) => r, (e) => ({ error: e.message }));
+  const { grants, expectedGrants } = await import("../../scripts/grants.mjs");
+  const { roles } = await import("../../scripts/roles.mjs");
+  const [owner] = await adminDb`select rolsuper, rolbypassrls, rolcreaterole from pg_roles where rolname = 'rw_owner'`;
+  assert.deepEqual({ ...owner }, { rolsuper: false, rolbypassrls: false, rolcreaterole: false }, "the comparison is read by a plain role, as at the hoster");
+  const run = () => grants(urlAs("rw_owner"), { log: () => {} }).then((r) => r, (e) => ({ error: e.message }));
   const committed = readFileSync(SNAPSHOT, "utf8");
   const sound = await run();
   assert.equal(sound.error, undefined, sound.error);
-  assert.equal(sound.grants, expectedGrants(committed).length, "it compared every grant line of the two roles");
+  assert.deepEqual(sound, { grants: expectedGrants(committed).length }, "it compared every grant line of the two roles");
   assert.ok(sound.grants > 60, "table, schema and database lines for both roles");
   const lines = [];
-  await roles(u.toString(), { log: (l) => lines.push(l), grants: true });
-  assert.match(lines.join(), /grants of rw_app and rw_maint are those of db\/schema\.snapshot\.txt/);
+  await grants(urlAs("rw_owner"), { log: (l) => lines.push(l) });
+  assert.equal(lines.length, 1);
+  assert.ok(lines[0].startsWith(`grants: the ${sound.grants} table, schema and database grants of rw_app and rw_maint are those of db/schema.snapshot.txt, no more, no fewer (read in the database ${DB})`), lines[0]);
   const planted = [
     ["a DELETE for the service", "grant delete on rw.upload to rw_app", "revoke delete on rw.upload from rw_app", /1 more than the snapshot \(rw\.upload rw_app DELETE\)/],
     ["the journal made updatable", "grant update on rw.ledger to rw_maint", "revoke update on rw.ledger from rw_maint", /1 more than the snapshot \(rw\.ledger rw_maint UPDATE\)/],
@@ -420,12 +425,102 @@ test("the roles gesture, with --grants, refuses a base whose grants for rw_app o
   // a snapshot that cannot stand as the reference is a refusal, never a pass
   const without = (re) => committed.split("\n").filter((l) => !re.test(l)).join("\n");
   for (const [what, text] of [["no table line for rw_maint", without(/^grant rw\.\S+ rw_maint /)], ["no schema line", without(/^grant schema /)], ["no database line", without(/^grant database /)], ["empty", ""]]) {
-    const r = await roles(u.toString(), { log: () => {}, grants: true, snapshot: text }).then(() => ({}), (e) => ({ error: e.message }));
+    const r = await grants(urlAs("rw_owner"), { log: () => {}, snapshot: text }).then(() => ({}), (e) => ({ error: e.message }));
     assert.match(r.error ?? "(no refusal)", /holds no (table|schema|database) grant line for rw_(app|maint)/, what);
   }
-  // without the flag (the call before `migrate`, on a base that may be behind), nothing is compared
+  // the administrator's gesture compares nothing (it runs before `migrate`, on a base that may be behind),
+  // and the option it had until 2026-11-11 is refused, never ignored
+  const u = new URL(ADMIN); u.pathname = `/${DB}`;
   await adminDb.unsafe("grant delete on rw.upload to rw_app");
-  try { assert.deepEqual(await roles(u.toString(), { log: () => {} }), { temporaryRevoked: true }); } finally { await adminDb.unsafe("revoke delete on rw.upload from rw_app"); }
+  try {
+    assert.deepEqual(await roles(u.toString(), { log: () => {} }), { temporaryRevoked: true });
+    await assert.rejects(roles(u.toString(), { log: () => {}, grants: true }), /roles takes no option grants/);
+  } finally { await adminDb.unsafe("revoke delete on rw.upload from rw_app"); }
+});
+
+// Two deploys stopped on the comparison on 2026-11-11, when it was a flag of the administrator's gesture.
+// Run 42930736032: the administrator's URL names the hoster's default database (`rdb`), and the comparison
+// read the tables and schemas of the database it was connected to: none, so every table and schema line
+// was "fewer". Run 43018993884: given a session of its own on the service database, the administrator was
+// refused by the server, "permission denied for database": at the hoster a user connects only where it
+// holds a privilege, and rw_admin holds none on the service database. The production shape, here: another,
+// empty database of the same server, and an administrator that may connect there and not to the service's.
+test("the grants are compared in the service database only, by rw_owner; the administrator needs no access to it", async () => {
+  process.env.RW_DATABASE = DB;
+  const { grants, expectedGrants, effectiveGrants, compareGrants } = await import("../../scripts/grants.mjs");
+  const { roles } = await import("../../scripts/roles.mjs");
+  const other = `rw_test_rdb_${randomBytes(4).toString("hex")}`;
+  await admin.unsafe(`create database ${other}`);
+  const elsewhere = (user) => { const u = new URL(ADMIN); if (user) { u.username = user; u.password = ""; } u.pathname = `/${other}`; return u.toString(); };
+  const run = (url = urlAs("rw_owner")) => grants(url, { log: () => {} }).then((r) => r, (e) => ({ error: e.message }));
+  const committed = readFileSync(SNAPSHOT, "utf8");
+  const expected = expectedGrants(committed);
+  const NOT_HERE = /nothing compared, refused \(the comparison reads the service database \S+ and no other\)$/;
+  try {
+    const ownerElsewhere = postgres(elsewhere("rw_owner"), { max: 1, onnotice: () => {} });
+    try {
+      // the control: what an unguarded read finds in the other database, which rw_owner can reach. No table
+      // and no schema of the service: every such line of the snapshot would be "fewer" (68 on 2026-11-11),
+      // the line production wrote
+      const [{ n, db }] = await ownerElsewhere`select count(*)::int as n, current_database() as db from pg_namespace where nspname in ('rw', 'rw_meta')`;
+      assert.deepEqual({ n, db }, { n: 0, db: other }, "rw_owner is connected to the other database, which holds no schema of the service");
+      const read = await effectiveGrants(ownerElsewhere);
+      const notDatabase = expected.filter((l) => !l.startsWith("grant database "));
+      assert.ok(notDatabase.length >= 68 && notDatabase.length < expected.length, "table and schema lines, and database lines beside them");
+      assert.deepEqual(read.sort(), expected.filter((l) => l.startsWith("grant database ")).sort(), "read there: the database lines (asked by name), and not one table or schema line");
+      // the comparison, on that same session: refused for where it is, before the catalog is read, never a count
+      const there = await compareGrants(ownerElsewhere, committed).then(() => "(no refusal)", (e) => e.message);
+      assert.match(there, new RegExp(`^the session meant for the service database ${DB} is on another one: nothing compared, refused`));
+      assert.match(there, NOT_HERE);
+      assert.equal(/fewer|more than/.test(there), false, "no count of grants");
+    } finally { await ownerElsewhere.end(); }
+    // the gesture, given a URL that names the other database (rw_owner's, or the administrator's as the
+    // hoster has it): refused, in one line, never a count
+    for (const url of [elsewhere("rw_owner"), elsewhere()]) {
+      const r = await run(url);
+      assert.match(r.error ?? "(no refusal)", new RegExp(`^the URL given for the comparison of the grants names another database than ${DB}: nothing compared, refused`));
+      assert.match(r.error, NOT_HERE);
+      assert.equal(r.error.includes("\n") || /fewer|more than/.test(r.error), false, "one line, no count of grants");
+    }
+    // a table of the same name in the OTHER database, with a right in excess: it is not the service's, and
+    // the gesture on the owner's own URL does not see it
+    await admin.unsafe(`grant create on database ${other} to rw_owner`);
+    const planted = postgres(elsewhere("rw_owner"), { max: 1, onnotice: () => {} });
+    try { await planted.unsafe("create schema rw; create table rw.upload (x int); grant usage on schema rw to rw_app; grant delete on rw.upload to rw_app"); } finally { await planted.end(); }
+    assert.deepEqual(await run(), { grants: expected.length }, "the other database's objects are not read");
+    assert.match((await run(elsewhere("rw_owner"))).error ?? "(no refusal)", NOT_HERE, "and that database is still refused, now that it holds a schema rw");
+    // production's shape: an administrator that may NOT connect to the service database, and whose URL
+    // names the other one. Its own gesture passes (what it reads is the server's), the owner's comparison
+    // passes, and a drift is still refused: nothing here needs the administrator in the service database
+    const stand = `rw_test_admin_${randomBytes(4).toString("hex")}`;
+    await adminDb.unsafe(`create role ${stand} login createrole; grant rw_resolve to ${stand} with admin option`);
+    await adminDb.unsafe(`revoke connect on database ${DB} from public`);
+    try {
+      const refusedSession = postgres(urlAs(stand), { max: 1, onnotice: () => {} });
+      const denied = await refusedSession`select 1`.then(() => "(connected)", (e) => e.message).finally(() => refusedSession.end());
+      assert.match(denied, /permission denied for database/, "the stand-in administrator cannot connect to the service database, as rw_admin at the hoster");
+      assert.deepEqual(await roles(elsewhere(stand), { log: () => {} }), { temporaryRevoked: true }, "roles, from the other database, as that administrator");
+      assert.deepEqual(await run(), { grants: expected.length }, "grants, as rw_owner, on the service database");
+      for (const [what, plant, undo, said] of [
+        ["a DELETE for the service", "grant delete on rw.upload to rw_app", "revoke delete on rw.upload from rw_app", /: 1 more than the snapshot \(rw\.upload rw_app DELETE\)$/],
+        ["a grant of db/grants.sql gone", "revoke select on rw.reader from rw_maint", "grant select on rw.reader to rw_maint", /: 1 fewer \(rw\.reader rw_maint SELECT\)$/],
+      ]) {
+        await adminDb.unsafe(plant);
+        try { assert.match((await run()).error ?? "(no refusal)", said, what); } finally { await adminDb.unsafe(undo); }
+      }
+      // the comparison asked of a role that cannot connect to the service database (what `roles --grants`
+      // was at the hoster): said as such, in one line, never a count
+      const r = await run(urlAs(stand));
+      assert.match(r.error ?? "(no refusal)", new RegExp(`^cannot connect to the service database ${DB} as ${stand}: .*permission denied for database`), r.error);
+      assert.equal(r.error.includes("\n"), false, "one line");
+      assert.equal(/fewer|more than/.test(r.error), false, "no count of grants");
+    } finally {
+      await adminDb.unsafe(`grant connect on database ${DB} to public`);
+      await adminDb.unsafe(`revoke rw_resolve from rw_owner granted by ${stand}`).catch(() => {});
+      await adminDb.unsafe(`drop owned by ${stand}; drop role ${stand}`);
+    }
+    assert.deepEqual(await run(), { grants: expected.length }, "the base is as it was");
+  } finally { await admin.unsafe(`drop database if exists ${other} with (force)`); }
 });
 
 test("catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order", async () => {
