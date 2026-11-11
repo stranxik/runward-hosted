@@ -47,7 +47,7 @@ export const MOTS = {
       you: (role, n) => `vous · ${role} · ${n} passkey${s(n)}`, owner: "propriétaire",
       signOut: "Se déconnecter",
       legal: "Mentions légales", privacy: "Confidentialité", security: "Sécurité", times: "heures affichées à l'heure de Paris, avec leur décalage",
-      // the house's signature, the same on every product (ADR-0026): `studio` is the link to the studio's page
+      // the house's signature, the same on every product (ADR-0026): `studio` is the link to the studio's page (STUDIO, below)
       signature: (studio) => `runward, par ${studio}`,
       scrollTable: "Tableau, défilable",
       recovery: (opened, usable) => `<b>Une reprise d'accès est en cours pour votre compte.</b> Ouverte le ${opened}, elle deviendra utilisable le ${usable}. Si ce n'est pas vous, annulez-la.`,
@@ -716,6 +716,14 @@ export const MOTS = {
 
 /** The words of the reader's language. */
 export const mots = () => MOTS[lang()];
+/**
+ * The address of the house's studio page, behind its name in the foot's signature (ADR-0026), by the reader's language:
+ * written here and nowhere else. `depuis` says where the reader comes from, for that page's display only. The same
+ * page in both languages for now; the English one will be https://anotherframework.dev/en/studio.html?depuis=runward.
+ * It is an address, not a word: it stays out of MOTS, whose English values are held free of French.
+ */
+const STUDIO = { fr: "https://anotherframework.dev/studio.html?depuis=runward", en: "https://anotherframework.dev/studio.html?depuis=runward" };
+export const studioUrl = () => STUDIO[lang()];
 
 // The values the service writes in French, said in the reader's language (the API is unchanged): a fleet's title when
 // it is the store's default, the product's French name (src/adapters/store/tables.js); a passkey's provider when the
