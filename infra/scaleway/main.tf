@@ -173,6 +173,9 @@ locals {
   db_host  = var.database_host != "" ? var.database_host : local.pn.ip
   db_port  = local.pn.port
   # a password may hold any character: it is URL-encoded in the connection URL
+  # admin names the hoster's default database: `roles` acts on what the whole server shares, from any
+  # database. rw_admin holds no privilege on the service database (none is declared below) and the hoster
+  # refuses it there: the comparison of the grants runs as rw_owner (scripts/grants.mjs, 2026-11-11)
   db_url = { for k, v in {
     admin    = { user = "rw_admin", credential = var.operator_db_password_admin, database = "rdb" }
     rw_owner = { user = "rw_owner", credential = var.operator_db_password_rw_owner, database = local.database }
@@ -299,7 +302,9 @@ resource "scaleway_rdb_user" "rw_maint" {
   depends_on          = [scaleway_rdb_user.rw_app] # one operation at a time on the instance
 }
 
-# Privileges on runward_hosted. The API offers none, readonly, readwrite, all, and nothing finer:
+# Privileges on runward_hosted. The API offers none, readonly, readwrite, all, and nothing finer. The
+# hoster refuses a connection to a database from a user that holds no privilege on it (observed for
+# rw_admin on 2026-11-11). rw_admin has none here and needs none: `roles` works from the default database.
 #   rw_owner "all": CONNECT, CREATE (the migrations create the schemas rw and rw_meta, and own them);
 #   rw_app, rw_maint "readonly": the smallest level that carries CONNECT; its table rights apply to the
 #   schema public, which the service does not use. Everything in the schema rw comes from db/grants.sql.
@@ -314,11 +319,14 @@ resource "scaleway_rdb_user" "rw_maint" {
 # deploy, through the operator's gateway, the deploy stopping before the service switches:
 #   - `roles` (rw_admin), before `migrate`: the two roles exist, log in, are no superuser, create no role
 #     or database, do not bypass row level security, and may CONNECT;
-#   - `roles` with grants (rw_admin), after `migrate`: what the two roles may do IN EFFECT (their own
-#     grants, PUBLIC's, a membership's) on every table of the schemas rw and rw_meta, USAGE and CREATE on
-#     those two schemas, CONNECT and CREATE on the database, is exactly the grant lines of
-#     db/schema.snapshot.txt, no more, no fewer (scripts/roles.mjs; test/pg/isolation.test.js plants each
-#     kind of drift);
+#   - `grants` (rw_owner), after `migrate`: what the two roles may do IN EFFECT (their own grants,
+#     PUBLIC's, a membership's) on every table of the schemas rw and rw_meta, USAGE and CREATE on those
+#     two schemas, CONNECT and CREATE on the database, is exactly the grant lines of
+#     db/schema.snapshot.txt, no more, no fewer (scripts/grants.mjs; test/pg/isolation.test.js plants
+#     each kind of drift). It runs as rw_owner because the catalog of the service database is read from a
+#     session on that database, and a user connects only where it holds a privilege: rw_owner does
+#     ("all", below), rw_admin does not (deploy run 43018993884, 2026-11-11: "permission denied for
+#     database"), and is given none for this;
 #   - `isolation` (rw_app), after the smoke: no row crosses between the two witness tenants.
 # What is NOT checked: their rights on the schema public and on any other schema (the service has nothing
 # there; the hoster's preset applies there), on functions and on sequences, and TEMPORARY on the database
