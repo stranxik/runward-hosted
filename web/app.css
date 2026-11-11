@@ -265,7 +265,8 @@ body:not(.connecte) main:not(.hero-g){ max-width:calc(880px + 2 * var(--gut)); }
    5. The sign-in: a page of the public site
    ============================================================================================================ */
 main.hero-g{ grid-template-columns:minmax(0,1fr); gap:40px; align-items:center; align-content:center; padding-top:36px; padding-bottom:64px; }
-.hero-t{ display:grid; gap:22px; justify-items:start; min-width:0; }
+/* the text stands above the haze of the window beside it (which runs past its own box, and under the text on a phone) */
+.hero-t{ position:relative; z-index:1; display:grid; gap:22px; justify-items:start; min-width:0; }
 .hero-t > *{ margin:0; }
 .hero-e{ position:relative; isolation:isolate; min-width:0; }
 @media (min-width:980px){ main.hero-g{ grid-template-columns:minmax(0,1.04fr) minmax(0,.96fr); gap:clamp(36px, 5vw, 84px); padding-top:56px; padding-bottom:96px; } }

@@ -225,22 +225,22 @@ test("the checks received: accepted and not accepted, by date, each refusal with
 
 test("the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named", () => {
   const empty = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null } });
-  assert.ok(empty.html.includes('<p class="h2">Aucune application dans votre portefeuille.</p>'));
+  assert.ok(empty.html.includes('<h2 class="h2">Aucune application dans votre portefeuille.</h2>'));
   assert.ok(empty.html.includes("Branchez une application : son prochain contrôle arrivera ici, avec une phrase et de quoi le vérifier."));
   assert.ok(empty.html.includes('data-go="#/declarer">Brancher une première application</button>'));
   const emptyEn = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null }, lang: "en" });
-  assert.ok(emptyEn.html.includes('<p class="h2">No application in your portfolio.</p>'));
+  assert.ok(emptyEn.html.includes('<h2 class="h2">No application in your portfolio.</h2>'));
   const waiting = paint("", { index: null, status: { lines: [{ mission: "m", repository: "stranxik/<b>x</b>", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] }], quarantined: 0, recent: [], head: null, index: null } });
   assert.ok(waiting.html.includes("En attente du premier contrôle."));
   assert.ok(waiting.html.includes("stranxik/&lt;b&gt;x&lt;/b&gt;"), "a name is data, escaped");
   // every application removed: the index carries no mission, and the screen says the same as before the first one
   const none = paint("", { index: { ...P.index, missions: [] }, status: { lines: [], quarantined: 0, recent: [], head: null, index: P.status.index } });
-  assert.ok(none.html.includes('<p class="h2">Aucune application dans votre portefeuille.</p>'));
+  assert.ok(none.html.includes('<h2 class="h2">Aucune application dans votre portefeuille.</h2>'));
   // a repository declared beside published ones: the portfolio names it, its first check awaited
   const status = JSON.parse(JSON.stringify(P.status));
   status.lines.push({ mission: "next-one", repository: "stranxik/next", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] });
   const beside = paint("", { status }).html;
-  assert.ok(beside.includes(views.renderView(P.index, "decision")) && beside.includes('<p id="h-attente"><b>En attente du premier contrôle.</b></p>') && beside.includes("stranxik/next"));
+  assert.ok(beside.includes(views.renderView(P.index, "decision")) && beside.includes('<h2 class="h2" id="h-attente">En attente du premier contrôle.</h2>') && beside.includes("stranxik/next"));
   assert.equal(paint("").html.includes("h-attente"), false, "the control: nothing awaited, no such section");
   assert.equal(paint("", { status: null }).html.includes("Chargement"), true, "loading");
   const err = paint("", { fleetError: { status: 503, requestId: "req-1" } });

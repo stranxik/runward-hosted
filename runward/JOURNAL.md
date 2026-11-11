@@ -296,3 +296,16 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session. Proposed: ADR-0027.
 - Blocked / to dig, for the author's eye: the read of the portfolio on the return to the tab (ADR-0027, point 8) is a behaviour added for the moment "a check arrives"; without it that moment only plays after a gesture that reads again.
 - Next: the measure at rest (one command, in the pull request), then the author's review.
+
+## 2026-11-11 - the review of the design's pull request: nothing blocking, seven points corrected
+
+- Done: the adversarial review of PR #21 at `c331858` found nothing blocking; its points are corrected on this branch.
+  - The phone menu closes when the window crosses 900 px: opened under 900 px, then the window widened or a tablet turned, the stylesheet hid its button, its veil and its sheet while the screen stayed inert, ignoring every tap with nothing visible. `closeMenuWhenWide` (the shell) listens to the width and closes it. While the menu is open, the trail's line, the banners and the foot are inert with the screen.
+  - On the sign-in the text stands above the haze of the window beside it. The haze, a box of its own stacking order, was painted over the title's column where it runs past its window: on a phone the sentence under the title was tinted by it.
+  - The legal notice says what is so of the contact address: the mail is received by the publisher through `contact@runward.dev`, which forwards it to his mailbox; neither the site nor the service stores any of it. The publisher stays named.
+  - The signature's link of the public site carries `?depuis=runward` as the shell's.
+  - ADR-0025 names the six tokens added to the layer for the scene (the calm haze's opacity, the four periods of the haze's lobes, the period of the dots) and says what the test allows: the loading line and the sign-in's scene, its grid of dots included.
+  - « En attente du premier contrôle » and the empty portfolio's title are headings again. An unused icon and two unused fields are removed.
+- Evidence: `test/unit/menu.test.js`, 2 cases (the menu open makes the screen, the trail's line, the banners and the foot inert; a window that crosses 900 px closes it; planted: without the listener the screen stays inert). On the real server, one browser, the sign-in at three frames of the haze's drift with every loop stopped there: the darkest pixel of the sentence under the title is its ink (23,23,23) at each frame, at 390 and 1440 px; with the text put back under the haze on purpose it is tinted at 390 px (31,32,32, then 34,34,35, then 50,33,20). A first pass of the same change, before the author's Mac restarted and its working copy was lost, had measured the sign-in's ten states at 1440, 390 and 360 px, light and dark, at the same three frames: 180 measures, 0 text under AA of 3264, the lowest 5.8:1; it is not run again (one browser at most, the changed screens only). `test/unit/site.test.js` (325 texts, the link), `test/unit/decision.test.js` (the headings).
+- Decided: nothing by the session.
+- Next: the committed reports regenerated in the reference environment (next commit); the same corrections reach the motion's branch by a merge.

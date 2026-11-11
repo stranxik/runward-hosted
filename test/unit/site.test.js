@@ -162,8 +162,8 @@ test("the texts served are the 325 validated ones, text for text, in French and 
   assert.ok(rows.includes("runward, par Another Framework\trunward, by Another Framework"));
   for (const [p, html] of renderSite({ links: LINKS, data: siteData() }).pages) {
     const foot = html.slice(html.indexOf('<footer class="pied">'), html.lastIndexOf("</footer>")); // the page's own foot (the printed statement has one of its own, before)
-    assert.match(foot, /<span class="signe" data-t="\d+">runward, par <a href="https:\/\/anotherframework\.dev\/studio\.html">Another Framework<\/a><\/span>/, `${p}: the signature in the foot`);
-    assert.match(html, /<template id="en-\d+">runward, by <a href="https:\/\/anotherframework\.dev\/studio\.html">Another Framework<\/a><\/template>/, `${p}: its English`);
+    assert.match(foot, /<span class="signe" data-t="\d+">runward, par <a href="https:\/\/anotherframework\.dev\/studio\.html\?depuis=runward">Another Framework<\/a><\/span>/, `${p}: the signature in the foot`);
+    assert.match(html, /<template id="en-\d+">runward, by <a href="https:\/\/anotherframework\.dev\/studio\.html\?depuis=runward">Another Framework<\/a><\/template>/, `${p}: its English`);
   }
   // the renderer collects them in build.py's order: the table it gives is the file, byte for byte
   assert.equal(textsTable(renderSite({ links: LINKS, data: siteData() }).texts), tsv);

@@ -9,7 +9,7 @@ export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&a
 const $ = (id) => document.getElementById(id);
 export const main = $("main"), stampEl = $("stamp"), latEl = $("lat"), mobNavEl = $("mobnav"), menuBtnEl = $("menub"), colonneEl = $("colonne");
 export const filEls = [$("fil"), $("fil2")], langueEls = [$("langue"), $("langue2")];
-export const bandEl = $("bandeaux"), piedEl = $("pied"), annonceEl = $("annonce");
+export const bandEl = $("bandeaux"), piedEl = $("pied"), annonceEl = $("annonce"), barTelEl = $("bartel");
 export const short = (h) => (h ? `${String(h).slice(0, 12)}…` : "");
 
 // The state of the page, one object: what was read (session, index, status, access, journal) and what a

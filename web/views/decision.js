@@ -258,8 +258,8 @@ export function viewDecision(sub) {
     // nothing to read: no index yet, or every application removed. The mock-up's empty state, in a window whose bar
     // says where one is; the declared ones, if any, are named while their first check is awaited
     const body = waiting.length
-      ? `<p class="h2">${esc(w.waitTitle)}</p><p class="sous">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct)}${go("#/declarer", w.connect, { q: true })}</div>`
-      : `<p class="h2">${esc(w.emptyTitle)}</p><p class="sous">${esc(w.emptyText)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`;
+      ? `<h2 class="h2">${esc(w.waitTitle)}</h2><p class="sous">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct)}${go("#/declarer", w.connect, { q: true })}</div>`
+      : `<h2 class="h2">${esc(w.emptyTitle)}</h2><p class="sous">${esc(w.emptyText)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`;
     return { ...base, title: w.portfolio, html: frame(lang, `${tete(w.title)}${fenetre(esc(w.portfolio), body, { tag: "div", h: "p", cls: "lecture-vide" })}`) };
   }
   const idx = S.index && S.index.lang !== lang ? { ...S.index, lang } : S.index;
@@ -268,7 +268,7 @@ export function viewDecision(sub) {
     // the portfolio: runward-fleet's reading, whose parts the layer lays out (web/app.css): the title and its lede,
     // the tiles in a glass window whose bar is the line « Mis à jour le… », the applications on a sheet
     const updated = st.index ? `<p class="lecture-maj scr-bar num">${w.updated(when(st.index.publishedAt, { sec: false }))}</p>` : `<p class="lecture-maj scr-bar">${esc(w.portfolio)}</p>`;
-    const pending = waiting.length ? `<section class="bandeau lecture-attendues" aria-labelledby="h-attente"><p id="h-attente"><b>${esc(w.waitTitle)}</b></p><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct, { q: true })}</div></section>` : "";
+    const pending = waiting.length ? `<section class="bandeau lecture-attendues" aria-labelledby="h-attente"><h2 class="h2" id="h-attente">${esc(w.waitTitle)}</h2><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct, { q: true })}</div></section>` : "";
     return { ...base, title: w.portfolio, html: frame(lang, `${setAside}${updated}${renderView(idx, "decision")}${pending}
       <div class="actions lecture-actions">${go("#/declarer", w.connect, { q: true })}</div>`, "port") };
   }
