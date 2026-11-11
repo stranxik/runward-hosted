@@ -4,7 +4,7 @@ import { S, mobEl, main, parts } from "./base.js";
 import { api, loadSession } from "./api.js";
 import { say } from "./shell.js";
 import { FIELD_OF } from "./declarer.js";
-import { setReadingLang } from "./decision.js";
+import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write } from "./gestures.js";
 
@@ -17,16 +17,16 @@ document.addEventListener("click", async (e) => {
   if (what === "signin") return signIn(k);
   if (what === "redeem") return redeem(k);
   if (what === "addpk") return addPasskey(k);
-  if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; forgetReads(); location.hash = "#/entree/sortie"; say("Vous êtes déconnecté."); return; }
+  if (what === "logout") { await api("POST", "/api/v0/auth/logout", {}); S.session = null; S.index = null; forgetReads(); location.hash = "#/entree/sortie"; say(mots().done.signedOut); return; }
   if (what === "reload") { location.reload(); return; }
-  // the language of the decision reading, kept per viewer; the screen is painted again from what it already read
-  if (what === "lecture-lang") { setReadingLang(k); S.focusKey = `lecture-lang:${k}`; return rerender(); }
+  // the reader's language, kept per viewer: the screen and its frame are painted again from what they already read
+  if (what === "lecture-lang") { setLang(k); S.focusKey = `lecture-lang:${k}`; return rerender(); }
   if (what === "reload-screen") { S.error = null; S.session = undefined; forgetReads(); location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
   if (what === "copy") {
-    const pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");
-    try { await navigator.clipboard.writeText(pre.textContent + "\n"); b.textContent = "Copié"; if (out) out.textContent = "L'extrait est dans votre presse-papiers."; }
-    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = "Extrait sélectionné : copiez-le avec ⌘C ou Ctrl+C."; }
-    setTimeout(() => { b.textContent = "Copier l'extrait"; }, 2400);
+    const W = mots(), pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");
+    try { await navigator.clipboard.writeText(pre.textContent + "\n"); b.textContent = W.done.copied; if (out) out.textContent = W.done.inClipboard; }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = W.done.selected; }
+    setTimeout(() => { b.textContent = W.workflow.copy; }, 2400);
     return;
   }
   if (what === "scroll") { mobEl.open = false; document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
@@ -35,14 +35,14 @@ document.addEventListener("click", async (e) => {
   if (what === "confirm") return confirmGesture(k);
   if (what === "single") {
     const r = await write("POST", "/api/v0/passkeys/single", {}, { gesture: "passkey-single", object: "" });
-    if (r.ok) say("Choix écrit au journal : une seule passkey. Les étapes suivantes sont ouvertes.");
+    if (r.ok) say(mots().done.single);
     await refreshScreen(); location.hash = "#/arrivee"; return;
   }
   if (what === "gesture" && k.startsWith("confirm:")) {
     const id = k.slice(8);
     const r = await write("POST", `/api/v0/repositories/${id}/confirm`, {}, { gesture: "repository-confirm", object: id });
     if (!r.ok) { S.failed = k; return rerender(); }
-    say(r.data?.quarantine ? "Dépôt confirmé. Son premier envoi reste en quarantaine." : "Dépôt confirmé. La mission est publiée.");
+    say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
     await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? "#/" : "#/arrivee"; return;
   }
   if (what === "export") {
@@ -62,8 +62,8 @@ main.addEventListener("submit", async (e) => {
     const consent = f.elements.content.checked;
     const body = { name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
     const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: S.formValues.repo.toLowerCase() } : {});
-    if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: "La vérification n'a pas abouti. Rien n'a changé.", action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
-    S.formError = null; S.formValues = null; say("Dépôt déclaré, en attente du premier envoi.");
+    if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: mots().common.verifyFailed, action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
+    S.formError = null; S.formValues = null; say(mots().done.declared);
     const onArrival = parts().route === "arrivee";
     await refreshScreen();
     location.hash = onArrival ? "#/arrivee" : `#/declarer/attente/${r.data.id}`;
@@ -73,7 +73,7 @@ main.addEventListener("submit", async (e) => {
     const remove = [...f.querySelectorAll('input[name="remove"]:checked')].map((x) => x.value);
     const body = { workflow: val("wf"), defaultBranch: val("branch") || "main", addMissions: val("mission") ? [{ id: val("mission"), path: val("path") || "." }] : [], removeMissions: remove, knowingSendsStay: remove.length > 0 };
     const r = await write("PATCH", `/api/v0/repositories/${id}`, body);
-    if (!r.ok) { const x = r.data ? r : { message: "La vérification n'a pas abouti. Rien n'a changé.", action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
-    S.formError = null; say("Dépôt modifié."); await refreshScreen(); location.hash = "#/acces";
+    if (!r.ok) { const x = r.data ? r : { message: mots().common.verifyFailed, action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
+    S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = "#/acces";
   }
 });

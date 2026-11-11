@@ -1,16 +1,18 @@
 // Outage, offline, slow start.
 import { S, esc } from "./base.js";
 import { mk, reqNote, act, head } from "./marks.js";
+import { mots } from "./lexique.js";
 
 export function viewPanne(sub) {
+  const W = mots(), P = W.panne, C = W.common;
   const r = S.error;
   const V = {
-    "": ["Service injoignable", "Le service ne répond pas.", `<p class="face">${mk("inv", "injoignable")} La page n'a pas pu lire votre session. Vos données ne sont pas perdues.${reqNote(r)}</p><div class="actions">${act("reload-screen", "Réessayer")}</div>
-      <p class="note">Côté CI : l'étape d'envoi réessaie, puis le dit dans le résumé du job sans faire échouer votre CI. Un envoi qui n'est pas parti se renvoie en relançant le job.</p>`],
-    "hors-ligne": ["Hors ligne", "Votre navigateur est hors ligne.", `<p class="face">${mk("void", "hors ligne")} Aucune vérification par passkey n'est lancée tant que la connexion n'est pas revenue. Ce qui est affiché reste lisible.</p><div class="actions">${act("reload-screen", "Réessayer")}</div>`],
-    lent: ["Réveil lent", "Le service met plus de temps que d'habitude.", `<p class="face">Le service redémarre après une période sans visite ; cela prend d'habitude quelques secondes, et cette fois plus de 20.</p><div class="charge" role="progressbar" aria-label="En attente du service"></div><div class="actions">${act("reload-screen", "Réessayer")}</div>`],
+    "": [P.down.title, P.down.h1, `<p class="face">${mk("inv", P.down.mk)} ${P.down.face}${reqNote(r)}</p><div class="actions">${act("reload-screen", C.retry)}</div>
+      <p class="note">${P.down.note}</p>`],
+    "hors-ligne": [P.offline.title, P.offline.h1, `<p class="face">${mk("void", P.offline.mk)} ${P.offline.face}</p><div class="actions">${act("reload-screen", C.retry)}</div>`],
+    lent: [P.slow.title, P.slow.h1, `<p class="face">${P.slow.face}</p><div class="charge" role="progressbar" aria-label="${esc(P.slow.label)}"></div><div class="actions">${act("reload-screen", C.retry)}</div>`],
   };
-  const v = V[sub];
+  const v = Object.hasOwn(V, sub) ? V[sub] : null;
   if (!v) return null;
-  return { title: v[0], key: "panne", signed: "any", html: `${head("runward hébergé · état du service", "lu sur /api/health")}<h1 class="v">${esc(v[1])}</h1>${v[2]}` };
+  return { title: v[0], key: "panne", signed: "any", html: `${head(P.head, P.headR)}<h1 class="v">${esc(v[1])}</h1>${v[2]}` };
 }

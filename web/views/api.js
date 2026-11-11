@@ -1,13 +1,16 @@
 // The API, same origin only, and the reads of each screen. The budget of architecture §6 (4 reads at most
 // per screen) is held here and in the router: a screen reads through one of these loaders, once per opening.
 import { S, COMMIT } from "./base.js";
+import { lang } from "./lexique.js";
 
 export async function api(method, path, body) {
   let res;
   const started = Date.now();
   const slow = setTimeout(() => { if (!S.slow) { S.slow = true; render(); } }, 20_000);
   try {
-    res = await fetch(path, { method, credentials: "same-origin", headers: body !== undefined ? { "content-type": "application/json" } : {}, body: body !== undefined ? JSON.stringify(body) : undefined });
+    // the reader's language: the service already says its refusals in the one Accept-Language names (src/http/server.js)
+    const headers = { "accept-language": lang(), ...(body !== undefined ? { "content-type": "application/json" } : {}) };
+    res = await fetch(path, { method, credentials: "same-origin", headers, body: body !== undefined ? JSON.stringify(body) : undefined });
   } catch {
     clearTimeout(slow);
     return { ok: false, status: 0, network: true, refusal: navigator.onLine === false ? "offline" : "network" };

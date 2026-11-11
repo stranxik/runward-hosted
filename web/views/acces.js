@@ -3,6 +3,7 @@
 // adds its file there and one line to SECTIONS; the sub-screens (#/acces/<sub>) are named below the same way.
 import { S, esc } from "./base.js";
 import { head, mk, reqNote, act, loadingView } from "./marks.js";
+import { mots, titreFlotte } from "./lexique.js";
 import { sectionPasskeys } from "./acces/passkeys.js";
 import { sectionSessions } from "./acces/sessions.js";
 import { sectionDepots } from "./acces/depots.js";
@@ -22,11 +23,12 @@ export function viewAcces(sub) {
   if (sub === "effacer") return viewEffacer();
   if (sub === "ajout") return viewAjout();
   if (sub) return null;
+  const W = mots(), A = W.acces, C = W.common;
   const a = S.access;
-  if (S.accessError) return { title: "Accès", key: "acces", signed: "in", html: `${head("accès", "")}<h1 class="v">${mk("inv", "non affiché")} Accès ne s'affiche pas.</h1><p class="face">Le service n'a pas répondu.${reqNote(S.accessError)}</p><div class="actions">${act("reload-screen", "Réessayer")}</div>` };
-  if (!a) return loadingView("Accès");
-  return { title: "Accès", key: "acces", signed: "in", html: `${head(`accès · ${esc(S.session.tenant.title)}`, "toute modification demande une passkey récente, ou une vérification par geste")}
-    <h1 class="v">Qui entre, et qui envoie.</h1>
-    <p class="face lede">Vos passkeys et vos sessions ouvrent la lecture. Les dépôts déclarés sont les seuls à pouvoir écrire dans votre flotte.</p>
+  if (S.accessError) return { title: A.title, key: "acces", signed: "in", html: `${head(A.head, "")}<h1 class="v">${mk("inv", C.notShown)} ${A.h1Error}</h1><p class="face">${C.serviceSilent}${reqNote(S.accessError)}</p><div class="actions">${act("reload-screen", C.retry)}</div>` };
+  if (!a) return loadingView(A.title);
+  return { title: A.title, key: "acces", signed: "in", html: `${head(A.headTenant(esc(titreFlotte(S.session.tenant.title))), A.headR)}
+    <h1 class="v">${A.h1}</h1>
+    <p class="face lede">${A.lede}</p>
     ${SECTIONS.map((s) => s(a)).join("\n    ")}` };
 }
