@@ -114,8 +114,10 @@ export function smokeHostFaults(text, scripts = npmScripts()) {
 }
 
 /** What is wrong with the way deploy.yml checks the database rights and the service's host:
- *   - `roles` is called again, with grants, right after `migrate`, in the same step, which has no `if:`
- *     and no `continue-on-error:` (C28: the comparison with db/schema.snapshot.txt needs the migrated base);
+ *   - `grants` is called right after `migrate`, in the same step, which has no `if:` and no
+ *     `continue-on-error:` (C28: the comparison with db/schema.snapshot.txt needs the migrated base; the
+ *     gesture takes no argument, and `roles '{"grants":true}'`, its form until 2026-11-11, is refused by
+ *     the gateway, so it does not count);
  *   - the step that reads the service's container at the hoster compares vars.RW_SERVICE_HOST with the
  *     hostname the hoster reports, before it writes its outputs (C31: a refusal there leaves `previous`
  *     empty, so the rollback job does not run). */
@@ -123,8 +125,8 @@ export function deployChecksFaults(text) {
   const out = [];
   const steps = jobsOf(text).jobs.flatMap((j) => j.steps);
   const weakened = (s) => /^\s*(?:if|continue-on-error):/m.test(s);
-  const grants = steps.filter((s) => /scripts\/operator-call\.sh migrate[ \t]*\n\s*scripts\/operator-call\.sh roles '\{"grants":true\}'[ \t]*(?:\n|$)/.test(s));
-  if (!grants.length || grants.some(weakened)) out.push("no step compares the grants of rw_app and rw_maint with the snapshot right after migrate (scripts/operator-call.sh roles '{\"grants\":true}', without if: or continue-on-error:)");
+  const grants = steps.filter((s) => /scripts\/operator-call\.sh migrate[ \t]*\n\s*scripts\/operator-call\.sh grants[ \t]*(?:\n|$)/.test(s));
+  if (!grants.length || grants.some(weakened)) out.push("no step compares the grants of rw_app and rw_maint with the snapshot right after migrate (scripts/operator-call.sh grants, without if: or continue-on-error:)");
   const host = steps.filter((s) => /scripts\/service-host-check\.sh "\$RW_SERVICE_HOST" <<<"\$svc"[ \t]*\n/.test(s) && /RW_SERVICE_HOST:\s*"?\$\{\{\s*vars\.RW_SERVICE_HOST\s*\}\}"?/.test(s));
   if (!host.length || host.some(weakened)) out.push("no step compares vars.RW_SERVICE_HOST with the hostname the hoster reports for the service's container (scripts/service-host-check.sh, without if: or continue-on-error:)");
   else if (host.some((s) => { const w = s.indexOf("GITHUB_OUTPUT"); return w !== -1 && w < s.indexOf("service-host-check.sh"); })) out.push("the comparison of vars.RW_SERVICE_HOST with the hoster's hostname comes after the step wrote its outputs (a refusal must leave the rollback targets empty)");

@@ -220,10 +220,12 @@ test("the guard: a workflow that runs the smoke gives it vars.RW_SERVICE_HOST an
     refused(deploy.replace("    environment: production\n    permissions: { contents: read }\n    outputs:", '    environment: production\n    env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}" }\n    permissions: { contents: read }\n    outputs:'),
       /deploy\.yml: the job deploy holds a secret in its own env, before its refusal/, "a secret in the refusing job's env");
     // C28 and C31: the two comparisons of deploy.yml cannot be dropped, weakened or moved
-    const grants = "          scripts/operator-call.sh roles '{\"grants\":true}'\n";
+    const grants = "          scripts/operator-call.sh grants\n";
     assert.ok(deploy.includes(`          scripts/operator-call.sh migrate\n${grants}`));
     refused(deploy.replace(grants, ""), /deploy\.yml: no step compares the grants of rw_app and rw_maint with the snapshot right after migrate/, "the grants' comparison removed");
     refused(deploy.replace(`          scripts/operator-call.sh migrate\n${grants}`, `${grants}          scripts/operator-call.sh migrate\n`), /deploy\.yml: no step compares the grants/, "the grants compared before migrate");
+    // the form of 2026-11-10, which the gateway now refuses (roles takes no argument), is not a comparison
+    refused(deploy.replace(grants, "          scripts/operator-call.sh roles '{\"grants\":true}'\n"), /deploy\.yml: no step compares the grants/, "the comparison asked of roles, as rw_admin");
     const hostCheck = '          scripts/service-host-check.sh "$RW_SERVICE_HOST" <<<"$svc"\n';
     assert.ok(deploy.includes(hostCheck));
     refused(deploy.replace(hostCheck, ""), /deploy\.yml: no step compares vars\.RW_SERVICE_HOST with the hostname the hoster reports/, "the host's comparison removed");

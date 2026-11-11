@@ -62,10 +62,10 @@ test("a call without a valid operator token is refused, journalled, and starts n
     // an unknown gesture is not revealed to a caller without the token
     assert.equal((await t.call("/gestures/no-such", { token: null })).status, 401);
     // the schedule's path reaches the idempotent daily gestures only
-    for (const name of ["roles", "migrate", "isolation", "open-bootstrap", "maintenance"]) assert.equal((await t.call(`/scheduled/${name}`, { token: null })).status, 401, name);
+    for (const name of ["roles", "migrate", "grants", "isolation", "open-bootstrap", "maintenance"]) assert.equal((await t.call(`/scheduled/${name}`, { token: null })).status, 401, name);
     assert.equal(seen.length, 0, "no child was started");
     const refused = t.lines.filter((l) => l.event === "operator.refused");
-    assert.equal(refused.length, 10);
+    assert.equal(refused.length, 11);
     assert.ok(refused.every((l) => l.status === 401 && !JSON.stringify(l).includes(TOKEN.slice(0, 8))), "the journal names the refusal, never a token");
   } finally { await t.close(); }
 });
@@ -76,6 +76,9 @@ test("each gesture runs under its own role: the child receives that role's URL a
     const expect = {
       roles: ["ADMIN_URL", URLS.RW_OPERATOR_URL_ADMIN, false],
       migrate: ["MIGRATE_URL", URLS.RW_OPERATOR_URL_OWNER, false],
+      // the comparison of the grants runs under the migration role: at the hoster the administrator cannot
+      // connect to the service database (deploy run 43018993884), and its URL never reaches this child
+      grants: ["MIGRATE_URL", URLS.RW_OPERATOR_URL_OWNER, false],
       isolation: ["DATABASE_URL", URLS.RW_OPERATOR_URL_APP, false],
       retention: ["DATABASE_URL", URLS.RW_OPERATOR_URL_MAINT, true],
       "verify-chains": ["DATABASE_URL", URLS.RW_OPERATOR_URL_MAINT, true],
@@ -92,6 +95,10 @@ test("each gesture runs under its own role: the child receives that role's URL a
       assert.ok(!Object.keys(raw.env).some((k) => k.startsWith("RW_OPERATOR_")), `${name}: no gateway variable crosses`);
       assert.equal(childEnv(name, ENV)[as], url, `${name}: the URL of ${GESTURES[name].role}`);
     }
+    assert.deepEqual({ role: GESTURES.grants.role, argv: GESTURES.grants.argv, args: GESTURES.grants.args, scheduled: GESTURES.grants.scheduled }, { role: "rw_owner", argv: ["scripts/grants.mjs"], args: {}, scheduled: undefined });
+    assert.ok(GESTURES.grants.timeoutMs <= 2 * 60_000, "a read of the catalog: a short deadline");
+    assert.equal(GESTURES.roles.role, "rw_admin");
+    assert.equal(Object.values(childEnv("grants", ENV)).includes(URLS.RW_OPERATOR_URL_ADMIN), false, "the administrator's URL is not in the comparison's environment");
     // the scheduled path runs the same gesture, under the same role, without the token
     rmSync(REPORT_FILE, { force: true });
     const s = await t.call("/scheduled/retention", { token: null });
@@ -152,11 +159,15 @@ test("arguments: a closed list per gesture, each checked, passed as argv (never 
   assert.throws(() => argvOf("open-bootstrap", { hash: "x; rm -rf /" }), /expected form/);
   assert.throws(() => argvOf("open-recovery", { hash, tenant }), /needs member/);
   assert.throws(() => argvOf("migrate", { dir: "/tmp" }), /takes no argument dir/);
-  // roles, after migrate, compares the grants with the snapshot (C28): one boolean, nothing else
+  // the grants are compared with the snapshot (C28) by a gesture of their own, under rw_owner; neither it
+  // nor roles takes an argument, and the form roles had until 2026-11-11 is refused, never ignored
   assert.deepEqual(argvOf("roles", {}), ["scripts/roles.mjs"]);
-  assert.deepEqual(argvOf("roles", { grants: true }), ["scripts/roles.mjs", "--grants"]);
-  assert.throws(() => argvOf("roles", { grants: "yes" }), /grants is a boolean/);
+  assert.deepEqual(argvOf("grants", {}), ["scripts/grants.mjs"]);
+  assert.throws(() => argvOf("roles", { grants: true }), /roles takes no argument grants/);
+  assert.throws(() => argvOf("roles", { grants: false }), /roles takes no argument grants/, "even a false one");
   assert.throws(() => argvOf("roles", { snapshot: "/tmp/x" }), /takes no argument snapshot/);
+  assert.throws(() => argvOf("grants", { snapshot: "/tmp/x" }), /grants takes no argument snapshot/);
+  assert.throws(() => argvOf("grants", { database: "rdb" }), /grants takes no argument database/);
   assert.throws(() => argvOf("maintenance", { on: true, off: true }), /exactly one/);
   assert.throws(() => argvOf("maintenance", { reason: "a\nb", on: true }), /expected form/);
   const seen = [];
@@ -167,6 +178,12 @@ test("arguments: a closed list per gesture, each checked, passed as argv (never 
     assert.deepEqual(await bad.json(), { error: "arguments" }, "a code; the reason is in the gateway's log");
     assert.match(t.lines.find((l) => l.event === "operator.refused").detail.reason, /hash is not in the expected form/);
     assert.equal(seen.length, 0);
+    // the call the deploy made until 2026-11-11: answered 400, said in the log, and no child started
+    const old = await t.call("/gestures/roles", { body: { args: { grants: true } } });
+    assert.equal(old.status, 400);
+    assert.deepEqual(await old.json(), { error: "arguments" });
+    assert.equal(t.lines.filter((l) => l.event === "operator.refused").at(-1).detail.reason, "roles takes no argument grants");
+    assert.equal(seen.length, 0, "roles did not run with an argument it ignored");
     const r = await t.call("/gestures/reset-access", { body: { args: { hash, tenant } } });
     assert.equal(r.status, 200);
     assert.deepEqual(seen[0].argv, ["src/operator.js", "reset-access", "--hash", hash, "--tenant", tenant]);

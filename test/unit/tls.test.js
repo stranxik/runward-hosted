@@ -159,7 +159,7 @@ test("database TLS in production: verify-full with the authority, or the service
 
 test("database TLS: every PostgreSQL client of the tree goes through the verifying configuration", async () => {
   // A script that builds its own `ssl` (a mode string, or { ca, rejectUnauthorized } without the identity
-  // check) is the defect coming back: scripts/roles.mjs, migrate.mjs and isolation-deployed.mjs call
+  // check) is the defect coming back: scripts/roles.mjs, grants.mjs, migrate.mjs and isolation-deployed.mjs call
   // migrationTls, the store takes databaseTls. The only exemption is the CI image smoke's administrator on
   // the loopback interface, where no network is crossed.
   const { readdirSync, readFileSync: read } = await import("node:fs");
