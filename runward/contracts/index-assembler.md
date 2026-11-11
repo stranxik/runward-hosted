@@ -4,7 +4,7 @@
 
 **Contract version**: v0
 **Port type**: secondary (driven by the application)
-**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@d05b5974, archive sha256 `fff95065…2337`; pinned by ADR-0002, re-pinned on main by ADR-0018, then at this commit by ADR-0021, proposed)
+**Known adapters**: `src/adapters/fleet/assembler.js` (runward-fleet 0.46.0 at main@d0528149, archive sha256 `addcaa2d…2f84`; pinned by ADR-0002, re-pinned on main by ADR-0018, at main@d05b5974 by ADR-0021, then at this commit by ADR-0024, proposed)
 
 ## Business intent
 
@@ -60,7 +60,7 @@ The same inputs give the same bytes with the same archive of runward-fleet; anot
 
 - **Versioned**: the runward-fleet version and archive digest are recorded on each published index (`fleet_index`). The archive digest names the build; the version alone does not (ADR-0021).
 - **Additive by default**: `runward-fleet-index/0` is read tolerantly and never extended here.
-- **Expand then contract**: a new runward-fleet archive is pinned by a new ADR, which measures whether the bytes change; a published index is never rebuilt by a re-pin, it keeps its bytes and its archive digest for replay.
+- **Expand then contract**: a new runward-fleet archive is pinned by a new ADR, which measures whether the bytes change; a published index is never rebuilt by a re-pin, it keeps its bytes and its archive digest for replay. An index of an earlier archive is read by the pinned views as it is (ADR-0024: measured, every view renders; its refusals are shown one by one until the next publication, which carries the grouping by text).
 - **Consumer-driven verification**: `test/unit/repositories.test.js` replays every published index, and checks that an index another archive built is reported `other-archive`, never matched and never said different; `test/unit/pin.test.js` checks that such a label counts only when the lock and the chained journal both know it (anything else is `label-refused`, never a pass), the replay's three exits, the witness reader's rule, and that `fleetPin` refuses an install that is not the pinned archive (npm's recorded integrity, then every file against the lock's `files`); `test/unit/http.test.js` checks the served `views.js` is the pinned one, that the router answers the views' `decision` route like an unknown one, and that `/api/version` serves the sha256 of the tarball npm installed.
 - **Provenance**: `/api/version` serves the version, commit, archive digest and views digest.
 

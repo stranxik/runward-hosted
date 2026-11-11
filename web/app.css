@@ -433,6 +433,7 @@ body:not(.connecte) details.mob{ display:none; }
 .lecture [data-reading] [data-role="title"]{ font-size:clamp(28px,2.6vw,36px); font-weight:500; letter-spacing:var(--ls-h2); line-height:1.15; margin:0 0 6px; }
 .lecture [data-role="lede"]{ font-size:15px; color:var(--text-2); margin:0 0 18px; max-width:70ch; }
 .lecture [data-role="note"]{ font-size:13px; color:var(--text-2); margin:0 0 6px; max-width:70ch; }
+.lecture [data-view="portfolio"] > [data-role="note"]{ max-width:none; } /* the order the applications are listed in: one line where it fits */
 .lecture [data-role="links"]{ font-size:14px; color:var(--text-2); margin:6px 0 0; max-width:none; }
 .lecture [data-role="links"] a{ color:var(--text); }
 .lecture [data-role="back"]{ display:none; } /* the bar's trail says the way back */
@@ -486,14 +487,30 @@ body:not(.connecte) details.mob{ display:none; }
 .lecture [data-view="application"] > section{ border:1px solid var(--line); border-radius:var(--r-panel); padding:14px 16px 6px; margin:18px 0 0; }
 .lecture [data-view="application"] > section h2{ font-size:15px; font-weight:500; letter-spacing:0; margin:0 0 10px; }
 .lecture [data-view="application"] > section h3{ font-size:14px; font-weight:500; color:var(--text-2); margin:12px 0 8px; }
-.lecture [data-role="problems"] ol{ list-style:none; padding:0; margin:0 0 6px; }
-.lecture [data-role="problem"]{ margin:0 0 14px; padding:0 0 12px; border-bottom:1px solid var(--line); }
-.lecture [data-role="problem"]:last-child{ border-bottom:0; }
+/* the refusals (runward's ADR-0128): by kind, each with its n / N; within a kind, by the check's text, shown once
+   and folded (the first of the page open), then where each refusal it stands for is, behind a second fold when
+   there are several. <details> folds: no script. A refusal alone (an index built before the grouping) reads the same. */
+.lecture [data-role="problems"] [data-role="refusal-kinds"]{ list-style:none; padding:0; margin:0 0 6px; }
+.lecture [data-role="refusal-kind"]{ margin:0; padding:14px 0; border-top:1px solid var(--line); }
+.lecture [data-role="refusal-kind"]:first-child{ border-top:0; padding-top:0; }
+.lecture [data-role="refusal-text"]{ margin:8px 0 0; }
+.lecture [data-role="refusal-text"] + [data-role="refusal-text"]{ margin-top:14px; }
+.lecture [data-reading] summary{ cursor:pointer; width:fit-content; max-width:100%; padding:3px 0; border-radius:var(--r-mark); }
 .lecture [data-role="sentence"]{ font-size:15px; line-height:1.45; font-weight:500; margin:0 0 6px; }
 .lecture [data-role="detail"]{ background:var(--term); color:var(--term-ink); border-radius:var(--r-thumb); padding:8px 10px; margin:6px 0 0; }
-.lecture [data-role="detail-label"]{ font-size:12px; color:var(--term-soft); margin:0 0 4px; }
-.lecture [data-role="location"]{ font-size:12px; color:var(--term-soft); margin:0 0 4px; overflow-wrap:anywhere; }
-.lecture [data-role="location"] code{ word-break:normal; overflow-wrap:anywhere; }
+.lecture [data-role="detail-label"]{ font-size:12px; line-height:1.5; color:var(--term-soft); margin:0 0 4px; }
+.lecture details[data-role="detail"]{ padding:5px 10px; }
+.lecture details[data-role="detail"] > [data-role="detail-label"]{ margin:0; }
+.lecture details[data-role="detail"][open] > [data-role="detail-label"]{ margin:0 0 4px; }
+.lecture details[data-role="detail"][open]{ padding-bottom:9px; }
+.lecture [data-role="detail-label"] .n{ border-bottom-color:var(--term-soft); }
+.lecture [data-role="detail-label"]:focus-visible{ outline-color:var(--term-ink); }
+.lecture [data-role="where"]{ margin:6px 0 0; }
+.lecture [data-role="where-label"]{ font-size:14px; line-height:1.45; color:var(--text-2); }
+.lecture [data-role="refusals"]{ padding-left:1.6em; margin:4px 0 0; }
+.lecture [data-role="refusals"] ::marker{ color:var(--text-2); font-variant-numeric:tabular-nums; }
+.lecture [data-role="problem"]{ font-size:14px; line-height:1.45; margin:6px 0 0; padding:0; border:0; overflow-wrap:anywhere; }
+.lecture [data-role="problem"] code{ word-break:normal; overflow-wrap:anywhere; }
 .lecture [data-role="verbatim"]{ font-family:var(--mono); font-size:var(--fs-releve); line-height:1.6; white-space:pre-wrap; overflow-wrap:anywhere; word-break:normal; margin:0; }
 .lecture [data-role="nature"] + [data-role="nature"]{ margin-top:4px; }
 .lecture [data-role="legend"]{ font-size:13px; color:var(--text-2); margin:0 0 6px; }
@@ -553,6 +570,8 @@ body:not(.connecte) details.mob{ display:none; }
   .lecture [data-view="application"] > [data-role="qualifier"], .lecture [data-view="application"] > [data-role="date"]{ font-size:20px; }
   .lecture [data-view="application"] > [data-role="reason"]{ font-size:20px; }
   .lecture [data-role="sentence"], .lecture [data-role="piece"], .lecture [data-role="endorsement"] li, .lecture-panneau, .lecture-p{ font-size:17px; }
+  .lecture [data-role="problem"], .lecture [data-role="where-label"]{ font-size:16px; }
+  .lecture [data-reading] summary{ padding:8px 0; }
   .lecture-schema li{ font-size:15px; }
 }
 @media print{ .lecture-barre, .lecture-actions{ display:none; } }
