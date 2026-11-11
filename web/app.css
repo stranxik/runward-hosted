@@ -83,11 +83,13 @@ ol.steps .body{ min-width:0; }
 @media (prefers-reduced-motion: reduce){
   .charge::after{ animation:none; width:100%; opacity:.25; }
 }
-.vh{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+/* margin:-1px: the live region after the frame (#annonce) takes no height, or it lengthens the page by 1 px past the
+   sidebar's column and the sticky sidebar slips by as much at the page's end */
+.vh{ position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
 
 h1.v, .face{ text-wrap:balance; }
 .btn, nav.svc a{ touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
-.skip:focus{ position:fixed; left:16px; top:8px; width:auto; height:auto; clip:auto; z-index:100; background:var(--bg); padding:6px 10px; border:1px solid var(--fg); }
+.skip:focus{ position:fixed; left:16px; top:8px; margin:0; width:auto; height:auto; clip:auto; z-index:100; background:var(--bg); padding:6px 10px; border:1px solid var(--fg); }
 
 /* v2 : ajouts de la révision du 2026-11-06 (aucune couleur nouvelle : les jetons seuls) */
 @media (min-width: 760px){ .apercu .detail{ display:inline; } }
@@ -186,6 +188,12 @@ details.mob > nav .sec{ font-size:12px; color:var(--soft); margin:10px 8px 2px; 
 
 @media (max-width:420px){ .top-act .btn:not(.btn-q){ display:none; } }
 
+/* the grain of the fleet stylesheet (body::after) is fixed to the window: a page taller than the window, captured
+   in full, showed it end at the window's height, the sidebar's ground and the column's stopping there. Laid on the
+   body, it runs to the page's end, in both themes; the sidebar's content stays sticky (.lat-in) */
+body{ position:relative; min-height:100vh; min-height:100dvh; }
+body::after{ position:absolute; }
+
 /* ---------- la coque connectée : barre latérale collante, seule la colonne défile avec la page ---------- */
 .corps{ display:block; }
 body.connecte .corps{ display:grid; grid-template-columns:232px minmax(0,1fr); align-items:start; }
@@ -206,6 +214,12 @@ body.connecte .corps{ display:grid; grid-template-columns:232px minmax(0,1fr); a
 .lat .bas{ margin-top:auto; border-top:1px solid var(--hair); padding:12px 8px 0; font-size:12px; color:var(--soft); line-height:1.55; display:flex; flex-direction:column; gap:8px; }
 .lat .bas b{ color:var(--fg); font-weight:500; }
 .lat .bas-act{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+/* an application's name, of any length, wraps inside its line (sidebar and phone menu), its mark on the first line */
+a.it.mis{ min-width:0; }
+.lat a.it.mis{ padding-top:5px; padding-bottom:5px; }
+a.mis .etq{ min-width:0; white-space:normal; align-items:flex-start; }
+a.mis .etq > [translate]{ min-width:0; overflow-wrap:anywhere; }
+a.mis .etq [data-role="mark"]{ margin-top:5px; }
 body.connecte .top{ display:none; }
 body.connecte main.wrap, body.connecte #bandeaux.wrap{ max-width:1280px; margin:0; padding-left:28px; padding-right:28px; }
 body.connecte main.wrap{ padding-top:28px; }

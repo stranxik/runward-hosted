@@ -4,6 +4,7 @@ import { S, parts } from "./base.js";
 import { api, loadSession } from "./api.js";
 import { ceremony, HINT } from "./webauthn.js";
 import { KINDS } from "./confirm.js";
+import { mots } from "./lexique.js";
 import { say } from "./shell.js";
 import { forgetReads, refreshScreen, rerender } from "./router.js";
 
@@ -50,7 +51,7 @@ export async function addPasskey(mode) {
   if (!c.ok) { S.addError = c.why === "exists" ? "exists" : "cancelled"; return refreshAfterAdd(); }
   const r = await api("POST", "/api/v0/passkeys", { challengeId: o.data.challengeId, response: c.response });
   if (!r.ok) S.addError = r.refusal === "passkey-exists" ? "exists" : "cancelled";
-  else say("Passkey ajoutée.");
+  else say(mots().done.passkeyAdded);
   return refreshAfterAdd();
 }
 async function refreshAfterAdd() {
@@ -89,11 +90,7 @@ const ROUTE_OF = {
   consent: (id) => ["DELETE", `/api/v0/repositories/${id}/consent`], purge: (id) => ["DELETE", `/api/v0/repositories/${id}/content`], reader: () => ["DELETE", "/api/v0/reader"],
   readeron: () => ["POST", "/api/v0/reader"], closeothers: () => ["POST", "/api/v0/sessions/close-others"], recovery: () => ["POST", "/api/v0/recovery/cancel"], lang: () => ["POST", "/api/v0/tenant/settings"],
 };
-const DONE = {
-  passkey: "Passkey retirée. Vous pouvez la remettre pendant 24 heures.", session: "Session fermée.", repo: "Dépôt retiré. Vous pouvez le remettre pendant 30 jours.",
-  consent: "Consentement retiré. Les prochains envois de ce dépôt ne seront plus acceptés.", consentir: "Contenu consenti pour ce dépôt.", purge: "Contenu reçu effacé.",
-  restore: "Passkey remise.", restorerepo: "Dépôt remis.", reader: "Lecteur automatique retiré.", readeron: "Lecteur automatique autorisé.", closeothers: "Les autres sessions sont fermées.", recovery: "Reprise d'accès annulée.", lang: "Langue changée ; l'index est reconstruit.",
-};
+// what the page announces once a gesture is done: the lexicon's done.<kind>, else done.other
 export async function confirmGesture(k) {
   const [kind, id] = k.split(":");
   const t = KINDS[kind];
@@ -106,7 +103,8 @@ export async function confirmGesture(k) {
   S.busy = null;
   if (!r.ok) { S.failed = k; S.failedText = r.message ? `${r.message} ${r.action ?? ""}` : null; return rerender(); }
   S.confirming = null;
-  say(DONE[kind] ?? "Fait.");
+  const done = mots().done;
+  say(Object.hasOwn(done, kind) ? done[kind] : done.other);
   if ((kind === "passkey" && r.data?.closedCurrent) || (kind === "session" && r.data?.closedCurrent)) { S.session = null; S.closedBy = "passkey"; location.hash = "#/entree/session-fermee"; return; }
   S.focusKey = k;
   await refreshScreen();

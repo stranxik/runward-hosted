@@ -5,7 +5,8 @@
 // views: for the index's language it is, byte for byte, what `runward-fleet build` writes for the same fleet.json
 // (runward's docs/spec/runward-fleet-decision.md §8). The app adds no word inside it and styles its roles
 // (data-reading, data-role, data-state) with its own layer (web/app.css, ADR-0019). Around it, the service says
-// what only it knows, from its own closed lexicon below, in French and in English: the language of the reading,
+// what only it knows, from its own closed lexicon below, in French and in English (the frame around it speaks the
+// same language, from the app's lexicon, web/views/lexique.js): the language of the reading,
 // the portfolio with nothing in it yet, the checks received and not accepted, and « Vérifier par vous-même »,
 // the one-line command that recomputes the same verdict from the repository (the pivot of 2026-11-10, screen 4).
 // Everything is read from the index served and GET /api/v0/fleet/status, already loaded by the router for this
@@ -15,22 +16,15 @@ import { S, esc } from "./base.js";
 import { when } from "./time.js";
 import { go, act, reqNote, loadingView, THEME_ICON } from "./marks.js";
 import { renderView } from "./fleet-views.js";
-import { ligne } from "./lexique.js";
+import { lang, setLang } from "./lexique.js";
+import { ligne } from "./lignes.js";
 
 // ------------------------------------------------------------- the language of the reading
-// The viewer's choice, kept under the key of the public site's switch (web/site/site.js), so that a reader who
-// chose English on the landing reads the app in English; with no choice, the index's own language.
-const LANG_KEY = "rw-accueil-lang";
-export function readingLang() {
-  let v = null;
-  try { v = localStorage.getItem(LANG_KEY); } catch { v = null; }
-  if (v === "fr" || v === "en") return v;
-  return S.index?.lang === "en" ? "en" : "fr";
-}
-export function setReadingLang(lang) {
-  if (lang !== "fr" && lang !== "en") return;
-  try { localStorage.setItem(LANG_KEY, lang); } catch { /* a per-viewer convenience only: the screen falls back on the index's language */ }
-}
+// The reader's language is the app's, one for the reading and its frame (web/views/lexique.js): the choice kept under
+// the key of the public site's switch (web/site/site.js), so that a reader who chose English on the landing reads the
+// app in English; with no choice, the index's own language.
+export const readingLang = lang;
+export const setReadingLang = setLang;
 
 // ------------------------------------------------------------- what only the service knows, in its own words
 const plural = (n, one, many) => (Number(n) > 1 ? many : one);

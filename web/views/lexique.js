@@ -1,88 +1,730 @@
-// The words of the shell: what the journal calls an act, what a verdict, a gate and a deliverable are
-// called in French, and the lines the dashboard, a mission and the sidebar say with them.
-// Everything is read from the index served and from GET /api/v0/fleet/status, already loaded for the screen:
-// opening a mission costs 0 more read (architecture §6). No example data: what is shown is the tenant's.
-import { S, esc } from "./base.js";
-import { hm } from "./time.js";
-import { mk, etq, go } from "./marks.js";
+// The words of the app, in French and in English, in one place: the frame around every screen (the sidebar, the
+// top bar, the banners, the foot, and the elements of web/index.html that carry data-mot or data-mot-aria), every
+// screen of the shell, what the journal calls an act, what a verdict, a gate and a deliverable are called. The
+// decision reading keeps its own closed lexicon beside its screen (web/views/decision.js, WORDS).
+//
+// The language is the reader's, one for the whole app: the one chosen on the public site or on the decision
+// reading, kept in this browser under the public site's key (web/site/site.js); with no choice, the index's own
+// language; else French. A screen reads its words through mots() when it is painted, never at import, so that a
+// switch of language paints the frame and the screen again in the other one. The same keys in both languages
+// (test/unit/frame-lang.test.js holds them, and scans the frame and every screen painted in English).
+//
+// An entry is text, or a function. A function given values returns HTML: its caller escapes every value from the
+// API before passing it (an entry used as a plain label is escaped by the mark that prints it, web/views/marks.js).
+// This module imports only the base: every other module of the shell may read it.
+import { S } from "./base.js";
 
-export const WHAT = {
-  "send-accepted": "envoi accepté", "send-historical": "envoi accepté, plus ancien que le courant", "send-pending": "premier envoi gardé, à confirmer", "send-not-accepted": "envoi non accepté", "send-quarantined": "envoi gardé en quarantaine",
-  "repository-declared": "dépôt déclaré", "repository-changed": "dépôt modifié", "repository-confirmed": "dépôt confirmé", "repository-removed": "dépôt retiré", "repository-restored": "dépôt remis", "repository-expired": "déclaration expirée",
-  "consent-given": "contenu consenti", "consent-withdrawn": "consentement retiré", "content-erased": "contenu effacé", "member-founded": "membre créé", "member-recovered": "accès repris",
-  "signed-in": "connexion", "signed-out": "déconnexion", "session-closed": "session fermée", "sessions-closed-others": "autres sessions fermées", "passkey-added": "passkey ajoutée", "passkey-removed": "passkey retirée",
-  "passkey-restored": "passkey remise", "passkey-single-chosen": "choix : une seule passkey", "recovery-opened": "reprise d'accès ouverte", "recovery-cancelled": "reprise d'accès annulée", "access-reset": "accès réinitialisé par l'opérateur",
-  "bootstrap-opened": "amorçage ouvert par l'opérateur", "export-prepared": "archive préparée", "settings-changed": "réglage changé", "reader-authorized": "lecteur automatique autorisé", "reader-withdrawn": "lecteur automatique retiré", "reader-read": "lecture du lecteur automatique", "restore-replayed": "restauration rejouée",
+// ------------------------------------------------------------- the reader's language
+const LANG_KEY = "rw-accueil-lang";
+/** The reader's language: their choice, else the index's language, else French. */
+export function lang() {
+  let v = null;
+  try { v = localStorage.getItem(LANG_KEY); } catch { v = null; }
+  if (v === "fr" || v === "en") return v;
+  return S.index?.lang === "en" ? "en" : "fr";
+}
+/** Keep the reader's choice (a per-viewer convenience: without it, the app falls back on the index's language). */
+export function setLang(l) {
+  if (l !== "fr" && l !== "en") return;
+  try { localStorage.setItem(LANG_KEY, l); } catch { /* a per-viewer convenience only */ }
+}
+
+// the plural's mark: in French from two on (0 and 1 take the singular), in English for any number but one
+const s = (n) => (Number(n) > 1 ? "s" : "");
+const pl = (n) => (Number(n) === 1 ? "" : "s");
+
+// ------------------------------------------------------------- the words
+export const MOTS = {
+  fr: {
+    brand: "runward hébergé",
+    // ---- the frame: web/index.html, the sidebar, the phone menu, the top bar, the banners, the foot
+    frame: {
+      page: { brand: "runward hébergé", brandSuffix: " hébergé", skip: "Aller au contenu", navApp: "Navigation de l'app", navPublic: "Pages publiques", menu: "Menu", theme: "Changer de thème, clair ou sombre" },
+      portfolio: "Portefeuille", uploads: "Envois", access: "Accès", export: "Export",
+      views: { flotte: "Tableau de bord", vue: "Vue complète", history: "Historique", proof: "Preuve", signatures: "Signatures", pr: "Dans la PR", sources: "Sources" },
+      navService: "Vues du service", applications: "Applications", navApplications: "Applications, refusées par le contrôle d'abord", inPortfolio: "dans le portefeuille",
+      technical: "Vues techniques",
+      you: (role, n) => `vous · ${role} · ${n} passkey${s(n)}`, owner: "propriétaire",
+      signOut: "Se déconnecter", themeShort: "Changer de thème",
+      howItWorks: "Comment ça marche", trust: "Confiance", docs: "Documentation", signIn: "Se connecter", askAccess: "Demander l'accès",
+      mailto: "mailto:contact@runward.dev?subject=Acc%C3%A8s%20%C3%A0%20la%20pr%C3%A9version%20de%20runward%20h%C3%A9berg%C3%A9",
+      legal: "Mentions légales", privacy: "Confidentialité", security: "Sécurité", times: "heures affichées à l'heure de Paris, avec leur décalage",
+      scrollTable: "Tableau, défilable",
+      recovery: (opened, usable) => `<b>Une reprise d'accès est en cours pour votre compte.</b> Ouverte le ${opened}, elle deviendra utilisable le ${usable}. Si ce n'est pas vous, annulez-la.`,
+      recoveryCancel: "Annuler la reprise",
+      single: "<b>Vous n'avez qu'une passkey.</b> Si vous perdez cet appareil, il faudra passer par la reprise d'accès, qui prend 24 heures.",
+      addPasskey: "Ajouter une passkey",
+      added: (at, device, provider) => `<b>Une passkey a été ajoutée à votre compte</b> le ${at}${device ? `, depuis ${device}` : ""}${provider ? ` : « ${provider} »` : ""}. Si ce n'est pas vous, retirez-la et fermez les sessions que vous ne reconnaissez pas.`,
+      seePasskeys: "Voir mes passkeys",
+      newVersion: "<b>Une nouvelle version du service est en ligne.</b> Cette page a été chargée avec la précédente.", reload: "Recharger",
+      maintenance: (until) => `<b>Maintenance${until ? ` jusqu'au ${until}` : ""}.</b> La lecture reste ouverte ; les gestes qui écrivent attendent la fin.`,
+    },
+    // ---- what several screens say
+    common: {
+      retry: "Réessayer", cancel: "Annuler", backToAccess: "Revenir à Accès", seeAccess: "Voir Accès", seeUploads: "Voir les envois", wholeJournal: "Tout le journal",
+      declare: "Déclarer un dépôt", openFleet: "Ouvrir la flotte", goSignIn: "Aller à la connexion", signInPasskey: "Se connecter avec ma passkey",
+      confirmOnDevice: "Validez sur votre appareil.", waitingPasskey: "En attente de la passkey",
+      askedForGesture: "Votre passkey vous est demandée pour ce geste.", askedIfOld: "Votre passkey vous est redemandée si votre dernière vérification date de plus de 5 minutes.",
+      notVerified: "non vérifié", verifyFailed: "La vérification n'a pas abouti. Rien n'a changé.", notShown: "non affiché", serviceSilent: "Le service n'a pas répondu.",
+      notPublished: "non publié", quarantined: (n) => `${n} envoi${s(n)} en quarantaine : la flotte montre le dernier index publié.`,
+      waitingFirst: "en attente du premier envoi", consented: "contenu consenti", phoneQr: "téléphone, par QR code", synced: "synchronisée", boundHere: "liée à cet appareil",
+      nothingAdded: "rien d'ajouté", alreadyThere: "déjà là", onQr: "Sur mon téléphone, par code QR", gestureCheck: "vérification par geste",
+      restore: "Remettre", remove: "Retirer", until: (at) => `possible jusqu'au ${at}`, statusHead: "runward hébergé · état du service",
+      noMission: "Aucune mission publiée.", noMissionText: "Votre flotte compte les dépôts que vous déclarez, et seulement ceux-là. Une mission apparaît après son premier envoi confirmé.",
+      recentActivity: "Activité récente", noIndex: "aucun index publié", deviceJoin: " sur ",
+    },
+    // the providers the service names in French (src/domain/identity.js#AAGUIDS), by the same key in each language
+    providers: { icloud: "Trousseau iCloud", google: "Gestionnaire de mots de passe Google", chromeMac: "Chrome sur Mac" },
+    time: { undated: "à dater", locale: "fr-FR" },
+    marks: {
+      forge: "Votre accès ne dépend pas de votre compte de forge : vos passkeys suffisent. Ainsi, la clé de vos preuves n'est jamais un compte tenu ailleurs.",
+      pkPlain: "Une passkey, c'est le déverrouillage de votre appareil (empreinte, visage ou code) qui sert de clé pour ce site, et pour lui seul. Rien à retenir, rien à recopier, et elle ne fonctionne sur aucun autre site.",
+      request: "requête", loading: "Chargement…", loadingLabel: "Chargement",
+    },
+    // ---- what the journal calls an act, who acts, a verdict, a phase, a deliverable, a refusal
+    acts: {
+      "send-accepted": "envoi accepté", "send-historical": "envoi accepté, plus ancien que le courant", "send-pending": "premier envoi gardé, à confirmer", "send-not-accepted": "envoi non accepté", "send-quarantined": "envoi gardé en quarantaine",
+      "repository-declared": "dépôt déclaré", "repository-changed": "dépôt modifié", "repository-confirmed": "dépôt confirmé", "repository-removed": "dépôt retiré", "repository-restored": "dépôt remis", "repository-expired": "déclaration expirée",
+      "consent-given": "contenu consenti", "consent-withdrawn": "consentement retiré", "content-erased": "contenu effacé", "member-founded": "membre créé", "member-recovered": "accès repris",
+      "signed-in": "connexion", "signed-out": "déconnexion", "session-closed": "session fermée", "sessions-closed-others": "autres sessions fermées", "passkey-added": "passkey ajoutée", "passkey-removed": "passkey retirée",
+      "passkey-restored": "passkey remise", "passkey-single-chosen": "choix : une seule passkey", "recovery-opened": "reprise d'accès ouverte", "recovery-cancelled": "reprise d'accès annulée", "access-reset": "accès réinitialisé par l'opérateur",
+      "bootstrap-opened": "amorçage ouvert par l'opérateur", "export-prepared": "archive préparée", "settings-changed": "réglage changé", "reader-authorized": "lecteur automatique autorisé", "reader-withdrawn": "lecteur automatique retiré", "reader-read": "lecture du lecteur automatique", "restore-replayed": "restauration rejouée",
+    },
+    who: { human: "identité humaine", workload: "identité de charge", operator: "opérateur du service", reader: "lecteur automatique" },
+    verdict: { gaps: "refusée", gapsMany: "refusées", "level-not-met": "niveau non atteint", "not-observed": "silencieuse", silentMany: "silencieuses", clean: "sans écart" },
+    phase: { frame: "Cadrer", architect: "Architecturer", floor: "Plancher", iterate: "Itérer", govern: "Gouverner", handover: "Transmettre" },
+    artifact: {
+      "Framing note": "note de cadrage", "Steering contract": "contrat de pilotage", "Architecture note": "note d'architecture",
+      "Execution topology": "topologie d'exécution", "Decision matrix": "matrice de décision", "Decision journal (≥1 ADR)": "journal de décisions",
+      "Port contracts (≥1 filled)": "contrats de ports", "Floor note (measured proof)": "note de plancher, preuve mesurée", "Threat model": "modèle de menaces",
+      "Evaluation rubric": "grille d'évaluation", "Observability schema": "schéma d'observabilité", "Recovery runbook": "runbook de reprise",
+      "Hand-over note (the kit, proven)": "note de passation",
+    },
+    refusal: { "workflow-not-pinned": "workflow appelant non déclaré", "content-not-consented": "contenu non consenti", "repository-pending": "dépôt en attente de votre confirmation", "repository-not-declared": "dépôt non déclaré ou retiré", "owner-changed": "propriétaire changé", "private-path": "chemin privé", "index-build-refused": "export que runward-fleet ne sait pas assembler", "index-rule-broken": "règle de vue cassée" },
+    // ---- the lines the dashboard, a mission and the sidebar say (web/views/lignes.js)
+    lines: {
+      allGates: "toutes les portes", gate: (n, phase) => `porte ${n}, ${phase}`, and: " et ",
+      blocked: (gate, n, list) => `Bloquée à la ${gate} : ${n} livrable${s(n)} absent${s(n)}, dont ${list}.`,
+      refusedAt: (gate) => `Refusée à la ${gate} : des lignes de conformité restent ouvertes.`,
+      levelNotMet: "Toutes les portes sont franchies, mais rien n'y est vérifié mécaniquement : le niveau demandé n'est pas atteint.",
+      lastRefused: (at, seq, why) => `Aucun envoi accepté. Le dernier, à ${at} (entrée ${seq}), n'a pas été accepté : ${why}.`,
+      noUpload: "Aucun envoi accepté pour cette mission déclarée : c'est un constat, pas un filtre.",
+      clean: "Toutes les portes sont franchies, sans écart.",
+      sourceJournal: (seq) => `source : journal${seq ? `, entrée ${seq}` : ""}`,
+      source: (path, commit, seq, at) => `source : ${path}, commit ${commit}, entrée ${seq} à ${at}`,
+      next: "ensuite, dans le dépôt", seeDeclared: "Voir ce qui n'est que déclaré", nextRead: "Le prochain envoi de ce dépôt sera lu.", consentInAccess: "Consentir dans Accès",
+      entry: (seq) => `entrée ${seq}`,
+      quoi: {
+        "send-accepted": (seq) => `envoi accepté (entrée ${seq})`, "send-historical": (seq) => `relance gardée comme historique, jamais comme courant (entrée ${seq})`,
+        "send-pending": (seq) => `premier envoi, gardé jusqu'à votre confirmation (entrée ${seq})`, "send-not-accepted": (seq, why) => `envoi non accepté : ${why} (entrée ${seq})`,
+        "send-quarantined": (seq, why) => `envoi gardé en quarantaine : ${why} (entrée ${seq})`,
+      },
+      act: (what, seq) => `${what} (entrée ${seq})`,
+      prov: (label, sha, version, at, seq) => `relevé du <b>${label}</b> · index <b>${sha}</b> · runward-fleet ${version} · assemblé à <b>${at}</b>, heure du service (déclarée), à l'entrée ${seq}`,
+    },
+    // ---- a confirmation, its gestures, and what the page announces once a gesture is done
+    confirm: {
+      kinds: {
+        passkey: { q: "Retirer cette passkey ?", b: "Retirer la passkey" },
+        session: { q: "Fermer cette session ?", d: "L'appareil qui l'utilise devra se reconnecter avec une passkey.", b: "Fermer la session" },
+        repo: { q: "Retirer ce dépôt de l'inventaire ?", d: "Ses prochains envois ne seront plus acceptés (repository-not-declared) et ses missions quittent la flotte au prochain index. Vous pouvez le remettre pendant 30 jours ; ensuite, le contenu reçu est effacé. Les envois arrivés pendant le retrait restent au journal, non publiés.", b: "Retirer le dépôt" },
+        consent: { q: "Retirer le consentement au contenu ?", d: "Les prochains envois de ce dépôt ne seront plus acceptés (content-not-consented).", b: "Retirer le consentement" },
+        consentir: { q: "Consentir au contenu de ce dépôt ?", d: "Ce service recevra le verdict, les écarts, les livrables et les noms déclarés par la charte. Vous pouvez le retirer à tout moment.", b: "Consentir au contenu" },
+        purge: { q: "Effacer le contenu reçu de ce dépôt ?", d: "Les octets reçus sont retirés du stockage et l'index est reconstruit sans eux. Le journal garde les empreintes et la trace de l'effacement. Les sauvegardes l'oublient au plus tard 7 jours après.", b: "Effacer le contenu" },
+        restore: { q: "Remettre cette passkey ?", d: "Elle pourra de nouveau ouvrir une session. Une autre de vos passkeys vous est demandée.", b: "Remettre la passkey" },
+        restorerepo: { q: "Remettre ce dépôt ?", d: "Il retrouve sa place dans l'inventaire, avec ses missions ; ses prochains envois seront acceptés. Les envois arrivés pendant le retrait restent au journal, non publiés.", b: "Remettre le dépôt" },
+        reader: { q: "Retirer le lecteur automatique ?", d: "Le job témoin ne pourra plus lire l'index ni l'archive ; les mesures S1 et S2 s'arrêtent.", b: "Retirer le lecteur" },
+        readeron: { q: "Autoriser le lecteur automatique ?", d: "Le workflow temoin.yml de stranxik/runward-hosted lira l'index et l'archive de cette flotte chaque jour, pour les mesures S1 et S2. Chaque lecture est écrite au journal ; vous pouvez le retirer ici.", b: "Autoriser le lecteur" },
+        closeothers: { q: "Fermer toutes les autres sessions ?", d: "Seule cette session reste ouverte.", b: "Fermer les autres sessions" },
+        recovery: { q: "Annuler la reprise d'accès ?", d: "Le lien de reprise ne servira plus. Si vous n'êtes pas à l'origine de cette reprise, retirez aussi les accès que vous ne reconnaissez pas.", b: "Annuler la reprise" },
+        lang: { q: "Changer la langue de la flotte ?", d: "Elle est écrite dans l'inventaire : la changer reconstruit l'index, et le journal le dit.", b: "Changer la langue" },
+      },
+      // plain text: the confirmation escapes it
+      passkey: (devices, current) => `Vous ne pourrez plus vous connecter avec elle, et les sessions qu'elle a ouvertes se ferment${devices ? ` (${devices})` : ""}.${current ? " Cette session-ci en fait partie : vous serez déconnecté." : ""} Vous pourrez la remettre pendant 24 heures, avec une autre passkey.`,
+      device: "appareil",
+      keptLegend: "Le contenu déjà reçu", keep: "Le garder jusqu'au retrait du dépôt", erase: "L'effacer maintenant",
+    },
+    done: {
+      passkey: "Passkey retirée. Vous pouvez la remettre pendant 24 heures.", session: "Session fermée.", repo: "Dépôt retiré. Vous pouvez le remettre pendant 30 jours.",
+      consent: "Consentement retiré. Les prochains envois de ce dépôt ne seront plus acceptés.", consentir: "Contenu consenti pour ce dépôt.", purge: "Contenu reçu effacé.",
+      restore: "Passkey remise.", restorerepo: "Dépôt remis.", reader: "Lecteur automatique retiré.", readeron: "Lecteur automatique autorisé.", closeothers: "Les autres sessions sont fermées.", recovery: "Reprise d'accès annulée.", lang: "Langue changée ; l'index est reconstruit.",
+      other: "Fait.", passkeyAdded: "Passkey ajoutée.", signedOut: "Vous êtes déconnecté.",
+      single: "Choix écrit au journal : une seule passkey. Les étapes suivantes sont ouvertes.",
+      confirmedQuarantine: "Dépôt confirmé. Son premier envoi reste en quarantaine.", confirmed: "Dépôt confirmé. La mission est publiée.",
+      declared: "Dépôt déclaré, en attente du premier envoi.", modified: "Dépôt modifié.",
+      copied: "Copié", inClipboard: "L'extrait est dans votre presse-papiers.", selected: "Extrait sélectionné : copiez-le avec ⌘C ou Ctrl+C.",
+    },
+    // ---- the screens
+    entree: {
+      head: "runward hébergé · connexion", headR: "par passkey",
+      intent: (where) => `Connectez-vous pour ouvrir cette page : ${where}. Vous y reviendrez juste après.`,
+      onPhone: "Ma passkey est sur mon téléphone", usePhone: "Utiliser mon téléphone",
+      connexion: { title: "Connexion", h1: "Ce que vos missions prouvent, au même endroit.", face: "Chaque CI envoie ce que runward a écrit. Vous lisez la vue de runward-fleet, la même que chez vous, derrière votre passkey.", note: 'Plus aucune passkey ? <a href="#/reprise">Reprendre l\'accès</a>. Pas encore d\'accès ? <a href="#/entree/sans-compte">Comment on entre</a>.' },
+      attente: { title: "Connexion en cours", face: "Votre navigateur vous demande votre passkey. Rien n'est accordé tant que vous ne l'avez pas validée.", note: "La demande reste valable 5 minutes." },
+      echec: { title: "Passkey non acceptée", h1: "La validation n'a pas abouti.", mk: "non acceptée", face: "Elle a été annulée sur l'appareil, ou elle n'a pas répondu. Rien n'a été accordé.", retry: "Réessayer avec ma passkey", note: 'Plus aucune passkey ? <a href="#/reprise">Reprendre l\'accès</a>.' },
+      inconnue: { title: "Passkey inconnue", h1: "Cette passkey n'ouvre aucun accès ici.", mk: "inconnue", face: "Elle n'est enregistrée pour aucun membre de ce service. Elle a peut-être été retirée, ou créée pour un autre site.", other: "Essayer une autre passkey", note: 'Vous étiez membre et n\'avez plus de passkey valable ? <a href="#/reprise">Reprendre l\'accès</a>. Sinon, <a href="#/entree/sans-compte">comment on entre</a>.' },
+      expiree: { title: "Demande expirée", h1: "La demande a expiré.", mk: "expirée", face: "Elle a duré plus de 5 minutes. Rien n'a été accordé.", again: "Recommencer" },
+      sansPasskey: { title: "Navigateur sans passkey", h1: "Ce navigateur ne propose pas de passkey.", face: "Il ne sait pas créer ni utiliser de passkey ici : navigation privée, poste partagé, ou navigateur trop ancien.", note: "Ouvrez cette page dans votre navigateur habituel ; s'il propose les passkeys, il affiche aussi un code QR pour valider avec votre téléphone." },
+      sansCompte: { title: "Comment on entre", h1: "L'accès est ouvert par l'opérateur du service.", face: "runward hébergé rassemble ce que les missions d'une équipe prouvent. Chaque accès est ouvert par l'opérateur, avec un lien à usage unique ; il n'y a pas d'inscription en libre-service.", own: 'Pour lire vos propres missions sans compte, runward-fleet construit la même vue chez vous, à partir des mêmes fichiers : <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.', back: "Revenir à la connexion" },
+      sortie: { title: "Déconnecté", h1: "Vous êtes déconnecté.", mk: "session fermée", face: "Cette session est fermée sur ce navigateur. Vos autres sessions restent ouvertes ; vous pouvez les fermer depuis Accès.", again: "Se reconnecter" },
+      fermee: { title: "Session fermée", h1: "Votre session s'est fermée.", mk: "fermée", face: "La passkey qui l'avait ouverte vient d'être retirée, comme annoncé. Connectez-vous avec une passkey qui vous reste." },
+      fin: { title: "Session expirée", h1: "Votre session a pris fin.", face: "Après 12 heures sans activité, ou 7 jours au plus, la session se ferme. Reconnectez-vous ; vous reviendrez où vous étiez." },
+    },
+    lien: {
+      head: "runward hébergé · lien d'accès", headR: "le lien reste dans votre navigateur : il n'est jamais envoyé dans l'adresse",
+      onPhone: "La créer sur mon téléphone", retry: "Réessayer",
+      absent: { title: "Lien à rouvrir", h1: "Rouvrez le lien reçu.", mk: "lien absent", face: "Le lien n'est gardé que le temps de cette page : il n'est jamais écrit dans l'adresse ni dans l'historique. Ouvrez de nouveau le lien complet que vous avez reçu." },
+      lecture: { title: "Lien d'accès", h1: "Lecture du lien…", label: "Lecture du lien" },
+      attente: { title: "Création en cours", face: "Votre navigateur vous propose d'enregistrer une passkey pour ce service. Le compte n'existe qu'une fois qu'elle est enregistrée par le service.", label: "En attente de la création de la passkey" },
+      annulee: { title: "Création annulée", h1: "La passkey n'a pas été créée.", mk: "rien de créé", face: (until) => `La création a été annulée sur l'appareil. Le lien reste valable jusqu'au ${until}.` },
+      panne: { title: "Service perdu pendant la création", h1: "Le service n'a pas reçu votre passkey.", mk: "non enregistrée", face: "Votre appareil a peut-être créé une passkey, mais le service ne l'a pas enregistrée : aucun compte n'existe encore, et le lien reste valable.", note: "Si votre appareil affiche une passkey de ce service qui ne fonctionne pas, supprimez-la de son trousseau ; ce navigateur a été prié de l'oublier." },
+      invalide: { title: "Lien invalide", h1: "Ce lien ne mène à rien.", mk: "invalide", face: "Il est incomplet, ou il n'a jamais été ouvert par ce service. Vérifiez que vous l'avez copié en entier." },
+      connecte: { title: "Déjà connecté", h1Invitation: "Vous êtes déjà membre de cette flotte.", h1: "Vous êtes déjà dans cette flotte.", mk: "connecté", face: (fleet) => `Ce navigateur a une session de membre de ${fleet}. Ce lien ne change rien pour vous.` },
+      servi: { title: "Lien déjà servi", h1: "Ce lien a déjà servi.", mk: "fermé", face: "Une passkey a déjà été créée avec lui.", bootstrap: " L'amorçage de cette flotte est fermé pour toujours.", note: "Si ce n'était pas vous : l'ouverture est écrite au journal et notifiée à l'opérateur. L'opérateur du service peut retirer ce membre ; la reprise d'accès vous rend ensuite la flotte." },
+      expire: { title: "Lien expiré", h1Recovery: "Ce lien de reprise a expiré.", h1Invitation: "Cette invitation a expiré.", h1: "Ce lien a expiré.", mk: "expiré", face: (until) => `Il valait jusqu'au ${until} et n'a pas servi. Rien n'a changé.`, invitation: "Demandez un nouveau lien à la personne qui vous l'a transmise.", draw: (script) => `Tirez un nouveau lien sur votre poste : <code>npm run ${script}</code>, puis approuvez le run.` },
+      annule: { titleRecovery: "Reprise annulée", title: "Lien fermé", h1Recovery: "Cette reprise a été annulée.", h1: "Ce lien a été fermé.", mk: "annulé", faceRecovery: "Une session ouverte de cette flotte l'a annulée. Rien n'a changé.", face: "Il a été fermé avant de servir, ou remplacé par un plus récent. Rien n'a été créé.", note: 'Si vous avez bien perdu toutes vos passkeys, tirez un nouveau lien de reprise. <a href="#/reprise">Comment faire</a>' },
+      pasEncore: { title: "Reprise pas encore utilisable", h1: (at) => `Cette reprise s'ouvrira le ${at}.`, mk: "en délai", face: "Pendant 24 heures, toute session encore ouverte de cette flotte la voit et peut l'annuler.", note: "Rien à faire d'ici là : revenez à ce même lien après l'heure dite. Ce délai protège le titulaire si quelqu'un d'autre a ouvert la reprise." },
+      reprise: { title: "Reprendre l'accès", h1: (fleet) => `Reprenez l'accès à ${fleet}.`, face: "Le délai est passé sans annulation. En créant une passkey ici :", effects: ["toutes les sessions ouvertes de votre compte se ferment ;", "vos anciennes passkeys sont retirées, et ne pourront pas être remises ;", "la reprise est écrite au journal."], once: (until) => `Ce lien vaut jusqu'au ${until}, une seule fois.`, create: "Créer ma passkey et reprendre l'accès" },
+      invitation: { title: "Invitation reçue", h1: (fleet) => `Vous êtes invité à lire ${fleet}.`, face: (until) => `Vous rejoindrez la flotte comme propriétaire. L'invitation vaut jusqu'au ${until}, une seule fois.`, create: "Créer ma passkey et rejoindre" },
+      amorcage: { title: "Lien d'amorçage", h1: "Créez la première passkey de cette flotte.", face: (until) => `Ce lien ouvre le compte fondateur de cette flotte. Il sert une seule fois et vaut jusqu'au ${until}.`, create: "Créer ma passkey sur cet appareil", note: "Ensuite, vous en ajouterez une seconde, si possible dans un autre trousseau : avec deux passkeys, la perte d'un appareil ne vous ferme pas la porte." },
+    },
+    reprise: {
+      title: "Reprendre l'accès", head: "runward hébergé · reprise d'accès", headR: "après la perte de toutes vos passkeys",
+      h1: "Vous avez perdu toutes vos passkeys.", lede: "La reprise vous rend la flotte en trois gestes. Elle prend 24 heures, pour que personne ne puisse la faire à votre place sans que vous le voyiez.",
+      step1: "Tirez un lien de reprise sur votre poste", command: "npm run operateur:reprise -- --tenant &lt;flotte&gt; --member &lt;membre&gt;",
+      step1Note: "Le lien s'affiche sur votre poste, et seulement là. Seule son empreinte part vers le service, par un run d'opérateur que vous approuvez.",
+      step2: "Attendez 24 heures", step2Text: "Pendant ce délai, toute session encore ouverte de votre flotte affiche la reprise et peut l'annuler. Un ticket du dépôt d'opérateur vous en avertit.",
+      step3: "Ouvrez le lien et créez une passkey", step3Text: "Toutes les sessions se ferment et vos anciennes passkeys sont retirées. Ajoutez ensuite une seconde passkey, dans un autre trousseau si possible.",
+      limit: "Limite, dite telle quelle : un agent qui a accès à votre poste et à votre compte GitHub peut lui aussi tirer et approuver une reprise. Le délai, l'avis dans vos sessions et la notification la rendent visible et annulable ; ils ne l'empêchent pas.",
+    },
+    arrivee: {
+      title: "Première arrivée", welcome: "Bienvenue", registered: "enregistrée",
+      cancelled: "La création a été annulée sur l'appareil. Réessayez, ou choisissez une autre voie.",
+      exists: "Cet appareil porte déjà la passkey de votre compte, par son trousseau synchronisé. Choisissez une clé de sécurité ou un autre gestionnaire.",
+      addKey: "Ajouter une clé de sécurité", otherManager: "Utiliser un autre gestionnaire de passkeys",
+      waysNote: "Votre téléphone partage sans doute le trousseau de cette passkey (iCloud, ou le gestionnaire de Google) : il porte déjà la même, et ne peut pas en ajouter une seconde distincte. Ce qui marche : une clé de sécurité, un autre gestionnaire (celui de Chrome, 1Password), ou un téléphone connecté à un autre compte.",
+      single: "Continuer avec une seule passkey",
+      singleAsk: "<b>Continuer avec une seule passkey ?</b> Si vous perdez cet appareil ou ce trousseau, la seule voie sera la reprise d'accès, qui prend 24 heures. Ce choix est écrit au journal, et chaque écran vous le rappellera jusqu'à l'ajout d'une seconde passkey.",
+      backWays: "Revenir aux voies possibles",
+      sameKeychain: "Vos deux passkeys sont dans le même trousseau : perdre ce compte vous ferme les deux.",
+      twoProviders: "Deux fournisseurs : perdre l'un ne vous ferme pas la porte.",
+      twoUnknown: "Deux passkeys enregistrées. Leur fournisseur n'est pas toujours connu : si elles sont dans le même trousseau, perdre ce compte vous ferme les deux.",
+      singleChosen: "seule passkey, choix écrit au journal",
+      noSecond: "Je n'ai aucune seconde voie : continuer avec une seule passkey",
+      opensFleet: "La flotte s'ouvre après ce choix.", opensSteps: "Les étapes suivantes s'ouvrent après ce choix.", comeBack: " Si vous fermez cette page avant, vous reviendrez ici à la prochaine connexion.",
+      closed: "S'ouvre après la seconde passkey, ou le choix d'une seule.",
+      headBack: (tenant) => `arrivée · ${tenant}`, countBack: (n, p) => `${n} passkey${s(n)} · ${p} dépôt${s(p)} déclaré${s(p)}`,
+      h1Back: "Retrouvez votre flotte.", ledeBack: "Ajoutez une seconde passkey, puis retrouvez la flotte telle qu'elle est : ses dépôts sont déjà déclarés.",
+      stepSecond: "Ajoutez une seconde passkey", stepOpen: "Ouvrez la flotte",
+      declared: (n, missions, workflow, consent) => `, mission${s(n)} ${missions}, workflow appelant ${workflow}, ${consent ? "contenu consenti" : "contenu non consenti"}.`,
+      expires: (at) => `La déclaration expire le ${at} si rien n'arrive. Sans consentement au contenu, le premier envoi sert seulement à confirmer le dépôt : ses octets ne sont pas gardés.`,
+      toConfirm: "à confirmer", arrived: (name) => `Le premier envoi de ${name} est arrivé.`, confirmFirst: "Confirmer le premier envoi",
+      appears: "La mission apparaît après la fin du job de CI et votre confirmation. Cette page ne se met pas à jour seule : revenez-y après votre fusion.",
+      checkArrival: "Vérifier l'arrivée du premier envoi",
+      head: (tenant) => `première arrivée · ${tenant}`, count: (n, d) => `${n} passkey${s(n)} · ${d} dépôt déclaré`,
+      h1: "Préparez votre flotte.", lede: "Quatre gestes, puis votre prochaine fusion sur <code>main</code> fait arriver le premier envoi, que vous confirmez ici.",
+      stepDeclare: "Déclarez le dépôt", stepCall: "Appelez le workflow d'envoi dans votre CI", stepMerge: "Fusionnez sur main, puis confirmez le premier envoi",
+    },
+    declarer: {
+      notDeclared: "non déclaré", repo: "Dépôt (propriétaire/dépôt)", workflow: "Workflow appelant, celui qui appelle le workflow d'envoi", mission: "Mission", path: "Chemin dans le dépôt", branch: "Branche par défaut du dépôt",
+      branchNote: "Vous la déclarez : GitHub ne la donne pas sans jeton pour un dépôt privé, et ce service n'en tient aucun. Elle sert au bouton qui ouvre la page de création du workflow. Aujourd'hui, seul <code>main</code> envoie.",
+      consent: "J'accepte que ce service reçoive le contenu des exports de ce dépôt : verdict, écarts, livrables et noms déclarés par la charte. Sans cet accord, aucun envoi de ce dépôt n'est accepté, attestation comprise. Je peux le retirer à tout moment dans Accès. Cocher cette case vous redemande votre passkey pour ce geste.",
+      submit: "Déclarer ce dépôt", formNote: "Votre passkey vous est redemandée si votre dernière vérification date de plus de 5 minutes. Le dépôt reste en attente jusqu'à son premier envoi, que vous confirmerez.",
+      loading: "Déclarer", head: "déclarer",
+      pending: { title: "Dépôt en attente", h1: (name) => `${name} est déclaré.`, lede: "Ajoutez l'appel du workflow d'envoi, puis fusionnez sur <code>main</code>. Le premier envoi sera gardé sans être publié jusqu'à ce que vous le confirmiez ici.", expires: (at) => `Cette déclaration expire le ${at} si aucun envoi n'arrive. Sans consentement au contenu, le premier envoi sert seulement à confirmer le dépôt : ses octets ne sont pas gardés.` },
+      nothing: { title: "Rien à confirmer", head: "déclarer · confirmer", h1: "Il n'y a rien à confirmer.", pinned: "déjà épinglé", confirmedOn: (name, at) => `${name} a été confirmé le ${at}. Rien n'a changé.`, none: (name) => `Aucun envoi n'est encore arrivé de ${name}.` },
+      confirm: {
+        titleOwner: "Nouveau propriétaire à confirmer", title: "Confirmer le premier envoi",
+        h1Owner: (name) => `${name} a changé de propriétaire.`, h1: (name) => `Le premier envoi de ${name} est arrivé.`,
+        owner: (id, now, before) => `Le même dépôt (identifiant ${id}) arrive maintenant sous le propriétaire ${now}, au lieu de ${before}. Si vous avez transféré ce dépôt, confirmez le nouveau propriétaire. Sinon, retirez le dépôt.`,
+        check: "Vérifiez qu'il vient bien de votre dépôt. En le confirmant, le service retient l'identifiant du dépôt et celui de son propriétaire : un dépôt recréé sous le même nom, ou transféré, ne pourra plus écrire dans votre flotte.",
+        confirmOwner: "Confirmer le nouveau propriétaire", confirmRepo: "Confirmer ce dépôt", notMine: "Ce n'est pas mon dépôt : retirer la déclaration",
+        note: "Votre passkey vous est demandée pour ce geste. Rien n'est publié avant.",
+      },
+      modify: {
+        title: "Modifier un dépôt", head: "déclarer · modifier", headR: "passkey récente", h1: (name) => `Modifier ${name}.`, notSaved: "non enregistré", workflow: "Workflow appelant",
+        series: "Changer de workflow ouvre une nouvelle série dans l'ordre des envois ; les envois de l'ancien restent au journal.",
+        removeMission: "retirer (ses envois restent au journal)", addMission: "Ajouter une mission", pathNote: "Le chemin est une déclaration : le jeton de la CI ne le porte pas.", save: "Enregistrer",
+      },
+      refused: "Déclaration refusée", count: (n) => `${n} dépôt(s) déclaré(s)`, h1: "Déclarez un dépôt.",
+      lede: "Un dépôt déclaré est le seul à pouvoir écrire dans votre flotte, depuis son workflow appelant, sur <code>main</code>.",
+    },
+    envois: {
+      title: "Envois",
+      state: { "send-accepted": "accepté, courant", "send-historical": "accepté, historique", "send-pending": "gardé, à confirmer", "send-not-accepted": "non accepté", "send-quarantined": "non publié" },
+      operatorGesture: "geste d'opérateur", act: "acte", mission: "mission", what: "quoi", state0: "état", no: "n°",
+      received: "reçu, heure du service (déclarée)", issued: "émis, jeton OIDC", commit: "commit", request: "requête",
+      historical: (n) => `Relance d'un run plus ancien que l'envoi courant (run n° ${n}) : gardé comme historique, jamais comme courant.`,
+      provenance: "Provenance, claim par claim",
+      headError: "journal du locataire", h1Error: "Le journal ne s'affiche pas.", faceError: "Le service n'a pas répondu. Vos envois ne sont pas perdus : ils sont écrits avant toute réponse.",
+      entries: "Entrées du journal, de la plus récente à la plus ancienne",
+      none: "Aucun envoi reçu pour l'instant.", noneText: "Le premier arrive après la fin du job de CI qui suit votre fusion sur <code>main</code>, si le workflow d'envoi est appelé.",
+      head: (n, hash) => `journal du locataire · ${n} entrée${s(n)} · tête <b>${hash}</b>`, headR: "chaîné par empreinte · tête recopiée dans chaque résumé de job",
+      h1: "Ce que vos CI ont envoyé.", start: "Début du journal : entrée n° 1.", older: "Entrées plus anciennes",
+      // the service's own note on its journal (src/application/reading.js), said here when the reader reads English
+      note: "Ce journal est chaîné ; sa tête est recopiée dans le résumé de chaque job qui envoie, pas encore publiée ailleurs.",
+      noteMore: "Comparer la tête servie à la dernière tête d'un résumé de job montre une troncature. Les résumés des dépôts publics laissent voir le rythme des envois de vos dépôts privés ; c'est accepté tant que cette flotte n'a que vos dépôts.",
+    },
+    fleet: {
+      waiting: "en attente de confirmation", noAccepted: "aucun envoi accepté", run: (n, a) => `run <b>${n}</b> · tentative ${a}`, nothing: "rien",
+      notAcceptedSince: (n) => `${n} non accepté${s(n)} depuis`, seeUploads: "voir les envois", zeroSince: "0 non accepté depuis",
+      head: (sha, version, at, seq) => `index servi · sha256 <b>${sha}</b> · runward-fleet ${version} · assemblé le <b>${at}</b>, heure du service (déclarée), à l'entrée ${seq}`,
+      headR: "rien n'est élevé par ce service : ci-declared au plus",
+      asServed: "index.json, tel que servi", recompute: (cmd, sha) => `recalculer chez vous depuis l'archive : ${cmd} redonne ${sha}`,
+      byMission: "Relevé des envois par mission", h2: "Envois par mission",
+      summary: (n, refused, none) => `${n} mission${s(n)}, ${refused} avec un envoi non accepté, ${none} sans aucun envoi accepté`,
+      table: "Relevé des envois par mission, défilable", th: ["Mission", "Dernier envoi accepté", "Envoi courant", "Non acceptés depuis"],
+      legend: "« Non accepté » parle de l'envoi au service ; « refusée » parle du verdict de runward, dans la vue ci-dessous. L'envoi courant est celui du plus grand numéro de run : une relance d'un run ancien reste historique.",
+      errorTitle: "Flotte injoignable", errorH1: "La flotte ne s'affiche pas.", errorMk: "non affichée", errorFace: "Votre session est ouverte, mais l'index n'a pas pu être lu. Le journal, lui, s'affiche.",
+      title: "Flotte",
+    },
+    flotte: {
+      exportAct: "Exporter", byState: "Missions par état", awaits: "Ce qui vous attend", nothingAwaits: "Rien ne vous attend : chaque mission déclarée est sans écart.",
+      missions: "Missions", th: ["Mission", "État", "Dernier envoi accepté", "Preuve"], noVerdict: "aucun verdict reçu", none: "aucun", notObserved: "non observé",
+      recalc: (sha, href) => `Cette vue est l'index <code>${sha}</code>, servi tel quel : <a href="${href}">index.json</a>. Sur l'archive exportée, <code translate="no">runward-fleet build fleet.json --out site</code> le reconstruit chez vous. La vue runward-fleet complète : <a href="#/vue">Vue complète</a>. Rien n'est élevé par ce service : ci-declared au plus.`,
+    },
+    mission: {
+      missing: "manquant", filled: (n) => `${n} livrable${s(n)} rempli${s(n)}`, filledOne: "rempli",
+      next: "Geste suivant", nextGaps: "Écrire le livrable qui manque à la porte où la mission bute, puis relancer <code>runward check --strict</code>.", says: "runward : ",
+      nextLevel: "Ouvrir la preuve de la flotte : elle sépare ce qui est vérifié mécaniquement de ce qui n'est que déclaré par la CI.", openProof: "Ouvrir la preuve",
+      nextConsented: "Le contenu de ce dépôt est consenti : le prochain envoi accepté fera entrer la mission dans l'index.", nextConsent: "Consentir au contenu de ce dépôt. Sans cet accord, aucun envoi n'est accepté, attestation comprise.",
+      file: "fichier", writtenBy: (v) => `, écrit par runward ${v}`, upload: "envoi", receivedOn: (seq, at) => `entrée ${seq}, reçue le ${at}`, run: "run", runLine: (id, n, a) => `${id}, n° ${n}, tentative ${a}`,
+      workflow: "workflow appelant", commit: "commit", level: "niveau de preuve", declaredOnly: (impl) => `${impl} : déclaré par la CI, rien de plus`,
+      noProv: "Aucun envoi accepté : il n'y a pas encore de verdict, donc pas de provenance à montrer.",
+      expected: "attendu", expectedLine: (what) => `${what} attendu par l'inventaire, absent`,
+      title: (name) => `Mission ${name}`, technical: "détail technique",
+      h2Missing: "Ce qui manque, porte par porte", h2Deliverables: "Livrables, porte par porte", h2Prov: "D'où vient ce verdict", h2Activity: "Activité de la mission", noActivity: "Aucune activité pour cette mission.",
+      h2View: "La vue runward-fleet de cette mission", viewR: "telle que runward-fleet build la construit",
+    },
+    workflow: {
+      add: "Ajouter le workflow", copy: "Copier l'extrait",
+      addNote: (branch, name) => `« Ajouter le workflow » ouvre, dans un nouvel onglet, la page de GitHub qui crée <code>.github/workflows/runward.yml</code> sur la branche <code>${branch}</code> de <span translate="no">${name}</span>, déjà remplie : il ne vous reste qu'à valider le commit. Ce service n'écrit rien dans votre dépôt et n'y demande aucun droit.`,
+      branch: (branch) => `Votre branche par défaut est <code>${branch}</code>. Aujourd'hui, seul un push sur <code>main</code> envoie : le workflow jugera vos commits, l'envoi attend l'acceptation des autres branches par défaut.`,
+      extract: "Extrait du workflow à ajouter dans votre dépôt", noRelease: "aucune release",
+      noReleaseText: "Le workflow d'envoi n'a pas encore de release publiée : l'appel s'écrira avec son commit dès la première, et le bouton s'ouvrira alors.",
+      about: "Ce workflow, publié par le service et épinglé par son commit, lance <code>runward check</code> sur votre commit et envoie ce que runward a écrit : aucun fichier de votre dépôt n'est envoyé à sa place, aucun secret n'est rangé. Sur une PR, il juge sans rien envoyer. Un refus de runward est envoyé aussi, et votre CI reste à la couleur de runward. Si le service ne répond pas, votre CI ne casse pas : le résumé du job dit ce qui n'est pas parti.",
+    },
+    claims: { pinned: "épinglé à la confirmation", calling: "le workflow appelant, déclaré", send: "le workflow d'envoi du service, épinglé par commit", order: "l'ordre des envois", table: "Revendications vérifiées du jeton, défilable" },
+    acces: {
+      title: "Accès", head: "accès", h1Error: "Accès ne s'affiche pas.",
+      headTenant: (tenant) => `accès · ${tenant}`, headR: "toute modification demande une passkey récente, ou une vérification par geste",
+      h1: "Qui entre, et qui envoie.", lede: "Vos passkeys et vos sessions ouvrent la lecture. Les dépôts déclarés sont les seuls à pouvoir écrire dans votre flotte.",
+      passkeys: {
+        h2: "Passkeys", name: "Passkey", removed: "retirée", last: "Votre dernière passkey ne se retire pas : ajoutez-en une autre d'abord.", opensThis: " · ouvre cette session",
+        addedOn: (d) => `ajoutée le ${d}`, lastUsed: "dernière utilisation, heure du service (déclarée)",
+        same: "Vos deux passkeys sont dans le même trousseau : perdre ce compte vous fermerait les deux. Ajoutez une clé de sécurité, ou une passkey d'un autre gestionnaire.",
+      },
+      sessions: { h2: "Sessions ouvertes", browser: "Navigateur", thisOne: " · cette session", openedBy: (label) => `ouverte par la passkey ${label}`, opened: "ouverte, heure du service (déclarée)", close: "Fermer", closeOthers: "Fermer toutes les autres sessions" },
+      depots: {
+        h2: "Dépôts déclarés", withdraw: "Retirer le consentement", consent: "Consentir au contenu", confirmFirst: "confirmer le premier envoi", confirmOwner: "confirmer le nouveau propriétaire",
+        missions: "missions", pinnedId: "identifiant épinglé", workflow: "workflow appelant", on: " sur ", notConsented: "contenu non consenti : aucun envoi accepté",
+        erase: "Effacer le contenu reçu", modify: "Modifier", removed: "retiré", none: "Aucun dépôt déclaré.",
+      },
+      reglages: {
+        h2: "Langue et lecteur automatique", lang: "Langue de la flotte", langNote: "écrite dans l'inventaire ; la changer reconstruit l'index", fr: "français", en: "anglais", toEn: "Passer en anglais", toFr: "Passer en français",
+        reader: "Lecteur automatique", readerNote: "stranxik/runward-hosted, temoin.yml : lit l'index et l'archive pour les mesures S1 et S2, chaque lecture au journal",
+        authorised: "autorisé", notAuthorised: "non autorisé", authorise: "Autoriser",
+      },
+      membres: { h2: "Membres", you: "Vous", owner: "propriétaire", lastOwner: "Le dernier propriétaire ne se retire pas.", invite: "L'invitation d'un second membre s'ouvre à son arrivée." },
+      donnees: {
+        h2: "Partir avec vos données",
+        text: "L'archive contient l'inventaire <code>fleet.json</code> dans toutes ses versions, les fichiers reçus tels quels, le journal et <code>replay.json</code>, qui dit quelle version de runward-fleet redonne chaque index. Rejouée chez vous par <code>runward-fleet build</code>, elle redonne la même vue.",
+        prepare: "Préparer l'archive", erase: "Effacer ce compte",
+      },
+      limites: {
+        h2: "Ce que ce service garde, et ses limites",
+        kept: (days, backups) => `Le contenu reçu d'un dépôt est gardé tant qu'il est déclaré, puis ${days} jours. Les sauvegardes de la base sont gardées ${backups} jours.`,
+        items: [
+          "Tout ce qui pilote ce navigateur, un agent compris, peut lire votre flotte tant que la session est ouverte. Les gestes lourds redemandent votre passkey à chaque fois, l'ajout d'une passkey compris ; chaque ajout s'affiche dans vos autres sessions.",
+          "Le workflow de votre dépôt décide d'appeler ou non l'envoi : le relevé donne le commit du dernier envoi accepté, et le lecteur automatique signale un écart avec <code>main</code>.",
+          "Un agent qui a accès à votre poste et à votre compte GitHub peut ouvrir une reprise d'accès : elle attend 24 heures et s'affiche ici pour que vous l'annuliez.",
+          "Ce que prouve l'envoi : il vient du workflow du service, dans la CI de ce dépôt, sur <code>main</code>, à tel commit. Le contenu jugé reste déclaré par la CI (<code>ci-declared</code>).",
+          "Votre accès ne dépend pas de votre compte de forge : vos passkeys suffisent.",
+        ],
+      },
+      ajout: {
+        exists: "Cet appareil porte déjà une passkey de votre compte.", cancelled: "La création a été annulée sur l'appareil, ou n'a pas été vérifiée. Rien n'a changé.",
+        title: "Ajouter une passkey", head: "accès · ajouter une passkey", h1: "Ajoutez une passkey.",
+        lede: "Choisissez de préférence un autre trousseau que celui de vos passkeys actuelles, ou une clé de sécurité. Votre passkey actuelle vous est d'abord demandée pour ce geste.",
+        key: "Une clé de sécurité", here: "Sur cet appareil",
+      },
+      effacer: {
+        title: "Effacer ce compte", head: "accès · effacer", headR: "geste d'opérateur dans cette version", h1: "Effacer ce compte.",
+        lede: "Tout le contenu de la flotte est effacé : dépôts, contenu reçu, index, journal, membres et passkeys.",
+        effects: ["Exportez d'abord l'archive si vous voulez garder la vue.", "L'effacement est fait dans les 30 jours de la demande. Les sauvegardes l'oublient au plus tard 7 jours après.", "Reste seulement, au journal de l'opérateur : l'empreinte du compte, la date et la dernière tête du journal, sans aucun nom."],
+        operator: "Pour l'instant, l'opérateur du service fait ce geste, par un run approuvé du dépôt d'opérateur.", exportFirst: "Exporter d'abord",
+      },
+      export: {
+        title: "Exporter", head: "accès · exporter", h1: "Votre archive.", notPrepared: "non préparée", failed: "L'archive n'a pas pu être préparée.", nothingLost: " Rien n'est perdu.",
+        preparing: "Préparation de l'archive", preparingText: "Préparation de l'archive…", ready: "prête",
+        archive: (size, sha, until) => `Archive de <b>${size}&nbsp;Mo</b>, empreinte <code>sha256 ${sha}</code>, disponible jusqu'au ${until}.`, decimal: ",",
+        download: "Télécharger l'archive", asked: "Votre passkey vous est demandée pour ce geste, puis l'archive se prépare.", prepare: "Préparer l'archive",
+      },
+    },
+    panne: {
+      head: "runward hébergé · état du service", headR: "lu sur /api/health",
+      down: { title: "Service injoignable", h1: "Le service ne répond pas.", mk: "injoignable", face: "La page n'a pas pu lire votre session. Vos données ne sont pas perdues.", note: "Côté CI : l'étape d'envoi réessaie, puis le dit dans le résumé du job sans faire échouer votre CI. Un envoi qui n'est pas parti se renvoie en relançant le job." },
+      offline: { title: "Hors ligne", h1: "Votre navigateur est hors ligne.", mk: "hors ligne", face: "Aucune vérification par passkey n'est lancée tant que la connexion n'est pas revenue. Ce qui est affiché reste lisible." },
+      slow: { title: "Réveil lent", h1: "Le service met plus de temps que d'habitude.", face: "Le service redémarre après une période sans visite ; cela prend d'habitude quelques secondes, et cette fois plus de 20.", label: "En attente du service" },
+    },
+    legal: {
+      title: "Mentions et sécurité", head: "runward hébergé · mentions", headR: "écran public, non indexé", h1: "Mentions, confidentialité, sécurité.",
+      notice: "Mentions légales", publisher: "éditeur", publisherDefault: "Thibault Souris, personne physique", host: "hébergeur", hostName: "Scaleway, région Paris",
+      service: "service", serviceText: "runward hébergé, sous licence FSL-1.1-MIT ; la vue est runward-fleet, sous licence MIT.",
+      privacy: "Confidentialité",
+      privacyItems: ["Pour vous connecter : la clé publique de vos passkeys et vos sessions, rien d'autre. Aucune adresse e-mail, aucun mot de passe.", "Pour vos missions : le contenu des exports des dépôts que vous avez consentis, gardé tant que le dépôt est déclaré, puis 30 jours.", "Un seul cookie, celui de la session. Aucune mesure d'audience, aucun service tiers dans la page.", "Tout est hébergé dans l'Union européenne. Effacement dans Accès, ou sur demande."],
+      security: "Sécurité", report: 'Pour signaler une faille : le contact de <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
+    },
+    introuvable: { title: "Adresse inconnue", head: "runward hébergé", h1: "Cette adresse n'existe pas.", mk: "introuvable", face: (where) => `${where} ne mène à aucune page de ce service. Le lien est peut-être incomplet.` },
+  },
+
+  en: {
+    brand: "runward hosted",
+    frame: {
+      page: { brand: "runward hosted", brandSuffix: " hosted", skip: "Skip to content", navApp: "App navigation", navPublic: "Public pages", menu: "Menu", theme: "Switch theme, light or dark" },
+      portfolio: "Portfolio", uploads: "Uploads", access: "Access", export: "Export",
+      views: { flotte: "Dashboard", vue: "Full view", history: "History", proof: "Proof", signatures: "Signatures", pr: "In the PR", sources: "Sources" },
+      navService: "The service's views", applications: "Applications", navApplications: "Applications, those refused by the check first", inPortfolio: "in the portfolio",
+      technical: "Technical views",
+      you: (role, n) => `you · ${role} · ${n} passkey${pl(n)}`, owner: "owner",
+      signOut: "Sign out", themeShort: "Switch theme",
+      howItWorks: "How it works", trust: "Trust", docs: "Documentation", signIn: "Sign in", askAccess: "Ask for access",
+      mailto: "mailto:contact@runward.dev?subject=Access%20to%20the%20runward%20hosted%20preview",
+      legal: "Legal notice", privacy: "Privacy", security: "Security", times: "times shown in Paris time, with their offset",
+      scrollTable: "Table, scrollable",
+      recovery: (opened, usable) => `<b>An access recovery is under way for your account.</b> Opened on ${opened}, it becomes usable on ${usable}. If this is not you, cancel it.`,
+      recoveryCancel: "Cancel the recovery",
+      single: "<b>You have only one passkey.</b> If you lose this device, you will have to go through access recovery, which takes 24 hours.",
+      addPasskey: "Add a passkey",
+      added: (at, device, provider) => `<b>A passkey was added to your account</b> on ${at}${device ? `, from ${device}` : ""}${provider ? `: “${provider}”` : ""}. If this was not you, remove it and close the sessions you do not recognise.`,
+      seePasskeys: "See my passkeys",
+      newVersion: "<b>A new version of the service is online.</b> This page was loaded with the previous one.", reload: "Reload",
+      maintenance: (until) => `<b>Maintenance${until ? ` until ${until}` : ""}.</b> Reading stays open; gestures that write wait until it ends.`,
+    },
+    common: {
+      retry: "Try again", cancel: "Cancel", backToAccess: "Back to Access", seeAccess: "See Access", seeUploads: "See the uploads", wholeJournal: "The whole journal",
+      declare: "Declare a repository", openFleet: "Open the fleet", goSignIn: "Go to sign-in", signInPasskey: "Sign in with my passkey",
+      confirmOnDevice: "Confirm on your device.", waitingPasskey: "Waiting for the passkey",
+      askedForGesture: "Your passkey is asked for this gesture.", askedIfOld: "Your passkey is asked again if your last verification is more than 5 minutes old.",
+      notVerified: "not verified", verifyFailed: "The verification did not go through. Nothing changed.", notShown: "not shown", serviceSilent: "The service did not answer.",
+      notPublished: "not published", quarantined: (n) => `${n} upload${pl(n)} in quarantine: the fleet shows the last published index.`,
+      waitingFirst: "waiting for the first upload", consented: "content consented", phoneQr: "phone, by QR code", synced: "synced", boundHere: "bound to this device",
+      nothingAdded: "nothing added", alreadyThere: "already there", onQr: "On my phone, by QR code", gestureCheck: "verification by gesture",
+      restore: "Restore", remove: "Remove", until: (at) => `possible until ${at}`, statusHead: "runward hosted · service status",
+      noMission: "No mission published.", noMissionText: "Your fleet counts the repositories you declare, and only those. A mission appears after its first confirmed upload.",
+      recentActivity: "Recent activity", noIndex: "no index published", deviceJoin: " on ",
+    },
+    providers: { icloud: "iCloud Keychain", google: "Google Password Manager", chromeMac: "Chrome on Mac" },
+    time: { undated: "not dated yet", locale: "en-GB" },
+    marks: {
+      forge: "Your access does not depend on your forge account: your passkeys are enough. So the key to your evidence is never an account held elsewhere.",
+      pkPlain: "A passkey is your device's unlock (fingerprint, face or code) used as the key to this site, and to this site only. Nothing to remember, nothing to copy, and it works on no other site.",
+      request: "request", loading: "Loading…", loadingLabel: "Loading",
+    },
+    acts: {
+      "send-accepted": "upload accepted", "send-historical": "upload accepted, older than the current one", "send-pending": "first upload kept, to confirm", "send-not-accepted": "upload not accepted", "send-quarantined": "upload kept in quarantine",
+      "repository-declared": "repository declared", "repository-changed": "repository changed", "repository-confirmed": "repository confirmed", "repository-removed": "repository removed", "repository-restored": "repository restored", "repository-expired": "declaration expired",
+      "consent-given": "content consented", "consent-withdrawn": "consent withdrawn", "content-erased": "content erased", "member-founded": "member created", "member-recovered": "access recovered",
+      "signed-in": "sign-in", "signed-out": "sign-out", "session-closed": "session closed", "sessions-closed-others": "other sessions closed", "passkey-added": "passkey added", "passkey-removed": "passkey removed",
+      "passkey-restored": "passkey restored", "passkey-single-chosen": "choice: a single passkey", "recovery-opened": "access recovery opened", "recovery-cancelled": "access recovery cancelled", "access-reset": "access reset by the operator",
+      "bootstrap-opened": "bootstrap opened by the operator", "export-prepared": "archive prepared", "settings-changed": "setting changed", "reader-authorized": "automatic reader authorised", "reader-withdrawn": "automatic reader withdrawn", "reader-read": "read by the automatic reader", "restore-replayed": "restore replayed",
+    },
+    who: { human: "human identity", workload: "workload identity", operator: "the service's operator", reader: "automatic reader" },
+    verdict: { gaps: "refused", gapsMany: "refused", "level-not-met": "level not met", "not-observed": "silent", silentMany: "silent", clean: "clean" },
+    phase: { frame: "Frame", architect: "Architect", floor: "Floor", iterate: "Iterate", govern: "Govern", handover: "Hand over" },
+    artifact: {
+      "Framing note": "framing note", "Steering contract": "steering contract", "Architecture note": "architecture note",
+      "Execution topology": "execution topology", "Decision matrix": "decision matrix", "Decision journal (≥1 ADR)": "decision journal",
+      "Port contracts (≥1 filled)": "port contracts", "Floor note (measured proof)": "floor note, measured proof", "Threat model": "threat model",
+      "Evaluation rubric": "evaluation rubric", "Observability schema": "observability schema", "Recovery runbook": "recovery runbook",
+      "Hand-over note (the kit, proven)": "hand-over note",
+    },
+    refusal: { "workflow-not-pinned": "calling workflow not declared", "content-not-consented": "content not consented", "repository-pending": "repository waiting for your confirmation", "repository-not-declared": "repository not declared, or removed", "owner-changed": "owner changed", "private-path": "private path", "index-build-refused": "an export runward-fleet cannot assemble", "index-rule-broken": "a view rule broken" },
+    lines: {
+      allGates: "all gates", gate: (n, phase) => `gate ${n}, ${phase}`, and: " and ",
+      blocked: (gate, n, list) => `Blocked at ${gate}: ${n} deliverable${pl(n)} missing, including ${list}.`,
+      refusedAt: (gate) => `Refused at ${gate}: conformance rows are still open.`,
+      levelNotMet: "All gates are passed, but nothing in them is checked mechanically: the level asked for is not met.",
+      lastRefused: (at, seq, why) => `No upload accepted. The last one, at ${at} (entry ${seq}), was not accepted: ${why}.`,
+      noUpload: "No upload accepted for this declared mission: a finding, not a filter.",
+      clean: "All gates are passed, with no gaps.",
+      sourceJournal: (seq) => `source: journal${seq ? `, entry ${seq}` : ""}`,
+      source: (path, commit, seq, at) => `source: ${path}, commit ${commit}, entry ${seq} at ${at}`,
+      next: "next, in the repository", seeDeclared: "See what is only declared", nextRead: "The next upload of this repository will be read.", consentInAccess: "Consent in Access",
+      entry: (seq) => `entry ${seq}`,
+      quoi: {
+        "send-accepted": (seq) => `upload accepted (entry ${seq})`, "send-historical": (seq) => `rerun kept as historical, never as current (entry ${seq})`,
+        "send-pending": (seq) => `first upload, kept until you confirm it (entry ${seq})`, "send-not-accepted": (seq, why) => `upload not accepted: ${why} (entry ${seq})`,
+        "send-quarantined": (seq, why) => `upload kept in quarantine: ${why} (entry ${seq})`,
+      },
+      act: (what, seq) => `${what} (entry ${seq})`,
+      prov: (label, sha, version, at, seq) => `reading of <b>${label}</b> · index <b>${sha}</b> · runward-fleet ${version} · assembled at <b>${at}</b>, service time (declared), at entry ${seq}`,
+    },
+    confirm: {
+      kinds: {
+        passkey: { q: "Remove this passkey?", b: "Remove the passkey" },
+        session: { q: "Close this session?", d: "The device using it will have to sign in again with a passkey.", b: "Close the session" },
+        repo: { q: "Remove this repository from the inventory?", d: "Its next uploads will no longer be accepted (repository-not-declared) and its missions leave the fleet at the next index. You can restore it for 30 days; after that, the content received is erased. Uploads that arrive while it is removed stay in the journal, unpublished.", b: "Remove the repository" },
+        consent: { q: "Withdraw consent to the content?", d: "The next uploads of this repository will no longer be accepted (content-not-consented).", b: "Withdraw consent" },
+        consentir: { q: "Consent to this repository's content?", d: "This service will receive the verdict, the gaps, the deliverables and the names declared by the charter. You can withdraw it at any time.", b: "Consent to the content" },
+        purge: { q: "Erase the content received from this repository?", d: "The bytes received are removed from storage and the index is rebuilt without them. The journal keeps the digests and the record of the erasure. Backups forget it 7 days later at most.", b: "Erase the content" },
+        restore: { q: "Restore this passkey?", d: "It will be able to open a session again. Another of your passkeys is asked for.", b: "Restore the passkey" },
+        restorerepo: { q: "Restore this repository?", d: "It gets its place back in the inventory, with its missions; its next uploads will be accepted. Uploads that arrived while it was removed stay in the journal, unpublished.", b: "Restore the repository" },
+        reader: { q: "Withdraw the automatic reader?", d: "The witness job will no longer be able to read the index or the archive; measures S1 and S2 stop.", b: "Withdraw the reader" },
+        readeron: { q: "Authorise the automatic reader?", d: "The workflow temoin.yml of stranxik/runward-hosted will read this fleet's index and archive every day, for measures S1 and S2. Each read is written to the journal; you can withdraw it here.", b: "Authorise the reader" },
+        closeothers: { q: "Close all other sessions?", d: "Only this session stays open.", b: "Close the other sessions" },
+        recovery: { q: "Cancel the access recovery?", d: "The recovery link will no longer work. If you did not start this recovery, also remove the access you do not recognise.", b: "Cancel the recovery" },
+        lang: { q: "Change the fleet's language?", d: "It is written in the inventory: changing it rebuilds the index, and the journal says so.", b: "Change the language" },
+      },
+      passkey: (devices, current) => `You will no longer be able to sign in with it, and the sessions it opened close${devices ? ` (${devices})` : ""}.${current ? " This session is one of them: you will be signed out." : ""} You can restore it for 24 hours, with another passkey.`,
+      device: "device",
+      keptLegend: "The content already received", keep: "Keep it until the repository is removed", erase: "Erase it now",
+    },
+    done: {
+      passkey: "Passkey removed. You can restore it for 24 hours.", session: "Session closed.", repo: "Repository removed. You can restore it for 30 days.",
+      consent: "Consent withdrawn. The next uploads of this repository will no longer be accepted.", consentir: "Content consented for this repository.", purge: "Content received erased.",
+      restore: "Passkey restored.", restorerepo: "Repository restored.", reader: "Automatic reader withdrawn.", readeron: "Automatic reader authorised.", closeothers: "The other sessions are closed.", recovery: "Access recovery cancelled.", lang: "Language changed; the index is rebuilt.",
+      other: "Done.", passkeyAdded: "Passkey added.", signedOut: "You are signed out.",
+      single: "Choice written to the journal: a single passkey. The next steps are open.",
+      confirmedQuarantine: "Repository confirmed. Its first upload stays in quarantine.", confirmed: "Repository confirmed. The mission is published.",
+      declared: "Repository declared, waiting for its first upload.", modified: "Repository modified.",
+      copied: "Copied", inClipboard: "The extract is in your clipboard.", selected: "Extract selected: copy it with ⌘C or Ctrl+C.",
+    },
+    entree: {
+      head: "runward hosted · sign-in", headR: "by passkey",
+      intent: (where) => `Sign in to open this page: ${where}. You will come back to it right after.`,
+      onPhone: "My passkey is on my phone", usePhone: "Use my phone",
+      connexion: { title: "Sign-in", h1: "What your missions prove, in one place.", face: "Each CI sends what runward wrote. You read the runward-fleet view, the same one as on your side, behind your passkey.", note: 'No passkey left? <a href="#/reprise">Recover access</a>. No access yet? <a href="#/entree/sans-compte">How to get in</a>.' },
+      attente: { title: "Signing in", face: "Your browser asks for your passkey. Nothing is granted until you confirm it.", note: "The request stays valid for 5 minutes." },
+      echec: { title: "Passkey not accepted", h1: "The confirmation did not go through.", mk: "not accepted", face: "It was cancelled on the device, or it did not answer. Nothing was granted.", retry: "Try again with my passkey", note: 'No passkey left? <a href="#/reprise">Recover access</a>.' },
+      inconnue: { title: "Unknown passkey", h1: "This passkey opens no access here.", mk: "unknown", face: "It is registered for no member of this service. It may have been removed, or created for another site.", other: "Try another passkey", note: 'You were a member and have no valid passkey left? <a href="#/reprise">Recover access</a>. Otherwise, <a href="#/entree/sans-compte">how to get in</a>.' },
+      expiree: { title: "Request expired", h1: "The request expired.", mk: "expired", face: "It lasted more than 5 minutes. Nothing was granted.", again: "Start again" },
+      sansPasskey: { title: "Browser without passkeys", h1: "This browser does not offer passkeys.", face: "It cannot create or use a passkey here: private browsing, a shared computer, or a browser that is too old.", note: "Open this page in your usual browser; if it offers passkeys, it also shows a QR code to confirm with your phone." },
+      sansCompte: { title: "How to get in", h1: "Access is opened by the service's operator.", face: "runward hosted gathers what a team's missions prove. Each access is opened by the operator, with a single-use link; there is no self-service sign-up.", own: 'To read your own missions without an account, runward-fleet builds the same view on your side, from the same files: <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.', back: "Back to sign-in" },
+      sortie: { title: "Signed out", h1: "You are signed out.", mk: "session closed", face: "This session is closed in this browser. Your other sessions stay open; you can close them from Access.", again: "Sign in again" },
+      fermee: { title: "Session closed", h1: "Your session closed.", mk: "closed", face: "The passkey that opened it was just removed, as announced. Sign in with a passkey you still have." },
+      fin: { title: "Session expired", h1: "Your session ended.", face: "After 12 hours without activity, or 7 days at most, the session closes. Sign in again; you will come back where you were." },
+    },
+    lien: {
+      head: "runward hosted · access link", headR: "the link stays in your browser: it is never sent in the address",
+      onPhone: "Create it on my phone", retry: "Try again",
+      absent: { title: "Link to open again", h1: "Open the link you received again.", mk: "no link", face: "The link is kept only while this page is open: it is never written in the address or in the history. Open the full link you received again." },
+      lecture: { title: "Access link", h1: "Reading the link…", label: "Reading the link" },
+      attente: { title: "Creating", face: "Your browser offers to save a passkey for this service. The account exists only once the service has registered it.", label: "Waiting for the passkey to be created" },
+      annulee: { title: "Creation cancelled", h1: "The passkey was not created.", mk: "nothing created", face: (until) => `The creation was cancelled on the device. The link stays valid until ${until}.` },
+      panne: { title: "Service lost during creation", h1: "The service did not receive your passkey.", mk: "not registered", face: "Your device may have created a passkey, but the service did not register it: no account exists yet, and the link stays valid.", note: "If your device shows a passkey for this service that does not work, delete it from its keychain; this browser was asked to forget it." },
+      invalide: { title: "Invalid link", h1: "This link leads nowhere.", mk: "invalid", face: "It is incomplete, or this service never opened it. Check that you copied all of it." },
+      connecte: { title: "Already signed in", h1Invitation: "You are already a member of this fleet.", h1: "You are already in this fleet.", mk: "signed in", face: (fleet) => `This browser has a member's session of ${fleet}. This link changes nothing for you.` },
+      servi: { title: "Link already used", h1: "This link was already used.", mk: "closed", face: "A passkey was already created with it.", bootstrap: " This fleet's bootstrap is closed for good.", note: "If it was not you: the opening is written to the journal and notified to the operator. The service's operator can remove this member; access recovery then gives you the fleet back." },
+      expire: { title: "Link expired", h1Recovery: "This recovery link expired.", h1Invitation: "This invitation expired.", h1: "This link expired.", mk: "expired", face: (until) => `It was valid until ${until} and was not used. Nothing changed.`, invitation: "Ask the person who sent it to you for a new link.", draw: (script) => `Draw a new link on your workstation: <code>npm run ${script}</code>, then approve the run.` },
+      annule: { titleRecovery: "Recovery cancelled", title: "Link closed", h1Recovery: "This recovery was cancelled.", h1: "This link was closed.", mk: "cancelled", faceRecovery: "An open session of this fleet cancelled it. Nothing changed.", face: "It was closed before it was used, or replaced by a newer one. Nothing was created.", note: 'If you have really lost all your passkeys, draw a new recovery link. <a href="#/reprise">How to do it</a>' },
+      pasEncore: { title: "Recovery not usable yet", h1: (at) => `This recovery opens on ${at}.`, mk: "waiting", face: "For 24 hours, any session of this fleet still open sees it and can cancel it.", note: "Nothing to do until then: come back to this same link after that time. This delay protects the holder if someone else opened the recovery." },
+      reprise: { title: "Recover access", h1: (fleet) => `Recover access to ${fleet}.`, face: "The delay passed without a cancellation. By creating a passkey here:", effects: ["all open sessions of your account close;", "your former passkeys are removed, and cannot be restored;", "the recovery is written to the journal."], once: (until) => `This link is valid until ${until}, once.`, create: "Create my passkey and recover access" },
+      invitation: { title: "Invitation received", h1: (fleet) => `You are invited to read ${fleet}.`, face: (until) => `You will join the fleet as an owner. The invitation is valid until ${until}, once.`, create: "Create my passkey and join" },
+      amorcage: { title: "Bootstrap link", h1: "Create this fleet's first passkey.", face: (until) => `This link opens this fleet's founding account. It works once and is valid until ${until}.`, create: "Create my passkey on this device", note: "Then you will add a second one, in another keychain if you can: with two passkeys, losing one device does not lock you out." },
+    },
+    reprise: {
+      title: "Recover access", head: "runward hosted · access recovery", headR: "after losing all your passkeys",
+      h1: "You lost all your passkeys.", lede: "Recovery gives you the fleet back in three gestures. It takes 24 hours, so that no one can do it in your place without you seeing it.",
+      step1: "Draw a recovery link on your workstation", command: "npm run operateur:reprise -- --tenant &lt;fleet&gt; --member &lt;member&gt;",
+      step1Note: "The link shows on your workstation, and only there. Only its digest goes to the service, through an operator run you approve.",
+      step2: "Wait 24 hours", step2Text: "During this delay, any session of your fleet still open shows the recovery and can cancel it. An issue in the operator repository warns you.",
+      step3: "Open the link and create a passkey", step3Text: "All sessions close and your former passkeys are removed. Then add a second passkey, in another keychain if you can.",
+      limit: "A limit, said as it is: an agent with access to your workstation and your GitHub account can also draw and approve a recovery. The delay, the notice in your sessions and the notification make it visible and cancellable; they do not prevent it.",
+    },
+    arrivee: {
+      title: "First arrival", welcome: "Welcome", registered: "registered",
+      cancelled: "The creation was cancelled on the device. Try again, or choose another way.",
+      exists: "This device already carries your account's passkey, through its synced keychain. Choose a security key or another manager.",
+      addKey: "Add a security key", otherManager: "Use another passkey manager",
+      waysNote: "Your phone probably shares this passkey's keychain (iCloud, or Google's manager): it already carries the same one, and cannot add a distinct second one. What works: a security key, another manager (Chrome's, 1Password), or a phone signed in to another account.",
+      single: "Continue with a single passkey",
+      singleAsk: "<b>Continue with a single passkey?</b> If you lose this device or this keychain, the only way back will be access recovery, which takes 24 hours. This choice is written to the journal, and every screen will remind you of it until you add a second passkey.",
+      backWays: "Back to the possible ways",
+      sameKeychain: "Your two passkeys are in the same keychain: losing that account locks you out of both.",
+      twoProviders: "Two providers: losing one does not lock you out.",
+      twoUnknown: "Two passkeys registered. Their provider is not always known: if they are in the same keychain, losing that account locks you out of both.",
+      singleChosen: "single passkey, choice written to the journal",
+      noSecond: "I have no second way: continue with a single passkey",
+      opensFleet: "The fleet opens after this choice.", opensSteps: "The next steps open after this choice.", comeBack: " If you close this page before, you will come back here at your next sign-in.",
+      closed: "Opens after the second passkey, or the choice of a single one.",
+      headBack: (tenant) => `arrival · ${tenant}`, countBack: (n, p) => `${n} passkey${pl(n)} · ${p} ${Number(p) !== 1 ? "repositories" : "repository"} declared`,
+      h1Back: "Find your fleet again.", ledeBack: "Add a second passkey, then find the fleet as it is: its repositories are already declared.",
+      stepSecond: "Add a second passkey", stepOpen: "Open the fleet",
+      declared: (n, missions, workflow, consent) => `, mission${pl(n)} ${missions}, calling workflow ${workflow}, ${consent ? "content consented" : "content not consented"}.`,
+      expires: (at) => `The declaration expires on ${at} if nothing arrives. Without consent to the content, the first upload only serves to confirm the repository: its bytes are not kept.`,
+      toConfirm: "to confirm", arrived: (name) => `The first upload of ${name} has arrived.`, confirmFirst: "Confirm the first upload",
+      appears: "The mission appears after the CI job ends and you confirm it. This page does not update by itself: come back to it after your merge.",
+      checkArrival: "Check whether the first upload arrived",
+      head: (tenant) => `first arrival · ${tenant}`, count: (n, d) => `${n} passkey${pl(n)} · ${d} ${Number(d) !== 1 ? "repositories" : "repository"} declared`,
+      h1: "Prepare your fleet.", lede: "Four gestures, then your next merge on <code>main</code> brings the first upload, which you confirm here.",
+      stepDeclare: "Declare the repository", stepCall: "Call the send workflow in your CI", stepMerge: "Merge on main, then confirm the first upload",
+    },
+    declarer: {
+      notDeclared: "not declared", repo: "Repository (owner/repository)", workflow: "Calling workflow, the one that calls the send workflow", mission: "Mission", path: "Path in the repository", branch: "The repository's default branch",
+      branchNote: "You declare it: GitHub does not give it without a token for a private repository, and this service holds none. The button that opens the workflow's creation page uses it. Today, only <code>main</code> sends.",
+      consent: "I agree that this service receives the content of this repository's exports: verdict, gaps, deliverables and names declared by the charter. Without this agreement, no upload of this repository is accepted, attestation included. I can withdraw it at any time in Access. Ticking this box asks for your passkey again for this gesture.",
+      submit: "Declare this repository", formNote: "Your passkey is asked again if your last verification is more than 5 minutes old. The repository stays pending until its first upload, which you will confirm.",
+      loading: "Declare", head: "declare",
+      pending: { title: "Repository pending", h1: (name) => `${name} is declared.`, lede: "Add the call to the send workflow, then merge on <code>main</code>. The first upload will be kept without being published until you confirm it here.", expires: (at) => `This declaration expires on ${at} if no upload arrives. Without consent to the content, the first upload only serves to confirm the repository: its bytes are not kept.` },
+      nothing: { title: "Nothing to confirm", head: "declare · confirm", h1: "There is nothing to confirm.", pinned: "already pinned", confirmedOn: (name, at) => `${name} was confirmed on ${at}. Nothing changed.`, none: (name) => `No upload has arrived from ${name} yet.` },
+      confirm: {
+        titleOwner: "New owner to confirm", title: "Confirm the first upload",
+        h1Owner: (name) => `${name} changed owner.`, h1: (name) => `The first upload of ${name} has arrived.`,
+        owner: (id, now, before) => `The same repository (id ${id}) now arrives under the owner ${now}, instead of ${before}. If you transferred this repository, confirm the new owner. Otherwise, remove the repository.`,
+        check: "Check that it does come from your repository. By confirming it, the service keeps the repository's id and its owner's: a repository created again under the same name, or transferred, will no longer be able to write to your fleet.",
+        confirmOwner: "Confirm the new owner", confirmRepo: "Confirm this repository", notMine: "This is not my repository: remove the declaration",
+        note: "Your passkey is asked for this gesture. Nothing is published before.",
+      },
+      modify: {
+        title: "Modify a repository", head: "declare · modify", headR: "recent passkey", h1: (name) => `Modify ${name}.`, notSaved: "not saved", workflow: "Calling workflow",
+        series: "Changing the workflow starts a new series in the order of uploads; the old one's uploads stay in the journal.",
+        removeMission: "remove (its uploads stay in the journal)", addMission: "Add a mission", pathNote: "The path is a declaration: the CI's token does not carry it.", save: "Save",
+      },
+      refused: "Declaration refused", count: (n) => `${n} ${Number(n) !== 1 ? "repositories" : "repository"} declared`, h1: "Declare a repository.",
+      lede: "A declared repository is the only one that can write to your fleet, from its calling workflow, on <code>main</code>.",
+    },
+    envois: {
+      title: "Uploads",
+      state: { "send-accepted": "accepted, current", "send-historical": "accepted, historical", "send-pending": "kept, to confirm", "send-not-accepted": "not accepted", "send-quarantined": "not published" },
+      operatorGesture: "operator gesture", act: "act", mission: "mission", what: "what", state0: "state", no: "no.",
+      received: "received, service time (declared)", issued: "issued, OIDC token", commit: "commit", request: "request",
+      historical: (n) => `Rerun of a run older than the current upload (run no. ${n}): kept as historical, never as current.`,
+      provenance: "Provenance, claim by claim",
+      headError: "tenant's journal", h1Error: "The journal does not show.", faceError: "The service did not answer. Your uploads are not lost: they are written before any answer.",
+      entries: "Journal entries, newest first",
+      none: "No upload received yet.", noneText: "The first one arrives after the end of the CI job that follows your merge on <code>main</code>, if the send workflow is called.",
+      head: (n, hash) => `tenant's journal · ${n} ${Number(n) !== 1 ? "entries" : "entry"} · head <b>${hash}</b>`, headR: "chained by digest · head copied into each job summary",
+      h1: "What your CIs sent.", start: "Start of the journal: entry no. 1.", older: "Older entries",
+      note: "This journal is chained; its head is copied into the summary of each job that sends, not yet published anywhere else.",
+      noteMore: "Comparing the head served with the last head of a job summary shows a truncation. The summaries of public repositories let the pace of your private repositories' uploads be seen; that is accepted as long as this fleet holds only your repositories.",
+    },
+    fleet: {
+      waiting: "waiting for confirmation", noAccepted: "no upload accepted", run: (n, a) => `run <b>${n}</b> · attempt ${a}`, nothing: "none",
+      notAcceptedSince: (n) => `${n} not accepted since`, seeUploads: "see the uploads", zeroSince: "0 not accepted since",
+      head: (sha, version, at, seq) => `index served · sha256 <b>${sha}</b> · runward-fleet ${version} · assembled on <b>${at}</b>, service time (declared), at entry ${seq}`,
+      headR: "nothing is raised by this service: ci-declared at most",
+      asServed: "index.json, as served", recompute: (cmd, sha) => `recompute on your side from the archive: ${cmd} gives back ${sha}`,
+      byMission: "Uploads by mission", h2: "Uploads by mission",
+      summary: (n, refused, none) => `${n} mission${pl(n)}, ${refused} with an upload not accepted, ${none} with no upload accepted`,
+      table: "Uploads by mission, scrollable", th: ["Mission", "Last upload accepted", "Current upload", "Not accepted since"],
+      legend: "“Not accepted” is about the upload to the service; “refused” is about runward's verdict, in the view below. The current upload is the one with the highest run number: a rerun of an old run stays historical.",
+      errorTitle: "Fleet unreachable", errorH1: "The fleet does not show.", errorMk: "not shown", errorFace: "Your session is open, but the index could not be read. The journal does show.",
+      title: "Fleet",
+    },
+    flotte: {
+      exportAct: "Export", byState: "Missions by state", awaits: "What awaits you", nothingAwaits: "Nothing awaits you: every declared mission is clean.",
+      missions: "Missions", th: ["Mission", "State", "Last upload accepted", "Proof"], noVerdict: "no verdict received", none: "none", notObserved: "not observed",
+      recalc: (sha, href) => `This view is the index <code>${sha}</code>, served as it is: <a href="${href}">index.json</a>. On the exported archive, <code translate="no">runward-fleet build fleet.json --out site</code> rebuilds it on your side. The full runward-fleet view: <a href="#/vue">Full view</a>. Nothing is raised by this service: ci-declared at most.`,
+    },
+    mission: {
+      missing: "missing", filled: (n) => `${n} deliverable${pl(n)} filled`, filledOne: "filled",
+      next: "Next gesture", nextGaps: "Write the deliverable missing at the gate where the mission is stuck, then run <code>runward check --strict</code> again.", says: "runward: ",
+      nextLevel: "Open the fleet's proof: it separates what is checked mechanically from what is only declared by the CI.", openProof: "Open the proof",
+      nextConsented: "This repository's content is consented: the next accepted upload will bring the mission into the index.", nextConsent: "Consent to this repository's content. Without this agreement, no upload is accepted, attestation included.",
+      file: "file", writtenBy: (v) => `, written by runward ${v}`, upload: "upload", receivedOn: (seq, at) => `entry ${seq}, received on ${at}`, run: "run", runLine: (id, n, a) => `${id}, no. ${n}, attempt ${a}`,
+      workflow: "calling workflow", commit: "commit", level: "level of proof", declaredOnly: (impl) => `${impl}: declared by the CI, nothing more`,
+      noProv: "No upload accepted: there is no verdict yet, so no provenance to show.",
+      expected: "expected", expectedLine: (what) => `${what} expected by the inventory, missing`,
+      title: (name) => `Mission ${name}`, technical: "technical detail",
+      h2Missing: "What is missing, gate by gate", h2Deliverables: "Deliverables, gate by gate", h2Prov: "Where this verdict comes from", h2Activity: "The mission's activity", noActivity: "No activity for this mission.",
+      h2View: "This mission's runward-fleet view", viewR: "as runward-fleet build builds it",
+    },
+    workflow: {
+      add: "Add the workflow", copy: "Copy the extract",
+      addNote: (branch, name) => `“Add the workflow” opens, in a new tab, the GitHub page that creates <code>.github/workflows/runward.yml</code> on the branch <code>${branch}</code> of <span translate="no">${name}</span>, already filled in: you only have to confirm the commit. This service writes nothing in your repository and asks for no right on it.`,
+      branch: (branch) => `Your default branch is <code>${branch}</code>. Today, only a push on <code>main</code> sends: the workflow will judge your commits, and the upload waits until other default branches are accepted.`,
+      extract: "Extract of the workflow to add to your repository", noRelease: "no release",
+      noReleaseText: "The send workflow has no published release yet: the call will be written with its commit from the first one, and the button will open then.",
+      about: "This workflow, published by the service and pinned by its commit, runs <code>runward check</code> on your commit and sends what runward wrote: no file of your repository is sent in its place, no secret is stored. On a PR, it judges without sending anything. A refusal from runward is sent too, and your CI keeps runward's colour. If the service does not answer, your CI does not break: the job summary says what did not go out.",
+    },
+    claims: { pinned: "pinned at confirmation", calling: "the calling workflow, declared", send: "the service's send workflow, pinned by commit", order: "the order of uploads", table: "Verified claims of the token, scrollable" },
+    acces: {
+      title: "Access", head: "access", h1Error: "Access does not show.",
+      headTenant: (tenant) => `access · ${tenant}`, headR: "every change asks for a recent passkey, or a verification by gesture",
+      h1: "Who gets in, and who sends.", lede: "Your passkeys and your sessions open the reading. Declared repositories are the only ones that can write to your fleet.",
+      passkeys: {
+        h2: "Passkeys", name: "Passkey", removed: "removed", last: "Your last passkey cannot be removed: add another one first.", opensThis: " · opens this session",
+        addedOn: (d) => `added on ${d}`, lastUsed: "last used, service time (declared)",
+        same: "Your two passkeys are in the same keychain: losing that account would lock you out of both. Add a security key, or a passkey from another manager.",
+      },
+      sessions: { h2: "Open sessions", browser: "Browser", thisOne: " · this session", openedBy: (label) => `opened by the passkey ${label}`, opened: "opened, service time (declared)", close: "Close", closeOthers: "Close all other sessions" },
+      depots: {
+        h2: "Declared repositories", withdraw: "Withdraw consent", consent: "Consent to the content", confirmFirst: "confirm the first upload", confirmOwner: "confirm the new owner",
+        missions: "missions", pinnedId: "pinned id", workflow: "calling workflow", on: " on ", notConsented: "content not consented: no upload accepted",
+        erase: "Erase the content received", modify: "Modify", removed: "removed", none: "No repository declared.",
+      },
+      reglages: {
+        h2: "Language and automatic reader", lang: "The fleet's language", langNote: "written in the inventory; changing it rebuilds the index", fr: "French", en: "English", toEn: "Switch to English", toFr: "Switch to French",
+        reader: "Automatic reader", readerNote: "stranxik/runward-hosted, temoin.yml: reads the index and the archive for measures S1 and S2, each read in the journal",
+        authorised: "authorised", notAuthorised: "not authorised", authorise: "Authorise",
+      },
+      membres: { h2: "Members", you: "You", owner: "owner", lastOwner: "The last owner cannot be removed.", invite: "Inviting a second member opens when that step ships." },
+      donnees: {
+        h2: "Leave with your data",
+        text: "The archive holds the inventory <code>fleet.json</code> in all its versions, the files received as they are, the journal and <code>replay.json</code>, which says which version of runward-fleet gives back each index. Replayed on your side by <code>runward-fleet build</code>, it gives back the same view.",
+        prepare: "Prepare the archive", erase: "Erase this account",
+      },
+      limites: {
+        h2: "What this service keeps, and its limits",
+        kept: (days, backups) => `A repository's content received is kept as long as it is declared, then ${days} days. The database's backups are kept ${backups} days.`,
+        items: [
+          "Anything that drives this browser, an agent included, can read your fleet while the session is open. Heavy gestures ask for your passkey again each time, adding a passkey included; each addition shows in your other sessions.",
+          "Your repository's workflow decides whether to call the upload: the record gives the commit of the last accepted upload, and the automatic reader flags a difference with <code>main</code>.",
+          "An agent with access to your workstation and your GitHub account can open an access recovery: it waits 24 hours and shows here so that you can cancel it.",
+          "What the upload proves: it comes from the service's workflow, in this repository's CI, on <code>main</code>, at a given commit. The content judged stays declared by the CI (<code>ci-declared</code>).",
+          "Your access does not depend on your forge account: your passkeys are enough.",
+        ],
+      },
+      ajout: {
+        exists: "This device already carries a passkey of your account.", cancelled: "The creation was cancelled on the device, or was not verified. Nothing changed.",
+        title: "Add a passkey", head: "access · add a passkey", h1: "Add a passkey.",
+        lede: "If you can, choose another keychain than your current passkeys', or a security key. Your current passkey is asked for first, for this gesture.",
+        key: "A security key", here: "On this device",
+      },
+      effacer: {
+        title: "Erase this account", head: "access · erase", headR: "an operator's gesture in this version", h1: "Erase this account.",
+        lede: "All of the fleet's content is erased: repositories, content received, index, journal, members and passkeys.",
+        effects: ["Export the archive first if you want to keep the view.", "The erasure is done within 30 days of the request. Backups forget it 7 days later at most.", "Only this stays, in the operator's journal: the account's digest, the date and the journal's last head, with no name."],
+        operator: "For now, the service's operator makes this gesture, through an approved run of the operator repository.", exportFirst: "Export first",
+      },
+      export: {
+        title: "Export", head: "access · export", h1: "Your archive.", notPrepared: "not prepared", failed: "The archive could not be prepared.", nothingLost: " Nothing is lost.",
+        preparing: "Preparing the archive", preparingText: "Preparing the archive…", ready: "ready",
+        archive: (size, sha, until) => `Archive of <b>${size}&nbsp;MB</b>, digest <code>sha256 ${sha}</code>, available until ${until}.`, decimal: ".",
+        download: "Download the archive", asked: "Your passkey is asked for this gesture, then the archive is prepared.", prepare: "Prepare the archive",
+      },
+    },
+    panne: {
+      head: "runward hosted · service status", headR: "read on /api/health",
+      down: { title: "Service unreachable", h1: "The service does not answer.", mk: "unreachable", face: "The page could not read your session. Your data is not lost.", note: "On the CI side: the send step tries again, then says so in the job summary without failing your CI. An upload that did not go out is sent again by rerunning the job." },
+      offline: { title: "Offline", h1: "Your browser is offline.", mk: "offline", face: "No passkey verification starts until the connection is back. What is shown stays readable." },
+      slow: { title: "Slow start", h1: "The service is taking longer than usual.", face: "The service restarts after a period without visits; it usually takes a few seconds, and this time more than 20.", label: "Waiting for the service" },
+    },
+    legal: {
+      title: "Notice and security", head: "runward hosted · notice", headR: "public screen, not indexed", h1: "Legal notice, privacy, security.",
+      notice: "Legal notice", publisher: "publisher", publisherDefault: "Thibault Souris, natural person", host: "host", hostName: "Scaleway, Paris region",
+      service: "service", serviceText: "runward hosted, under the FSL-1.1-MIT licence; the view is runward-fleet, under the MIT licence.",
+      privacy: "Privacy",
+      privacyItems: ["To sign you in: the public key of your passkeys and your sessions, nothing else. No email address, no password.", "For your missions: the content of the exports of the repositories you consented to, kept as long as the repository is declared, then 30 days.", "One cookie only, the session's. No audience measurement, no third-party service in the page.", "Everything is hosted in the European Union. Erasure in Access, or on request."],
+      security: "Security", report: 'To report a vulnerability: the contact in <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
+    },
+    introuvable: { title: "Unknown address", head: "runward hosted", h1: "This address does not exist.", mk: "not found", face: (where) => `${where} leads to no page of this service. The link may be incomplete.` },
+  },
 };
-export const WHO = { human: "identité humaine", workload: "identité de charge", operator: "opérateur du service", reader: "lecteur automatique" };
-export const MAILTO = "mailto:contact@runward.dev?subject=Acc%C3%A8s%20%C3%A0%20la%20pr%C3%A9version%20de%20runward%20h%C3%A9berg%C3%A9";
-export const VERDICT_FR = { gaps: ["inv", "refusée"], "level-not-met": ["inv", "niveau non atteint"], "not-observed": ["void", "silencieuse"], clean: ["full", "sans écart"] };
-const ORDER = { gaps: 0, "level-not-met": 1, "not-observed": 2, clean: 3 };
-export const PHASE_FR = { frame: "Cadrer", architect: "Architecturer", floor: "Plancher", iterate: "Itérer", govern: "Gouverner", handover: "Transmettre" };
-const GATE_KEY = { frame: "frame", architect: "architect", floor: "floor", iterate: "iterate", govern: "govern", hand: "handover" };
-export const ART_FR = {
-  "Framing note": "note de cadrage", "Steering contract": "contrat de pilotage", "Architecture note": "note d'architecture",
-  "Execution topology": "topologie d'exécution", "Decision matrix": "matrice de décision", "Decision journal (≥1 ADR)": "journal de décisions",
-  "Port contracts (≥1 filled)": "contrats de ports", "Floor note (measured proof)": "note de plancher, preuve mesurée", "Threat model": "modèle de menaces",
-  "Evaluation rubric": "grille d'évaluation", "Observability schema": "schéma d'observabilité", "Recovery runbook": "runbook de reprise",
-  "Hand-over note (the kit, proven)": "note de passation",
-};
-const REFUS_FR = { "workflow-not-pinned": "workflow appelant non déclaré", "content-not-consented": "contenu non consenti", "repository-pending": "dépôt en attente de votre confirmation", "repository-not-declared": "dépôt non déclaré ou retiré", "owner-changed": "propriétaire changé", "private-path": "chemin privé", "index-build-refused": "export que runward-fleet ne sait pas assembler", "index-rule-broken": "règle de vue cassée" };
-export const chipOf = (v) => { const [sh, w] = VERDICT_FR[v] ?? VERDICT_FR["not-observed"]; return sh === "inv" ? mk("inv", w) : etq(sh, w); };
-export const verdictOf = (m) => (m && typeof m.latest === "object" && m.latest ? m.latest.verdict : "not-observed");
-export const nomLong = (m) => m.name;
-export const nomCourt = (m) => (m.path && m.path !== "." ? m.path.split("/").pop() : m.name.split("/").pop());
-export const triees = () => (S.index ? [...S.index.missions].sort((a, b) => (ORDER[verdictOf(a)] ?? 9) - (ORDER[verdictOf(b)] ?? 9)) : []);
-export const ligne = (id) => S.status?.lines.find((l) => l.mission === id) ?? null;
-export function porteFr(gate) {
-  if (!gate || gate === "all gates passed") return "toutes les portes";
-  const g = /^(\d+)\s*·\s*([A-Za-z]+)/.exec(gate);
-  return g ? `porte ${g[1]}, ${PHASE_FR[GATE_KEY[g[2].toLowerCase()]] ?? g[2]}` : gate;
+
+/** The words of the reader's language. */
+export const mots = () => MOTS[lang()];
+
+// The values the service writes in French, said in the reader's language (the API is unchanged): a fleet's title when
+// it is the store's default, the product's French name (src/adapters/store/tables.js); a passkey's provider when the
+// service names it in French (src/domain/identity.js#AAGUIDS); the word that joins a browser and its system in a
+// device's label (« Chrome sur macOS », src/domain/identity.js#deviceFromUserAgent).
+/** A fleet's title: the operator's own, as written; the store's default, in the reader's language. */
+export const titreFlotte = (t) => (t === MOTS.fr.brand ? mots().brand : t);
+/** A passkey's provider or a device's label, as the service writes it, in the reader's language; none stays none. */
+export function appareil(d) {
+  if (!d) return d;
+  const k = Object.keys(MOTS.fr.providers).find((x) => MOTS.fr.providers[x] === d);
+  return k ? mots().providers[k] : String(d).replace(MOTS.fr.common.deviceJoin, mots().common.deviceJoin);
 }
-const manquants = (m) => (typeof m.latest === "object" ? (m.latest.deliverables?.list ?? []).filter((d) => d.state !== "filled") : []);
-export const sourceDe = (m) => (typeof m.latest === "object" ? S.index.sources.find((s) => s.id === m.latest.src)?.path : null);
-export function cause(m) {
-  const v = verdictOf(m), st = ligne(m.id);
-  if (v === "gaps") {
-    const mq = manquants(m);
-    return mq.length ? `Bloquée à la ${esc(porteFr(m.latest.currentGate))} : ${mq.length} livrable${mq.length > 1 ? "s" : ""} absent${mq.length > 1 ? "s" : ""}, dont ${mq.slice(0, 2).map((d) => `<code>${esc(d.relPath)}</code>`).join(" et ")}.` : `Refusée à la ${esc(porteFr(m.latest.currentGate))} : des lignes de conformité restent ouvertes.`;
-  }
-  if (v === "level-not-met") return "Toutes les portes sont franchies, mais rien n'y est vérifié mécaniquement : le niveau demandé n'est pas atteint.";
-  if (v === "not-observed") {
-    if (st?.lastRefusal) return `Aucun envoi accepté. Le dernier, à ${hm(st.lastRefusalAt)} (entrée ${esc(st.lastRefusalSeq)}), n'a pas été accepté : ${esc(REFUS_FR[st.lastRefusal] ?? st.lastRefusal)}.`;
-    return "Aucun envoi accepté pour cette mission déclarée : c'est un constat, pas un filtre.";
-  }
-  return "Toutes les portes sont franchies, sans écart.";
-}
-export function sourceLigne(m) {
-  const st = ligne(m.id);
-  if (!st || !st.accepted) return `source : journal${st?.lastRefusalSeq ? `, entrée ${esc(st.lastRefusalSeq)}` : ""}`;
-  return `source : <code>${esc(sourceDe(m) ?? "")}</code>, commit ${esc(String(st.accepted.commit ?? "").slice(0, 12))}, entrée ${esc(st.accepted.seq)} à ${hm(st.accepted.receivedAt)}`;
-}
-export function geste(m) {
-  const v = verdictOf(m), st = ligne(m.id);
-  if (v === "gaps" && m.latest.next?.command) return `<span class="k">ensuite, dans le dépôt</span><code class="cmd" translate="no">${esc(m.latest.next.command)}</code>`;
-  if (v === "level-not-met") return go(`#/mission/${m.id}`, "Voir ce qui n'est que déclaré", { q: true });
-  if (v === "not-observed") return st?.consent ? `<span class="small">${etq("full", "contenu consenti")} Le prochain envoi de ce dépôt sera lu.</span>` : go("#/acces", "Consentir dans Accès", { q: true });
-  return "";
-}
-export function comptes() {
-  const by = Object.fromEntries((S.index?.fleet.byVerdict ?? []).map((g) => [g.state, g.n]));
-  return { N: S.index?.fleet.declared ?? 0, gaps: by.gaps ?? 0, lnm: by["level-not-met"] ?? 0, silent: by["not-observed"] ?? 0, clean: by.clean ?? 0 };
-}
-const QUOI = {
-  "send-accepted": (e) => `envoi accepté (entrée ${e.seq})`, "send-historical": (e) => `relance gardée comme historique, jamais comme courant (entrée ${e.seq})`,
-  "send-pending": (e) => `premier envoi, gardé jusqu'à votre confirmation (entrée ${e.seq})`, "send-not-accepted": (e) => `envoi non accepté : ${REFUS_FR[e.refusal] ?? e.refusal} (entrée ${e.seq})`,
-  "send-quarantined": (e) => `envoi gardé en quarantaine : ${REFUS_FR[e.refusal] ?? e.refusal} (entrée ${e.seq})`,
-};
-export function jLigne(e) {
-  if (e.who === "workload") {
-    const shape = e.what === "send-accepted" ? "full" : e.what === "send-not-accepted" || e.what === "send-quarantined" ? "inv" : "void";
-    return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-${shape}" aria-hidden="true"></span></span><span><span translate="no">${esc(e.repository ?? "")}</span>${e.runNumber ? `, run ${esc(e.runNumber)}` : ""}<span class="sub">${esc((QUOI[e.what] ?? ((x) => `${WHAT[x.what] ?? x.what} (entrée ${x.seq})`))(e))}</span></span></li>`;
-  }
-  return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${esc(WHAT[e.what] ?? e.what)}${e.repository ? ` · <span translate="no">${esc(e.repository)}</span>` : ""}<span class="sub">${esc(WHO[e.who] ?? e.who)} (entrée ${e.seq})</span></span></li>`;
-}
-export const provLigne = () => {
-  const i = S.status?.index;
-  return i ? `relevé du <b>${esc(S.index?.asOf?.label ?? "")}</b> · index <b>${esc(String(i.sha256).slice(0, 12))}</b> · runward-fleet ${esc(i.fleetVersion)} · assemblé à <b>${hm(i.publishedAt)}</b>, heure du service (déclarée), à l'entrée ${esc(i.seq)}` : "aucun index publié";
-};

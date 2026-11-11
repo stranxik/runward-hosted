@@ -1,13 +1,15 @@
 // Legal notice, privacy, security.
 import { esc, META } from "./base.js";
 import { head } from "./marks.js";
+import { mots } from "./lexique.js";
 
 export function viewLegal() {
-  return { title: "Mentions et sécurité", key: "panne", signed: "any", html: `${head("runward hébergé · mentions", "écran public, non indexé")}
-    <h1 class="v">Mentions, confidentialité, sécurité.</h1>
+  const L = mots().legal;
+  return { title: L.title, key: "panne", signed: "any", html: `${head(L.head, L.headR)}
+    <h1 class="v">${L.h1}</h1>
     <div class="grid2">
-      <section class="panel"><h2>Mentions légales</h2><p class="small"><span class="k">éditeur</span>${esc(META("runward-publisher") || "Thibault Souris, personne physique")}</p><p class="small"><span class="k">hébergeur</span>Scaleway, région Paris</p><p class="small"><span class="k">service</span>runward hébergé, sous licence FSL-1.1-MIT ; la vue est runward-fleet, sous licence MIT.</p></section>
-      <section class="panel"><h2>Confidentialité</h2><ul class="small"><li>Pour vous connecter : la clé publique de vos passkeys et vos sessions, rien d'autre. Aucune adresse e-mail, aucun mot de passe.</li><li>Pour vos missions : le contenu des exports des dépôts que vous avez consentis, gardé tant que le dépôt est déclaré, puis 30 jours.</li><li>Un seul cookie, celui de la session. Aucune mesure d'audience, aucun service tiers dans la page.</li><li>Tout est hébergé dans l'Union européenne. Effacement dans Accès, ou sur demande.</li></ul></section>
-      <section class="panel"><h2>Sécurité</h2><p class="small">Pour signaler une faille : le contact de <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).</p></section>
+      <section class="panel"><h2>${L.notice}</h2><p class="small"><span class="k">${L.publisher}</span>${esc(META("runward-publisher") || L.publisherDefault)}</p><p class="small"><span class="k">${L.host}</span>${L.hostName}</p><p class="small"><span class="k">${L.service}</span>${L.serviceText}</p></section>
+      <section class="panel"><h2>${L.privacy}</h2><ul class="small">${L.privacyItems.map((i) => `<li>${i}</li>`).join("")}</ul></section>
+      <section class="panel"><h2>${L.security}</h2><p class="small">${L.report}</p></section>
     </div>` };
 }

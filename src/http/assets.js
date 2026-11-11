@@ -33,15 +33,16 @@ export const FONTS = Object.freeze([
  */
 export const MODULES = Object.freeze([
   "app.js",
-  // ---- the base: the page, the API, the pinned fleet views
+  // ---- the base: the page, its words (FR, EN), the API, the pinned fleet views
   "views/base.js",
+  "views/lexique.js",
   "views/time.js",
   "views/marks.js",
   "views/api.js",
   "views/webauthn.js",
   "views/fleet-views.js",
   // ---- what several screens share
-  "views/lexique.js",
+  "views/lignes.js",
   "views/confirm.js",
   "views/workflow.js",
   "views/claims.js",

@@ -1,7 +1,9 @@
 // Access, section: the members.
+import { mots } from "../lexique.js";
 
 /** The members of the fleet. */
 export function sectionMembres(a) {
-  return `<section class="blk"><h2>Membres</h2>
-      <div class="arow"><div><div class="nm">Vous</div><span class="k">propriétaire</span></div><div class="small soft">Le dernier propriétaire ne se retire pas.</div><div class="small soft">L'invitation d'un second membre s'ouvre à son arrivée.</div></div></section>`;
+  const M = mots().acces.membres;
+  return `<section class="blk"><h2>${M.h2}</h2>
+      <div class="arow"><div><div class="nm">${M.you}</div><span class="k">${M.owner}</span></div><div class="small soft">${M.lastOwner}</div><div class="small soft">${M.invite}</div></div></section>`;
 }

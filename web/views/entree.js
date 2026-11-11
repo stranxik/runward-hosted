@@ -2,44 +2,46 @@
 // the author (2026-11-06); its routes, data and states are complete. The public home is no longer a screen of
 // the shell: it is the public site at / (web/site/, ADR-0022), and #/entree alone opens the sign-in.
 import { S, esc } from "./base.js";
-import { act, FORGE, PK_PLAIN, mk, go, head } from "./marks.js";
+import { act, forge, pkPlain, mk, go, head } from "./marks.js";
+import { mots } from "./lexique.js";
 
 export function viewEntree(sub) {
-  const intent = S.intent && sub === "connexion" ? `<p class="intent" role="note">Connectez-vous pour ouvrir cette page : <code>${esc(S.intent)}</code>. Vous y reviendrez juste après.</p>` : "";
-  const signin = `<div class="actions">${act("signin", "Se connecter avec ma passkey", { k: "device" })}${act("signin", "Ma passkey est sur mon téléphone", { q: true, k: "phone" })}</div>`;
+  const W = mots(), E = W.entree, C = W.common;
+  const intent = S.intent && sub === "connexion" ? `<p class="intent" role="note">${E.intent(`<code>${esc(S.intent)}</code>`)}</p>` : "";
+  const signin = `<div class="actions">${act("signin", C.signInPasskey, { k: "device" })}${act("signin", E.onPhone, { q: true, k: "phone" })}</div>`;
   const V = {
-    connexion: ["Connexion", `<h1 class="v">Ce que vos missions prouvent, au même endroit.</h1>
-      <p class="face">Chaque CI envoie ce que runward a écrit. Vous lisez la vue de runward-fleet, la même que chez vous, derrière votre passkey.</p>
-      ${intent}${signin}${FORGE}${PK_PLAIN}
-      <p class="note">Plus aucune passkey ? <a href="#/reprise">Reprendre l'accès</a>. Pas encore d'accès ? <a href="#/entree/sans-compte">Comment on entre</a>.</p>`],
-    attente: ["Connexion en cours", `<h1 class="v">Validez sur votre appareil.</h1>
-      <p class="face">Votre navigateur vous demande votre passkey. Rien n'est accordé tant que vous ne l'avez pas validée.</p>
-      <div class="charge" role="progressbar" aria-label="En attente de la passkey"></div><p class="note">La demande reste valable 5 minutes.</p>`],
-    echec: ["Passkey non acceptée", `<h1 class="v">La validation n'a pas abouti.</h1>
-      <p class="face">${mk("inv", "non acceptée")} Elle a été annulée sur l'appareil, ou elle n'a pas répondu. Rien n'a été accordé.</p>
-      <div class="actions">${act("signin", "Réessayer avec ma passkey", { k: "device" })}${act("signin", "Utiliser mon téléphone", { q: true, k: "phone" })}</div>
-      <p class="note">Plus aucune passkey ? <a href="#/reprise">Reprendre l'accès</a>.</p>`],
-    inconnue: ["Passkey inconnue", `<h1 class="v">Cette passkey n'ouvre aucun accès ici.</h1>
-      <p class="face">${mk("inv", "inconnue")} Elle n'est enregistrée pour aucun membre de ce service. Elle a peut-être été retirée, ou créée pour un autre site.</p>
-      <div class="actions">${act("signin", "Essayer une autre passkey", { k: "device" })}${act("signin", "Utiliser mon téléphone", { q: true, k: "phone" })}</div>
-      <p class="note">Vous étiez membre et n'avez plus de passkey valable ? <a href="#/reprise">Reprendre l'accès</a>. Sinon, <a href="#/entree/sans-compte">comment on entre</a>.</p>`],
-    expiree: ["Demande expirée", `<h1 class="v">La demande a expiré.</h1><p class="face">${mk("void", "expirée")} Elle a duré plus de 5 minutes. Rien n'a été accordé.</p><div class="actions">${go("#/entree/connexion", "Recommencer")}</div>`],
-    "sans-passkey": ["Navigateur sans passkey", `<h1 class="v">Ce navigateur ne propose pas de passkey.</h1>
-      <p class="face">Il ne sait pas créer ni utiliser de passkey ici : navigation privée, poste partagé, ou navigateur trop ancien.</p>
-      <p class="note">Ouvrez cette page dans votre navigateur habituel ; s'il propose les passkeys, il affiche aussi un code QR pour valider avec votre téléphone.</p>`],
-    "sans-compte": ["Comment on entre", `<h1 class="v">L'accès est ouvert par l'opérateur du service.</h1>
-      <p class="face">runward hébergé rassemble ce que les missions d'une équipe prouvent. Chaque accès est ouvert par l'opérateur, avec un lien à usage unique ; il n'y a pas d'inscription en libre-service.</p>
-      <p>Pour lire vos propres missions sans compte, runward-fleet construit la même vue chez vous, à partir des mêmes fichiers : <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.</p>
-      <div class="actions">${go("#/entree/connexion", "Revenir à la connexion", { q: true })}</div>`],
-    sortie: ["Déconnecté", `<h1 class="v">Vous êtes déconnecté.</h1>
-      <p class="face">${mk("void", "session fermée")} Cette session est fermée sur ce navigateur. Vos autres sessions restent ouvertes ; vous pouvez les fermer depuis Accès.</p>
-      <div class="actions">${go("#/entree/connexion", "Se reconnecter")}</div>`],
-    "session-fermee": ["Session fermée", `<h1 class="v">Votre session s'est fermée.</h1>
-      <p class="face">${mk("void", "fermée")} La passkey qui l'avait ouverte vient d'être retirée, comme annoncé. Connectez-vous avec une passkey qui vous reste.</p>${signin}`],
-    fin: ["Session expirée", `<h1 class="v">Votre session a pris fin.</h1>
-      <p class="face">Après 12 heures sans activité, ou 7 jours au plus, la session se ferme. Reconnectez-vous ; vous reviendrez où vous étiez.</p>${signin}`],
+    connexion: [E.connexion.title, `<h1 class="v">${E.connexion.h1}</h1>
+      <p class="face">${E.connexion.face}</p>
+      ${intent}${signin}${forge()}${pkPlain()}
+      <p class="note">${E.connexion.note}</p>`],
+    attente: [E.attente.title, `<h1 class="v">${C.confirmOnDevice}</h1>
+      <p class="face">${E.attente.face}</p>
+      <div class="charge" role="progressbar" aria-label="${esc(C.waitingPasskey)}"></div><p class="note">${E.attente.note}</p>`],
+    echec: [E.echec.title, `<h1 class="v">${E.echec.h1}</h1>
+      <p class="face">${mk("inv", E.echec.mk)} ${E.echec.face}</p>
+      <div class="actions">${act("signin", E.echec.retry, { k: "device" })}${act("signin", E.usePhone, { q: true, k: "phone" })}</div>
+      <p class="note">${E.echec.note}</p>`],
+    inconnue: [E.inconnue.title, `<h1 class="v">${E.inconnue.h1}</h1>
+      <p class="face">${mk("inv", E.inconnue.mk)} ${E.inconnue.face}</p>
+      <div class="actions">${act("signin", E.inconnue.other, { k: "device" })}${act("signin", E.usePhone, { q: true, k: "phone" })}</div>
+      <p class="note">${E.inconnue.note}</p>`],
+    expiree: [E.expiree.title, `<h1 class="v">${E.expiree.h1}</h1><p class="face">${mk("void", E.expiree.mk)} ${E.expiree.face}</p><div class="actions">${go("#/entree/connexion", E.expiree.again)}</div>`],
+    "sans-passkey": [E.sansPasskey.title, `<h1 class="v">${E.sansPasskey.h1}</h1>
+      <p class="face">${E.sansPasskey.face}</p>
+      <p class="note">${E.sansPasskey.note}</p>`],
+    "sans-compte": [E.sansCompte.title, `<h1 class="v">${E.sansCompte.h1}</h1>
+      <p class="face">${E.sansCompte.face}</p>
+      <p>${E.sansCompte.own}</p>
+      <div class="actions">${go("#/entree/connexion", E.sansCompte.back, { q: true })}</div>`],
+    sortie: [E.sortie.title, `<h1 class="v">${E.sortie.h1}</h1>
+      <p class="face">${mk("void", E.sortie.mk)} ${E.sortie.face}</p>
+      <div class="actions">${go("#/entree/connexion", E.sortie.again)}</div>`],
+    "session-fermee": [E.fermee.title, `<h1 class="v">${E.fermee.h1}</h1>
+      <p class="face">${mk("void", E.fermee.mk)} ${E.fermee.face}</p>${signin}`],
+    fin: [E.fin.title, `<h1 class="v">${E.fin.h1}</h1>
+      <p class="face">${E.fin.face}</p>${signin}`],
   };
   const v = V[sub || "connexion"];
   if (!v) return null;
-  return { title: v[0], key: "entree", signed: "out", html: `${head("runward hébergé · connexion", "par passkey")}<section>${v[1]}</section>` };
+  return { title: v[0], key: "entree", signed: "out", html: `${head(E.head, E.headR)}<section>${v[1]}</section>` };
 }

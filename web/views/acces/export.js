@@ -2,14 +2,16 @@
 import { S, esc, short } from "../base.js";
 import { when } from "../time.js";
 import { mk, reqNote, act, head, go } from "../marks.js";
+import { mots } from "../lexique.js";
 
 export function viewExport() {
+  const W = mots(), X = W.acces.export, C = W.common;
   const x = S.export;
-  const body = x?.error ? `<p class="erreur" role="alert">${mk("inv", "non préparée")} ${esc(x.error.message ?? "L'archive n'a pas pu être préparée.")} Rien n'est perdu.${reqNote(x.error)}</p><div class="actions">${act("export", "Réessayer")}</div>`
-    : x?.busy ? `<div class="charge" role="progressbar" aria-label="Préparation de l'archive"></div><p class="note">Préparation de l'archive…</p>`
-      : x?.ready ? `<p>${mk("full", "prête")} Archive de <b>${esc((x.ready.size / 1024 / 1024).toFixed(1).replace(".", ","))}&nbsp;Mo</b>, empreinte <code>sha256 ${esc(short(x.ready.sha256))}</code>, disponible jusqu'au ${when(x.ready.expiresAt, { sec: false })}.</p>
-         <div class="actions"><a class="btn" href="/api/v0/export/${esc(x.ready.id)}" download="runward-hosted-export.tar">Télécharger l'archive</a></div>
+  const body = x?.error ? `<p class="erreur" role="alert">${mk("inv", X.notPrepared)} ${esc(x.error.message ?? X.failed)}${X.nothingLost}${reqNote(x.error)}</p><div class="actions">${act("export", C.retry)}</div>`
+    : x?.busy ? `<div class="charge" role="progressbar" aria-label="${esc(X.preparing)}"></div><p class="note">${X.preparingText}</p>`
+      : x?.ready ? `<p>${mk("full", X.ready)} ${X.archive(esc((x.ready.size / 1024 / 1024).toFixed(1).replace(".", X.decimal)), esc(short(x.ready.sha256)), when(x.ready.expiresAt, { sec: false }))}</p>
+         <div class="actions"><a class="btn" href="/api/v0/export/${esc(x.ready.id)}" download="runward-hosted-export.tar">${X.download}</a></div>
          <pre class="term" tabindex="0" lang="en">node scripts/replay-export.mjs runward-hosted-export.tar   # rebuilds every index of replay.json</pre>`
-        : `<p class="small">Votre passkey vous est demandée pour ce geste, puis l'archive se prépare.</p><div class="actions">${act("export", "Préparer l'archive")}</div>`;
-  return { title: "Exporter", key: "acces", signed: "in", html: `${head("accès · exporter", "vérification par geste")}<h1 class="v">Votre archive.</h1>${body}<div class="actions">${go("#/acces", "Revenir à Accès", { q: true })}</div>` };
+        : `<p class="small">${X.asked}</p><div class="actions">${act("export", X.prepare)}</div>`;
+  return { title: X.title, key: "acces", signed: "in", html: `${head(X.head, C.gestureCheck)}<h1 class="v">${X.h1}</h1>${body}<div class="actions">${go("#/acces", C.backToAccess, { q: true })}</div>` };
 }
