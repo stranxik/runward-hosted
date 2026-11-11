@@ -3,7 +3,7 @@
 // file a page names is a file of the closed list, served with its media type and named by its digest; no page holds
 // an inline script, an inline style element, an event handler or a javascript: address; the site's scripts write no
 // HTML (no innerHTML, no other sink) and call no network; the contact is a mailto: to one address and posts nothing;
-// the texts served are the 324 validated ones, text for text; the data comes from one file; the shell keeps its
+// the texts served are the 325 validated ones, text for text; the data comes from one file; the shell keeps its
 // addresses (/app, /lien, /#/...). Each guard has a planted control.
 import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ import { fakeAuthn, testJwk, sha, SEND_SHA } from "../helpers.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const PATHS = ["/", "/pourquoi", "/comment", "/pour-qui", "/formats", "/donnees", "/stand", "/releve", "/mentions"];
-const CONTACT = "thibaultsouris@runward.dev";
+const CONTACT = "contact@runward.dev";
 let c, base;
 before(async () => {
   const clock = manualClock(Date.now());
@@ -154,10 +154,17 @@ test("the site's scripts write no HTML from a string, evaluate nothing, call no 
   for (const [f] of SITE_FILES.filter(([f]) => f.endsWith(".js"))) assert.deepEqual(scriptFaults(readFileSync(`${WEB}site/${f}`, "utf8")), [], f);
 });
 
-test("the texts served are the 324 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)", async () => {
+test("the texts served are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)", async () => {
   const tsv = readFileSync(`${WEB}site/textes_fr_en.tsv`, "utf8");
   const rows = tsv.split("\n").filter(Boolean);
-  assert.equal(rows.length, 324);
+  assert.equal(rows.length, 325);
+  // the 325th is the house's signature (ADR-0026), in the foot of every page, its name linking to the studio's page
+  assert.ok(rows.includes("runward, par Another Framework\trunward, by Another Framework"));
+  for (const [p, html] of renderSite({ links: LINKS, data: siteData() }).pages) {
+    const foot = html.slice(html.indexOf('<footer class="pied">'), html.lastIndexOf("</footer>")); // the page's own foot (the printed statement has one of its own, before)
+    assert.match(foot, /<span class="signe" data-t="\d+">runward, par <a href="https:\/\/anotherframework\.dev\/studio\.html\?depuis=runward">Another Framework<\/a><\/span>/, `${p}: the signature in the foot`);
+    assert.match(html, /<template id="en-\d+">runward, by <a href="https:\/\/anotherframework\.dev\/studio\.html\?depuis=runward">Another Framework<\/a><\/template>/, `${p}: its English`);
+  }
   // the renderer collects them in build.py's order: the table it gives is the file, byte for byte
   assert.equal(textsTable(renderSite({ links: LINKS, data: siteData() }).texts), tsv);
   // and the served pages carry each of them, read back from their HTML: the French in the element, the English in its template

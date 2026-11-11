@@ -201,11 +201,26 @@ test("every font the layer declares is in the served list and in web/fonts, with
   assert.match(readFileSync(`${WEB}fonts/OFL.txt`, "utf8"), /SIL Open Font License, Version 1\.1/);
 });
 
-test("no entrance animation in the app (family rule); only the loading line loops", () => {
-  const css = readFileSync(`${WEB}app.css`, "utf8");
-  const anims = [...css.matchAll(/animation\s*:\s*([a-z-]+)/g)].map((m) => m[1]);
-  assert.deepEqual(anims.filter((a) => a !== "none"), ["charge"]);
-  assert.equal(/\.anim\b|IntersectionObserver/.test(css + Object.values(scripts()).join("\n")), false);
+test("no entrance animation in the app's stylesheet; two loops only, the loading line and the drift of the haze behind the sign-in (ADR-0025), both stopped under reduced motion", () => {
+  const css = readFileSync(`${WEB}app.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const anims = [...css.matchAll(/animation\s*:\s*([a-z-]+)/g)].map((m) => m[1]).filter((a) => a !== "none");
+  assert.deepEqual([...new Set(anims)].sort(), ["charge", "nue-a", "nue-b", "nue-c", "pts"]);
+  // every one of them loops (an entrance plays once), and each is a rule of the scene or of the loading line
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*animation\s*:\s*(?!none)[^{}]*)\}/g)].map((m) => ({ sel: m[1].trim(), body: m[2] }));
+  assert.ok(rules.length >= 6, "the guard must see the rules that animate");
+  assert.deepEqual(rules.filter((r) => !/\binfinite\b/.test(r.body)).map((r) => r.sel), [], "no animation that plays once");
+  assert.deepEqual(rules.filter((r) => !/^\.hero-e \.nue i|^body\[data-scene="pleine"\] \.scn \.points$|^\.charge::after$/.test(r.sel)).map((r) => r.sel), [], "the haze of the sign-in and the loading line only");
+  // the drift lives on the sign-in alone: behind a screen of data the haze does not move
+  assert.equal(/\.scn \.nue i\{[^}]*animation/.test(css), false);
+  // reduced motion stops both loops
+  const reduced = /@media \(prefers-reduced-motion: reduce\)\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+  assert.match(reduced, /\.nue i, \.points\{ animation:none !important; \}/);
+  assert.match(reduced, /\.charge::after\{ animation:none;/);
+  // planted controls: an entrance (it plays once) and a drift behind a screen of data are both seen
+  const once = [...`${css}\n.tete{ animation:monte 320ms 1; }`.matchAll(/([^{}]+)\{([^{}]*animation\s*:\s*(?!none)[^{}]*)\}/g)].filter((m) => !/\binfinite\b/.test(m[2])).map((m) => m[1].trim());
+  assert.deepEqual(once, [".tete"]);
+  assert.equal(/\.scn \.nue i\{[^}]*animation/.test(`${css}\n.scn .nue i{ animation:nue-a 24s infinite; }`), true);
+  assert.equal(/\.anim\b/.test(css + Object.values(scripts()).join("\n")), false);
 });
 
 test("the relevés in the mono read at 12 px, the fleet views' included (author's rule)", () => {

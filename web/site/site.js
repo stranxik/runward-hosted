@@ -50,7 +50,7 @@
 
   /* ---- la boîte de contact : elle prépare un courriel dans la messagerie du visiteur ; rien ne part vers un serveur.
      <dialog>.showModal() piège le focus, ferme sur Échap et rend le focus à l'élément qui l'a ouverte. */
-  var ADRESSE = "thibaultsouris@runward.dev";
+  var ADRESSE = "contact@runward.dev";
   var dlg = document.getElementById("contact");
   if (dlg && typeof dlg.showModal === "function") {
     var form = dlg.querySelector("form"), etat = dlg.querySelector(".dlg-s"), direct = dlg.querySelector("[data-direct]"), titre = dlg.querySelector("#dlg-t");

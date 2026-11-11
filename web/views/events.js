@@ -1,8 +1,8 @@
 // What the page listens to: one click handler for every button of the shell (data-go opens an address,
 // data-do names a gesture), and the two forms.
-import { S, mobEl, main, parts } from "./base.js";
+import { S, main, parts, colonneEl } from "./base.js";
 import { api, loadSession } from "./api.js";
-import { say } from "./shell.js";
+import { say, menu, closeMenuWhenWide } from "./shell.js";
 import { FIELD_OF } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
@@ -23,13 +23,18 @@ document.addEventListener("click", async (e) => {
   if (what === "lecture-lang") { setLang(k); S.focusKey = `lecture-lang:${k}`; return rerender(); }
   if (what === "reload-screen") { S.error = null; S.session = undefined; forgetReads(); location.hash = location.hash.startsWith("#/panne") ? "#/" : location.hash; return show(); }
   if (what === "copy") {
+    // the extract of a workflow (with its line end, a status beside the button) or the command of « Vérifier par
+    // vous-même » (as written: a pasted line end would run it; its status is announced)
     const W = mots(), pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");
-    try { await navigator.clipboard.writeText(pre.textContent + "\n"); b.textContent = W.done.copied; if (out) out.textContent = W.done.inClipboard; }
-    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = W.done.selected; }
-    setTimeout(() => { b.textContent = W.workflow.copy; }, 2400);
+    const plain = b.hasAttribute("data-copy-plain"), label = b.dataset.label ?? W.workflow.copy;
+    try { await navigator.clipboard.writeText(plain ? pre.textContent : pre.textContent + "\n"); b.textContent = W.done.copied; if (out) out.textContent = W.done.inClipboard; else say(W.done.commandCopied); }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = W.done.selected; else say(W.done.commandSelected); }
+    setTimeout(() => { if (b.isConnected) b.textContent = label; }, 2400);
     return;
   }
-  if (what === "scroll") { mobEl.open = false; document.getElementById(k)?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); return; }
+  // the phone menu: its button, its veil; a link inside it closes it with the screen it opens (the shell's paint)
+  if (what === "menu") { menu(); return; }
+  if (what === "menu-close") { menu(false); return; }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
   if (what === "confirm") return confirmGesture(k);
@@ -51,6 +56,13 @@ document.addEventListener("click", async (e) => {
     S.export = r.ok ? { ready: r.data } : { error: r.r ?? r.verify?.r ?? r };
     return rerender();
   }
+});
+
+closeMenuWhenWide(matchMedia("(min-width:900px)"));
+
+// the keyboard: Escape closes the phone menu
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && colonneEl.classList.contains("menu-ouvert")) { menu(false); document.getElementById("menub")?.focus(); }
 });
 
 main.addEventListener("submit", async (e) => {

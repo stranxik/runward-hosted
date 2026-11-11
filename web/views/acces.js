@@ -30,5 +30,5 @@ export function viewAcces(sub) {
   return { title: A.title, key: "acces", signed: "in", html: `${head(A.headTenant(esc(titreFlotte(S.session.tenant.title))), A.headR)}
     <h1 class="v">${A.h1}</h1>
     <p class="face lede">${A.lede}</p>
-    ${SECTIONS.map((s) => s(a)).join("\n    ")}` };
+    <div class="reglages">${SECTIONS.map((s) => s(a)).join("\n    ")}</div>` };
 }

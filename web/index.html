@@ -20,21 +20,29 @@
 </head>
 <body>
 <a class="vh skip" href="#main" data-mot="skip">Aller au contenu</a>
+<!-- the scene every screen stands on (the public site's: a haze, a grid of dots, a grain), calm behind a screen of
+     data; the sign-in alone carries the whole drifting haze, behind its window (web/views/entree.js) -->
+<div class="scn" id="scn" aria-hidden="true"><div class="nue"><i></i><i></i><i></i><i></i></div><div class="points"></div><div class="grain"></div></div>
 <div class="corps" id="corps">
   <aside class="lat" id="lat" aria-label="Navigation de l'app" data-mot-aria="navApp" hidden></aside>
-  <div class="colonne">
+  <div class="colonne" id="colonne">
+    <!-- one header on every screen: the brand (signed out, and on a phone), the screen's title or its trail, the
+         language, the theme, and on a phone the menu -->
     <header class="top" id="top">
-      <div class="wrap">
-        <a class="brand marque" href="#/" translate="no"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward<span data-mot="brandSuffix"> hébergé</span></a>
-        <nav class="pub" id="pub" aria-label="Pages publiques" data-mot-aria="navPublic"></nav>
-        <span class="rv" id="stamp"></span>
-        <div class="top-act" id="topact"></div>
-        <details class="mob" id="mob" hidden><summary data-mot="menu">Menu</summary><nav id="mobnav" aria-label="Navigation de l'app" data-mot-aria="navApp"></nav></details>
-        <button class="theme" type="button" data-theme-btn aria-label="Changer de thème, clair ou sombre" data-mot-aria="theme"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+      <a class="marque" href="#/" translate="no"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward<span data-mot="brandSuffix"> hébergé</span></a>
+      <span class="hote" id="stamp" translate="no"></span>
+      <nav class="fil" id="fil" aria-label="Fil d'Ariane" data-mot-aria="crumb"></nav>
+      <div class="outils">
+        <span class="langue" id="langue" role="group" aria-label="Langue" data-mot-aria="langGroup"></span>
+        <button class="btn-t" type="button" data-theme-btn aria-label="Changer de thème, clair ou sombre" data-mot-aria="theme"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+        <button class="btn btn-q menu-b" id="menub" type="button" data-do="menu" aria-expanded="false" aria-controls="mobnav" data-mot="menu" hidden>Menu</button>
       </div>
     </header>
-    <div id="bandeaux" class="wrap"></div>
-    <main id="main" class="wrap" tabindex="-1"><noscript><span lang="fr">Cette page affiche ses vues avec JavaScript.</span> <span lang="en">This page shows its views with JavaScript.</span></noscript></main>
+    <div class="voile" id="voile" data-do="menu-close"></div>
+    <nav class="menu-pan" id="mobnav" aria-label="Navigation de l'app" data-mot-aria="navApp"></nav>
+    <div class="barre-tel" id="bartel"><nav class="fil" id="fil2" aria-label="Fil d'Ariane" data-mot-aria="crumb"></nav><span class="langue" id="langue2" role="group" aria-label="Langue" data-mot-aria="langGroup"></span></div>
+    <div id="bandeaux"></div>
+    <main id="main" tabindex="-1"><noscript><span lang="fr">Cette page affiche ses vues avec JavaScript.</span> <span lang="en">This page shows its views with JavaScript.</span></noscript></main>
     <footer class="pied" id="pied"></footer>
   </div>
 </div>
