@@ -83,7 +83,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Licence and hosting | ADR-0013 |
 | Design tokens in one file | ADR-0019 (the app's own layer), which supersedes ADR-0014 |
 | The in-memory store as reference adapter | ADR-0015 |
-| The operator's gateway to the private database | ADR-0016 |
+| The operator's gateway to the private database | ADR-0016; pending: ADR-0023 (the grants compared by a gesture of their own, under rw_owner), proposed 2026-11-11 |
 | No load test before the preview; the bounds are tested | ADR-0017 |
 
 ### Ratification
