@@ -69,7 +69,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 |---|---|
 | One Node.js monolith, no framework, one network exit | ADR-0001 |
 | runward-fleet pinned by a vendored tarball of a commit | ADR-0002 |
-| runward-fleet re-pinned on main at main@d05b597, where PR #499 merged; the archive digest names the build | decided: ADR-0021, accepted 2026-11-11, refining ADR-0018 (accepted 2026-11-10, re-pinned at main@5a9cdf0) |
+| runward-fleet re-pinned on main at main@d05b597, where PR #499 merged; the archive digest names the build | decided: ADR-0021, accepted 2026-11-11, refining ADR-0018 (accepted 2026-11-10, re-pinned at main@5a9cdf0); pending: ADR-0024 (re-pinned at main@d052814, where the grouped decision reading merged; an index of an earlier archive is read as published until its next publication), proposed |
 | Upload by the OIDC token of the send workflow | ADR-0003 |
 | The index by runward-fleet, the view imported | ADR-0004 |
 | Passkeys and one link mechanism | ADR-0005 |
