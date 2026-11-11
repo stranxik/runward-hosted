@@ -155,3 +155,9 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: ADR-0022, proposed: `/` is the landing for everyone, the shell is served at `/app`, the landing's first script sends a `#/` address to it and the shell writes `/#/...` back; `/#/entree` alone opens the sign-in and the in-app public home (`web/views/accueil.js`) is retired.
 - Blocked / to dig: an address of the app opened from outside loads two documents; the shell's branch for a public screen (`shell.js`, its styles in `app.css`) has no screen left; the shell's signed-out session read still logs one 401 in the console, as before. The relevé and the public view show the data of 2026-11-10, as the mini-site did.
 - Next: the author's decision on ADR-0022; on the 17th, `donnees.json` replaced by the real index (the read of `siteData()`); a scan of the printed QR code on a phone against the deployed `/stand`.
+
+## 2026-11-11 - ADR-0021 and ADR-0022 accepted
+
+- Done: the author accepted ADR-0021 and ADR-0022 in chat, in answer to a list that named both; their status lines and the architecture note's rows say so.
+- Decided: ADR-0021, the pin at main@d05b597 whose archive digest names the build, accepted; ADR-0022, the landing at `/` and the shell at `/app`, accepted.
+- Next: the runbook (section 6) and the hand-over (section 4) still describe the re-pin of ADR-0018 and follow ADR-0021 now; the reevaluation of ADR-0022 on 2026-11-19, on what the stand showed.

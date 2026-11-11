@@ -1,7 +1,7 @@
 # ADR-0021: runward-fleet re-pinned at main@d05b597, the commit where PR #499 merged; the archive digest, not the version, names the build (refines ADR-0018)
 
 **Date**: 2026-11-10
-**Status**: proposed (written by an agent session; acceptance is the author's)
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte", in answer to a list that named ADR-0021 and ADR-0022); written by an agent session
 **Refines**: ADR-0018 (accepted 2026-11-10), which stays in force for everything this record does not change; through it, ADR-0002
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the two commits of runward, the two tarballs, the same inputs built by each pin, an export archive of each pin replayed by the other), challenge, durable position
