@@ -4,24 +4,25 @@
   "repository": "https://github.com/stranxik/runward",
   "path": "packages/runward-fleet",
   "ref": "main",
-  "commit": "d05b59742bf10f6bfe803a0caaa9a289cd272ab0",
-  "tarball": "vendor/runward-fleet-0.46.0-d05b5974.tgz",
-  "tarballSha256": "fff950650d3ac666cc6b43cc731936fbda1f99fc76d9e02c44977691a4aa2337",
-  "integrity": "sha512-1N2Y/BIW3wgFsjX//N2k4W9f+6m9T+oetM5tSSXnS1sw0ulSxZ1eziGEb4mG09LdOkk1nRCxejyHJdFgX0SsQw==",
+  "commit": "d05281492d724f09dfe821f0285571eacd3c540a",
+  "tarball": "vendor/runward-fleet-0.46.0-d0528149.tgz",
+  "tarballSha256": "addcaa2dce4e97c190754155f4e3cea48762a60de3678fb9ce802078c26f2f84",
+  "integrity": "sha512-oiaWdEZd74BPSbeJAG2rVHvidVjlSj+ThgtvlQBXyZ5aMnqH+cB0rZL7Sw+U87nL3huIdVUyfDin1PBxBjyIXQ==",
   "files": {
     "LICENSE": "0b66c627e2d8f83f304da621d9171beeb3c5b8d915d7f8c674f3802d97ad611f",
-    "README.md": "55da40527cd5d25894dea9325c598d4f51f767f6b9b6a1865e3ac3958eb05deb",
-    "package.json": "b0ccd58c3ac1843092bb51a56f636033f837ace6aed33c7b67e96d5be6226852",
-    "src/build.js": "2b494d9860bcdc3c47869a3e7d255ea1e241a3c40a0d5c3cef0aa3c4db2430e9",
+    "README.md": "10fc013de16ff19e11763a04c9c94cd0545a7b97235e9a19294e7b18dd57f784",
+    "package.json": "61cc48fea36ee6785979c9c5c6b2aa97603783d234ecb2944dab99dcee2ce423",
+    "src/build.js": "d04f7c5c743d36955ddddfff57185478f7bfcc3f8fea3332ef8355eb71f70f71",
     "src/cli.js": "8c67a9e0262cfb8856d1e6cf525288d344a4396ec6886169d97a3eb665618531",
     "src/der.js": "5b3351ae565648a82b6b63b7dded977f322b6864fd9597433cf337f843633282",
     "src/ed25519.js": "7879ba4f2b787a08b4d4f0d4b603e70d23feb6e7de7f19c43492e4512f95a829",
     "src/errors.js": "b9c6f4e27f256692040782a5e7c628327e06747ad8e70911c126f9c720ccb9ff",
-    "src/rules.js": "07ba17e35555b69781db2c2efbf86398393c7a9c4ca529b18c1899053c71d08a",
+    "src/rules.js": "dc3ff10e617be2cc28847f974d1e2ba67e22768832d723a0880973f7870c7a80",
     "src/run-signature.js": "1e2468d9eb08fb44c25eecc05b365b2d2e3b0588406171eeaaf797120bdf4a09",
     "src/sigstore.js": "13a69d63962c5801e80cae5374861de518ea377da6adc33c13f0735ef30794f4",
-    "src/site.js": "1fca86cdeec049a444e60526d6858c03443c6738aafafef1e46635b2db544db2",
+    "src/site.js": "e0ee438c53dbeecdac857d237b1b2fc676f9656d0cc572c84aa58a05f0bef099",
     "src/trust.js": "64e053325fe9786b5c59f2a67fdd7c2874870804da7451245429cd6ce0144902",
+    "ui/documents.js": "3d173800685d69858fcc264ff973581e6c4b2a7be4e808108b9462b216a48433",
     "ui/fonts/DepartureMono-Regular.woff2": "5b4fed1daa90708aa9c6ee1190abca9dc22164a1c1def0020386e46b61038cfb",
     "ui/fonts/OFL-DepartureMono.txt": "b65e42750f3cb65437a97f4dfd781c58f199259949db2341012be60e32500e83",
     "ui/fonts/OFL-Inter.txt": "8c8fa881d9091ee315d2c80d207bb73afd4e90a66c9782ca445c5642f25db6dc",
@@ -29,14 +30,21 @@
     "ui/fonts/inter-latin-400-normal.woff2": "dd05e326cf8eac3b55acecf29c842ed73e6e6dd06491cf47f7e8800680ab3e33",
     "ui/fonts/inter-latin-500-normal.woff2": "b0e7558f4710a1e255b93e3deefe3aebb19f3bb41c150f685a74d3b1a1c79e87",
     "ui/fonts/inter-latin-600-normal.woff2": "62553d159189834af73c9a6264704be5b2bee9a08da66a14768d8e5c6ffd2cdb",
-    "ui/template.html": "58b15ac2d55de018dc04605c7e92ea4ddd996e4a22f350eb26faf58cc51acd10",
-    "ui/views.js": "56b75208770b6e4297a2965b5f7d574c60b78b08b046f1b31f3fda5c5e13593d"
+    "ui/mission.js": "aad3379dba8bc3fa944d46077296047c09f4836359db63dc561036543301d089",
+    "ui/template.html": "9b805c6b3f62650a0c1b77888073471fcdeb3fb59e45fa8d39ad84ab35a9bcde",
+    "ui/views.js": "110c75a099fcd69ed4bfbc9c0d7280980345402a20daceb75b30fdc372a43361"
   },
   "how": "npm pack of packages/runward-fleet at commit. scripts/verify-runward-fleet.mjs proves that the tarball holds the files listed here and nothing else, each a regular file under package/, and (online) that they are the files npm packs at that commit, byte for byte. The service compares what is installed with this list when it starts (fleetPin)",
   "previous": {
-    "commit": "5a9cdf08a76977f9b671662f562e98d332ccc95e",
+    "commit": "d05b59742bf10f6bfe803a0caaa9a289cd272ab0",
     "ref": "main",
-    "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
-    "why": "PR #499 of runward merged into main at d05b5974: the decision reading (decide and renderDecision in runward-fleet/views, ADR-0125 of runward). src/build.js, src/rules.js, src/site.js, ui/template.html, ui/views.js and the README changed; the version stays 0.46.0, so the version no longer names one archive. Measured (ADR-0021): from the same fleet.json and exports the two pins give different index bytes, every field of the old index unchanged and fields added; an index the previous pin built replays to its bytes only with the archive 99e941a5, packed at 5a9cdf08, and scripts/replay-export.mjs names it other-archive instead of rebuilding it"
+    "tarballSha256": "fff950650d3ac666cc6b43cc731936fbda1f99fc76d9e02c44977691a4aa2337",
+    "why": "PRs #500, #510 and #509 of runward merged into main, the last at d0528149: the grouped decision reading (ADR-0128 of runward: the refusals by kind then by the check's text, shown once and folded; the applications refused first; every state with its n / N), the mission projections (ADR-0126, ui/mission.js) and the documents module (ADR-0127, ui/documents.js). package.json (two exports added), src/build.js, src/rules.js, src/site.js, ui/template.html, ui/views.js and the README changed, and two files were added; the version stays 0.46.0. Measured (ADR-0024): from the same fleet.json and exports the two pins give different index bytes, every field of the old index unchanged and one field added (latest.conformanceByKind[].byText); an index the previous pin built replays to its bytes only with the archive fff95065, packed at d05b5974, and scripts/replay-export.mjs names it other-archive instead of rebuilding it",
+    "previous": {
+      "commit": "5a9cdf08a76977f9b671662f562e98d332ccc95e",
+      "ref": "main",
+      "tarballSha256": "99e941a5ea915718e9a8254b00165042305772e3d228227b1cfeb9761b2aa2e9",
+      "why": "PR #499 of runward merged into main at d05b5974: the decision reading (decide and renderDecision in runward-fleet/views, ADR-0125 of runward). src/build.js, src/rules.js, src/site.js, ui/template.html, ui/views.js and the README changed; the version stays 0.46.0, so the version no longer names one archive. Measured (ADR-0021): from the same fleet.json and exports the two pins give different index bytes, every field of the old index unchanged and fields added; an index the previous pin built replays to its bytes only with the archive 99e941a5, packed at 5a9cdf08, and scripts/replay-export.mjs names it other-archive instead of rebuilding it"
+    }
   }
 }

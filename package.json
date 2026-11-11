@@ -30,7 +30,7 @@
     "@simplewebauthn/server": "14.0.3",
     "aws4fetch": "1.0.20",
     "postgres": "3.4.9",
-    "runward-fleet": "file:vendor/runward-fleet-0.46.0-d05b5974.tgz"
+    "runward-fleet": "file:vendor/runward-fleet-0.46.0-d0528149.tgz"
   },
   "devDependencies": {
     "@secretlint/secretlint-formatter-sarif": "13.1.0",
