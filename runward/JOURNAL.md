@@ -324,3 +324,11 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session. Proposed: ADR-0029 and ADR-0030, revised.
 - Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
 - Next: the author's decision on both records.
+
+## 2026-11-11 - the forge records: third review pass, three wordings
+
+- Done: the final check of the third revision (a8644fe..b1d82df) found every second-pass item in the text and nothing new wrong; its three minor remarks are applied (the P5 sentence names "the directory it declared"; the moment GitLab issues its token is marked as documented, not observed; the Azure witness reads `ver`).
+- Evidence: `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`, section "Third pass".
+- Decided: nothing by the session; ADR-0029 and ADR-0030 stay proposed until the author accepts them.
+- Next: the author's acceptance; then the implementation of the port, written and reviewed on the critical model.
+
