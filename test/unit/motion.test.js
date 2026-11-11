@@ -97,6 +97,7 @@ const served = mkdtempSync(join(tmpdir(), "rw-motion-"));
 test.after(() => rmSync(served, { recursive: true, force: true }));
 for (const f of MODULES) { const p = join(served, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(VIEWS.href))); }
 const M = await import(pathToFileURL(join(served, "views/mouvement.js")).href);
+const { motionOf } = await import(pathToFileURL(join(served, "views/router.js")).href);
 
 /** An element whose animations never end by themselves: only finish() or cancel() ends them. */
 function stuckElement() {
@@ -158,8 +159,7 @@ test("reduced motion: no transform is animated; what only moved does not play, w
   } finally { reduced.matches = false; }
 });
 
-test("the blocks of a screen arrive once, on a navigation forward: never on the same address painted again (a refresh, a re-render, a check that arrives), never on a way back", async () => {
-  const { motionOf } = await import(pathToFileURL(join(served, "views/router.js")).href);
+test("the blocks of a screen arrive once, on a navigation forward: never on the same address painted again (a refresh, a re-render, a check that arrives), never on a way back", () => {
   assert.deepEqual(motionOf(null, "#/", []), { transition: true, arrival: true, back: false }, "the first screen");
   assert.deepEqual(motionOf({ h: "#/" }, "#/decision/a", ["#/"]), { transition: true, arrival: true, back: false }, "forward");
   assert.deepEqual(motionOf({ h: "#/decision/a" }, "#/decision/a", ["#/", "#/decision/a"]), { transition: false, arrival: false, back: false }, "the same address: nothing moves");
