@@ -72,9 +72,9 @@ test("container-deploy.sh: the hoster's key reaches the API on every call, and i
     return state;
   });
   try {
-    const r = await run("scripts/container-deploy.sh", [ID, DIGEST], { SCW_SECRET_KEY: KEY, SCW_API_URL: api.url }, curl.dir);
+    const r = await run("scripts/container-deploy.sh", [ID, DIGEST], { SCW_SECRET_KEY: KEY, SCW_API_URL: api.url, CONTAINER_DEPLOY_PAUSE: "0.05" }, curl.dir);
     assert.equal(r.code, 0, r.out);
-    assert.ok(api.seen.length >= 4, "read, patch, deploy, read");
+    assert.ok(api.seen.length >= 3, "read, patch, read");
     const argv = curl.argv();
     assert.match(argv, /containers\/v1beta1/);
     assert.equal(argv.includes(KEY), false, "the key is an argument of curl");

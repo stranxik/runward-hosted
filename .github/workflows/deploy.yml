@@ -172,6 +172,10 @@ jobs:
           PREV_COMMIT: "${{ needs.deploy.outputs.previous_commit }}"
           PREV_OPERATOR: "${{ needs.deploy.outputs.previous_operator }}"
         run: |
-          scripts/container-deploy.sh "$CONTAINER" "$PREV" "$PREV_COMMIT"
-          [ -z "$PREV_OPERATOR" ] || scripts/container-deploy.sh "$OPERATOR" "$PREV_OPERATOR"
+          # both containers are tried, whatever the first one answers (2026-11-10: the service's line failed and
+          # the gateway stayed on the new digest); the step then fails if either did
+          failed=""
+          scripts/container-deploy.sh "$CONTAINER" "$PREV" "$PREV_COMMIT" || failed=" service"
+          [ -z "$PREV_OPERATOR" ] || scripts/container-deploy.sh "$OPERATOR" "$PREV_OPERATOR" || failed="$failed gateway"
+          [ -z "$failed" ] || { echo "rollback failed on:$failed"; exit 1; }
           for i in $(seq 1 60); do [ "$(curl -sf --max-time 30 "$SERVICE/api/version" | jq -r .image)" = "$PREV" ] && exit 0; sleep 10; done; exit 1
