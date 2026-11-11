@@ -303,3 +303,14 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
   - runward-fleet must admit a host with a port as well as long paths: the witness instance's address carries one.
 - Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
 - Next: the author's decision on ADR-0029; then the port with GitHub alone behind it (step a), on the model reserved for critical code.
+
+## 2026-11-11 - the review of ADR-0029: not acceptable as written, sixteen findings answered, Azure DevOps split out
+
+- Done: an adversarial review of `49bf59d` on the model reserved for critical work (`runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`) found the record not acceptable: two blocking findings, eight important, six minor. ADR-0029 is revised in place (it is proposed, never accepted); no code.
+  - A1: for a registered instance, the issuer key of every key of the store is the tenant's registration row, never the issuer's string; a planted control of two tenants with the same string and the same `project_id` joins the witness. A2: P3 is gitlab.com's alone; a registered instance is P4, and its sentence says the service has not checked that the key belongs to a GitLab instance.
+  - A3 to A10: the audience names the registration (`/send/<id>`, a random identifier, disjoint from `/read`), one uniform refusal; P3's sentence names the variables, the runner and the protection's rules, and only `push` sends; lifting the protection gives a level of its own, P3b; the last key may be retired, a retirement is replayed by a restore, each upload names its key; a token more than 10 minutes old is refused; the confirmation is bound to a digest of what the screen shows, for GitHub too; the refusals' words, seven codes of them, are sorted per forge.
+  - A11 to A16: the code citations corrected; what a key must be; the issuer's string parsed at registration only; the order after an instance's restore, a signal and a gesture; the confirmed file compared with the declaration; the sentence before the code, no level shown that nothing reaches.
+- Decided: nothing by the session. Proposed: ADR-0029, revised; ADR-0030, new, Azure DevOps as a direction with nine open points and no rule (A7).
+- Blocked / to dig, for the author's eye: the reviewer's own wording of A7 did not reach this session; a registered instance at P4 whatever its care is a choice the author may temper; only `push` sends on GitLab until a witness of `api` with variables.
+- Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
+- Next: the author's decision on ADR-0029 and ADR-0030.
