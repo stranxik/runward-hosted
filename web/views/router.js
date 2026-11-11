@@ -10,11 +10,13 @@
 //   documents     the reader of the mission's documents               web/views/documents.js     reads: its own
 // A screen that needs a new read names it in READS: the key says when the read is made again, the loader makes
 // it (web/views/api.js). The budget of architecture §6 holds for every screen: 4 reads at most at its opening.
-import { parts, S } from "./base.js";
+import { parts, S, main } from "./base.js";
 import { loadingView } from "./marks.js";
 import { loadFleet, loadAccess, loadJournal, loadSession } from "./api.js";
 import { ROUTES } from "./fleet-views.js";
 import { paint } from "./shell.js";
+import { mots } from "./lexique.js";
+import { ecran, charger, porte, poserMessages, releverPortefeuille, controleArrive } from "./mouvement.js";
 import { viewEntree } from "./entree.js";
 import { viewLien } from "./lien.js";
 import { viewReprise } from "./reprise.js";
@@ -69,7 +71,27 @@ function resolve() {
 let loadedFor = null;
 /** The next opening reads again (after a gesture that changed what the screen shows). */
 export const forgetReads = () => { loadedFor = null; };
+
+// ------------------------------------------------------------- the motion of a change of screen (ADR-0027)
+// What was shown last: the address, and the application a reading was open on. The blocks of a screen arrive once,
+// when one comes to it by a navigation forward: never on a refresh, a switch of language, a way back, a check that
+// arrives, nor between two states of one screen (the sign-in's ceremony changes its state in place).
+let shown = null, turn = 0, readAt = 0;
+const trail = [];
+/**
+ * What moves when the address `h` is shown after `shown` (the address shown last), `trail` being the addresses come
+ * through: nothing on the same address (a refresh, a re-render), a transition without arrival on a way back (the
+ * address before the one shown), a transition and the arrival of the screen's blocks on a navigation forward.
+ */
+export function motionOf(shown, h, trail) {
+  if (shown && shown.h === h) return { transition: false, arrival: false, back: false };
+  const back = trail.length > 1 && trail[trail.length - 2] === h;
+  return { transition: true, arrival: !back, back };
+}
+const appOf = (route, sub) => (route === "decision" && sub ? sub : null);
+
 export async function show() {
+  const mine = ++turn;
   const { h, route, sub } = parts();
   const screen = screenOf(route);
   if (S.session === undefined && !S.error) await loadSession();
@@ -92,12 +114,51 @@ export async function show() {
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
   const reads = screen?.reads ? READS[screen.reads] : null;
   const key = reads ? reads.key(sub) : null;
+  let waited = false;
   if (S.session && key && loadedFor !== key) {
     loadedFor = key;
-    paint(loadingView(""));
+    // loading: nothing for 300 ms (the screen shown stays), then a quiet skeleton, then the screen
+    // (the same address read again, a refresh: the screen stays as it is until its new reading is there)
+    const wait = shown?.h === h ? { fin: () => false } : charger(() => { if (mine !== turn) return; const was = main.offsetHeight; paint(loadingView("")); main.style.minHeight = `${was}px`; }); // the skeleton keeps the screen's height: the foot does not move
+    if (screen.reads === "fleet") readAt = Date.now();
     await reads.load(sub);
+    waited = wait.fin();
   }
-  paint(resolve() ?? view404(location.hash || "#/"));
+  if (mine !== turn) return; // a later navigation took over while this one was reading
+  const view = resolve() ?? view404(location.hash || "#/");
+  // a state of the screen already shown (the sign-in's ceremony): it changes in place, its window keeps its size
+  if (shown && !waited && view.state && shown.key === view.key && shown.h !== h && porte(view.state) !== null) {
+    document.title = `${view.title ? `${view.title} · ` : ""}${mots().brand}`;
+    shown = { ...shown, h };
+    poserMessages(0);
+    return;
+  }
+  const m = motionOf(shown, h, trail), same = !m.transition, back = m.back;
+  const app = appOf(route, sub) ?? (shown?.app && (route === "" || route === "decision") ? shown.app : null);
+  // the same address painted again (a refresh, the screen after a gesture): no transition at all, and what a check
+  // changed on the portfolio is shown where it changed
+  if (same && !waited) {
+    const before = releverPortefeuille();
+    paint(view);
+    controleArrive(before);
+  } else {
+    await ecran(() => paint(view), { arrivee: m.arrival, vite: waited, app });
+    poserMessages();
+  }
+  if (!same) { if (back) trail.pop(); else trail.push(h); }
+  shown = { h, key: view.key, app: appOf(route, sub) };
 }
+/** The screen shown, painted again from what it already read (a confirmation that opens, a list that changed). */
 export const rerender = () => paint(resolve() ?? view404(location.hash));
+/** The same screen in the other language: a fade, each piece keeps its place, no arrival. */
+export const relang = () => ecran(() => rerender(), { arrivee: false, vite: true, app: shown?.app });
 export const refreshScreen = async () => { loadedFor = null; await loadSession(); await show(); };
+/**
+ * The portfolio read again when its reader comes back to the tab, a minute at least after its last read: a check
+ * that arrived meanwhile shows where it changed (the same two reads as an opening, never a poll).
+ */
+export async function comeBack() {
+  if (!S.session || parts().route !== "" || Date.now() - readAt < 60_000) return;
+  loadedFor = null;
+  await show();
+}

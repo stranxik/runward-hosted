@@ -7,6 +7,7 @@ import { KINDS } from "./confirm.js";
 import { mots } from "./lexique.js";
 import { say } from "./shell.js";
 import { forgetReads, refreshScreen, rerender } from "./router.js";
+import { reussite } from "./mouvement.js";
 
 export async function signIn(mode) {
   location.hash = "#/entree/attente";
@@ -16,7 +17,9 @@ export async function signIn(mode) {
   if (!c.ok) { location.hash = c.why === "unsupported" ? "#/entree/sans-passkey" : c.why === "offline" ? "#/panne/hors-ligne" : "#/entree/echec"; return; }
   const r = await api("POST", "/api/v0/auth/verify", { challengeId: o.data.challengeId, response: c.response });
   if (!r.ok) { location.hash = r.refusal === "passkey-unknown" ? "#/entree/inconnue" : r.refusal === "challenge-invalid" ? "#/entree/expiree" : "#/entree/echec"; return; }
-  await loadSession(); forgetReads();
+  // accepted: the check draws itself in the window while the session is read (600 ms in all), then the screen changes
+  say(mots().done.signedIn);
+  await Promise.all([reussite(), loadSession()]); forgetReads();
   const back = S.intent; S.intent = null;
   location.hash = !S.session.arrivalDone ? "#/arrivee" : back && !back.startsWith("#/entree") ? back : "#/";
 }

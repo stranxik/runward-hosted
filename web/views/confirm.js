@@ -1,6 +1,6 @@
 // Access: gestures that withdraw, then restore. One confirmation box for every gesture that asks one.
 import { S, esc } from "./base.js";
-import { mk } from "./marks.js";
+import { mk, souffle } from "./marks.js";
 import { mots, appareil } from "./lexique.js";
 
 /**
@@ -22,7 +22,7 @@ export function confirmBox(k) {
     d = C.passkey(opened.map((s) => appareil(s.device) ?? C.device).join(", "), opened.some((s) => s.current));
   }
   const geste = t.g ? W.common.askedForGesture : W.common.askedIfOld;
-  if (S.busy === k) return `<div class="confirm" role="group" aria-label="${esc(t.q)}"><p><b>${esc(W.common.confirmOnDevice)}</b> ${esc(geste)}</p><div class="charge" role="progressbar" aria-label="${esc(W.common.waitingPasskey)}"></div></div>`;
+  if (S.busy === k) return `<div class="confirm" role="group" aria-label="${esc(t.q)}"><p><b>${esc(W.common.confirmOnDevice)}</b> ${esc(geste)}</p>${souffle(W.common.waitingPasskey)}</div>`;
   const failed = S.failed === k ? `<p class="erreur" role="alert">${mk("inv", W.common.notVerified)} ${esc(S.failedText ?? W.common.verifyFailed)}</p>` : "";
   const choice = t.choice ? `<fieldset class="choix"><legend class="k">${esc(C.keptLegend)}</legend>
       <label class="check"><input type="radio" name="sort" value="garder" checked><span>${esc(C.keep)}</span></label>

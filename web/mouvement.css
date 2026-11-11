@@ -1,0 +1,86 @@
+/* The motion of the shell (ADR-0027), loaded after web/app.css. Every duration and distance is a token of the layer
+   (--mv-*, web/couche-runward-app.css): no value is written here. Transform and opacity only; the paint-only
+   properties of a hover (a ground, a halo, an underline that grows) change with them, never a property of layout.
+   The sequences (the arrival, the fold, the ceremony, a check that arrives) are web/views/mouvement.js. Under reduced
+   motion the family's rule sets every transition and animation to 0 ms (web/famille.css), and the script plays
+   no transform. */
+
+/* ---- 1. from screen to screen: view transitions of the same document; a plain fade where they are missing */
+:root{ view-transition-name:none; }
+::view-transition{ pointer-events:none; }
+::view-transition-group(*){ animation-duration:var(--mv-ecran); animation-timing-function:var(--mv-doux); }
+::view-transition-old(*), ::view-transition-new(*){ animation-duration:var(--mv-ecran); animation-timing-function:var(--mv-doux); }
+::view-transition-group(mv-lecture), ::view-transition-group(mv-fenetre){ overflow:clip; border-radius:var(--r-win); }
+::view-transition-old(mv-lecture), ::view-transition-new(mv-lecture), ::view-transition-old(mv-fenetre), ::view-transition-new(mv-fenetre){ width:100%; height:100%; object-fit:none; object-position:top left; overflow:clip; }
+:root.mv-vite{ --mv-ecran:var(--mv-d3); }
+:root.mv-court{ --mv-ecran:var(--mv-d2); }
+:root.mv-theme{ view-transition-name:root; --mv-ecran:var(--mv-d2); }
+/* the portfolio's window is a box of the stylesheet: it is carried by a rule, while the pieces are named */
+:root.mv-noms .lecture[data-vue="port"]::before{ view-transition-name:mv-fenetre; }
+@media (prefers-reduced-motion: reduce){
+  ::view-transition-group(*){ animation:none; }
+  ::view-transition-old(*), ::view-transition-new(*){ animation-duration:var(--mv-d1); }
+}
+
+/* ---- 3. the ceremony: states stacked in one cell (the window never changes its size) */
+.pile{ display:grid; min-width:0; }
+.pile > *{ grid-area:1 / 1; min-width:0; }
+.pile > :not([data-actif]){ visibility:hidden; opacity:0; pointer-events:none; }
+.hero-t.pile{ align-items:center; gap:0; }
+.hero-t.pile > *{ display:grid; gap:22px; justify-items:start; align-content:center; }
+.hero-t.pile > * > *{ margin:0; }
+.porte.pile{ gap:0; }
+.porte-etat{ display:grid; gap:16px; align-content:center; }
+.porte-etat > *{ margin:0; min-width:0; }
+/* the waiting line: 2 px that breathe while a passkey is awaited; the one other curve, symmetric */
+.souffle{ display:block; height:2px; border-radius:1px; background:var(--text); opacity:.6; }
+.souffle{ animation:souffle var(--mv-souffle) ease-in-out infinite; }
+.pile > :not([data-actif]) .souffle{ animation:none; }
+@keyframes souffle{ 0%, 100%{ opacity:.22; transform:scaleX(.34); } 50%{ opacity:1; transform:scaleX(1); } }
+@media (prefers-reduced-motion: reduce){ .souffle{ animation:none; } }
+/* a check that draws itself: a disc, and a shutter that slides */
+.coche-m{ display:inline-grid; flex:none; place-items:center; width:16px; height:16px; border-radius:50%; background:var(--text); overflow:hidden; }
+.coche-m .essuie{ display:block; width:100%; height:100%; overflow:hidden; }
+.coche-m .trait{ display:block; width:100%; height:100%; position:relative; }
+.coche-m .trait::after{ content:""; position:absolute; left:5.6px; top:3px; width:4px; height:7.4px; border:solid var(--bg); border-width:0 1.6px 1.6px 0; transform:rotate(42deg); }
+.coche-m.g{ width:48px; height:48px; }
+.coche-m.g .trait::after{ left:17.5px; top:9.5px; width:11px; height:21px; border-width:0 3px 3px 0; }
+.btn .coche-m{ background:currentColor; }
+.reussite{ display:grid; justify-items:center; align-content:center; min-height:160px; }
+.copie-ok{ display:inline-flex; align-items:center; justify-content:center; gap:8px; }
+
+/* ---- 4. the fold: a FLIP in transform (web/views/mouvement.js); the chevron turns */
+.lecture [data-reading] summary::after{ transition:transform var(--mv-d2) var(--mv-doux); }
+
+/* ---- 6. hover and press */
+.btn{ transition:transform var(--mv-d1) var(--mv-doux), box-shadow var(--mv-d1) var(--mv-doux); }
+.btn:not([disabled]):hover{ transform:translateY(calc(var(--mv-leve) * -1)); box-shadow:0 0 0 4px color-mix(in srgb, var(--text) 10%, transparent); }
+.btn:not([disabled]):active{ transform:scale(.98); box-shadow:0 0 0 2px color-mix(in srgb, var(--text) 14%, transparent); }
+.langue button, .it, .btn-t, .lecture summary[data-role="where-label"]{ transition:background-color var(--mv-d1) var(--mv-doux), color var(--mv-d1) var(--mv-doux), transform var(--mv-d1) var(--mv-doux); }
+.langue button:not([aria-pressed="true"]):hover, .lecture summary[data-role="where-label"]:hover{ background-color:color-mix(in srgb, var(--text) 6%, transparent); color:var(--text); }
+.btn-t:hover{ transform:translateY(calc(var(--mv-leve) * -1)); }
+.btn-t:active{ transform:scale(.94); }
+/* a link: the strong underline grows from the left */
+.lien, .lien-btn, .fil a, .lecture [data-role="links"] a, .sect > header a{ text-decoration:none !important; border-bottom:0; padding-bottom:2px; background:linear-gradient(var(--bar), var(--bar)) 0 100% / 100% 1px no-repeat, linear-gradient(var(--text), var(--text)) 0 100% / 0 1px no-repeat; transition:background-size var(--mv-d2) var(--mv-doux); }
+:is(.lien, .lien-btn, .fil a, .lecture [data-role="links"] a, .sect > header a):hover{ background-size:100% 1px, 100% 1px; }
+/* a row of the portfolio opens its reading: a veil of 4 % under the pointer */
+.lecture [data-view="portfolio"] [data-role="application"]{ position:relative; cursor:pointer; }
+.lecture [data-view="portfolio"] [data-role="application"]::after{ content:""; position:absolute; inset:0; background:color-mix(in srgb, var(--text) 4%, transparent); opacity:0; pointer-events:none; transition:opacity var(--mv-d1) var(--mv-doux); }
+.lecture [data-view="portfolio"] [data-role="application"]:hover::after{ opacity:1; }
+.lecture [data-view="portfolio"] [data-role="application"]:first-child::after{ border-radius:0; }
+.lecture [data-view="portfolio"] [data-role="application"]:last-child::after{ border-radius:0 0 var(--r-win) var(--r-win); }
+
+/* ---- 8. a check arrives: what leaves and what glows is laid over the page, never inside the reading */
+.mv-sort, .mv-eclat{ position:absolute; z-index:4; pointer-events:none; }
+.mv-sort{ display:block; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.mv-eclat{ background:color-mix(in srgb, var(--text) 9%, transparent); }
+
+/* ---- 9. the phone menu: the sheet comes down 10 px as it appears, the veil appears; closing is the way back
+   (transitions, so they reverse on the way). The sidebar's marker is carried from screen to screen */
+.voile{ transition:opacity var(--mv-d2) var(--mv-doux), visibility 0s linear var(--mv-d2); }
+.menu-pan{ transform:translateY(calc(var(--mv-feuille) * -1)); transition:opacity var(--mv-d2) var(--mv-doux), transform var(--mv-d3) var(--mv-doux), visibility 0s linear var(--mv-d3); }
+.menu-ouvert .voile, .menu-ouvert .menu-pan{ transition-delay:0s; }
+.menu-ouvert .menu-pan{ transform:none; }
+.lat .it, .menu-pan .it{ position:relative; isolation:isolate; }
+.lat .it[aria-current="page"], .menu-pan .it[aria-current="page"]{ background:none; }
+.repere{ position:absolute; inset:0; z-index:-1; border-radius:var(--r-notice); background:color-mix(in srgb, var(--text) 8%, transparent); }
