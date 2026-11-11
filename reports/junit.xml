@@ -195,6 +195,8 @@
 	<testcase name="the hexagon's allowed arrows pass, and the tree as it is lints clean" classname="test"/>
 	<testcase name="the security scan refuses a read of the environment outside the composition roots, and eval" classname="test"/>
 	<testcase name="the composition roots are three, in the rules and in what the two configurations say of them" classname="test"/>
+	<testcase name="the phone menu open: the screen, the trail's line, the banners and the foot are inert, the sheet answers; closed, the reverse" classname="test"/>
+	<testcase name="a window that crosses 900 px with the menu open closes it: the screen never stays inert with nothing visible" classname="test"/>
 	<testcase name="migrations: a contracting statement is refused wherever it sits, in each spelling listed here" classname="test"/>
 	<testcase name="migrations: an escape string and a double-quoted identifier, each holding a quote, no longer hide a statement" classname="test"/>
 	<testcase name="migrations: a $ inside a name opens no dollar-quoted body, so the statement after it is read; glued to a number, the file is refused" classname="test"/>
@@ -355,9 +357,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 354 -->
+	<!-- tests 356 -->
 	<!-- suites 0 -->
-	<!-- pass 354 -->
+	<!-- pass 356 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
