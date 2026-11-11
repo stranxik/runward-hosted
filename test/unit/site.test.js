@@ -21,7 +21,7 @@ import { fakeAuthn, testJwk, sha, SEND_SHA } from "../helpers.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const PATHS = ["/", "/pourquoi", "/comment", "/pour-qui", "/formats", "/donnees", "/stand", "/releve", "/mentions"];
-const CONTACT = "thibaultsouris@runward.dev";
+const CONTACT = "contact@runward.dev";
 let c, base;
 before(async () => {
   const clock = manualClock(Date.now());
