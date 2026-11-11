@@ -129,7 +129,7 @@ test("the frame follows the reader's language: in English, no French word in the
 // ---- the house's signature (ADR-0026): the same in every foot, "runward" in lower case, the house's name the link
 /** What is wrong with a foot's signature for `lang`; [] when it is the house's. */
 export function signatureFaults(html, lang) {
-  const want = `runward, ${lang === "fr" ? "par" : "by"} <a href="https://anotherframework.dev/studio.html"`;
+  const want = `runward, ${lang === "fr" ? "par" : "by"} <a href="https://anotherframework.dev/studio.html?depuis=runward"`;
   const faults = [];
   if (!html.includes(want)) faults.push(`${lang}: the signature is not « ${want}…>Another Framework</a> »`);
   if (!/>Another Framework<\/a>/.test(html)) faults.push(`${lang}: the house's name is not the link`);
@@ -146,9 +146,12 @@ test("the foot carries the house's signature in the reader's language, signed in
   state({ lang: "en" });
   const pied = frame(true, "decision", "", {}).pied;
   assert.equal(signatureFaults(pied, "fr").length, 1);
-  assert.deepEqual(signatureFaults(pied.replace("runward, by", "Runward, by"), "en"), ["en: the signature is not « runward, by <a href=\"https://anotherframework.dev/studio.html\"…>Another Framework</a> »", "en: runward is not in lower case"]);
+  assert.deepEqual(signatureFaults(pied.replace("runward, by", "Runward, by"), "en"), ["en: the signature is not « runward, by <a href=\"https://anotherframework.dev/studio.html?depuis=runward\"…>Another Framework</a> »", "en: runward is not in lower case"]);
   assert.equal(signatureFaults(pied.replace(/<a href="https:\/\/anotherframework[^>]*>Another Framework<\/a>/, "Another Framework"), "en").length, 2);
   assert.deepEqual(signatureFaults(`${pied}<svg></svg>`, "en"), ["en: a logo in the foot"]);
+  // the address is written once, beside the lexicon, by language (the same page in both for now)
+  for (const lang of ["fr", "en"]) { state({ lang }); assert.equal(Lx.studioUrl(), "https://anotherframework.dev/studio.html?depuis=runward", lang); }
+  assert.equal(/anotherframework\.dev/.test(readFileSync(join(WEB, "views/shell.js"), "utf8")), false, "not in the shell");
 });
 
 test("planted control: one string of the frame left in French is found in the English frame", () => {

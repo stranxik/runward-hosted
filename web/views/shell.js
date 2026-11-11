@@ -13,12 +13,12 @@
 import { S, esc, setHTML, latEl, mobNavEl, menuBtnEl, colonneEl, bandEl, stampEl, filEls, langueEls, piedEl, parts, main, annonceEl } from "./base.js";
 import { when } from "./time.js";
 import { MARK, go, act } from "./marks.js";
-import { lang, mots, titreFlotte, appareil } from "./lexique.js";
+import { lang, mots, titreFlotte, appareil, studioUrl } from "./lexique.js";
 import { comptes, triees, verdictOf, nomCourt } from "./lignes.js";
 import { ask, confirmBox } from "./confirm.js";
 
-/** The house's signature in the foot links to the studio's page (ADR-0026). */
-const STUDIO = `<a href="https://anotherframework.dev/studio.html" translate="no">Another Framework</a>`;
+/** The house's signature in the foot: its name links to the studio's page, whose address is kept beside the lexicon (ADR-0026). */
+const studio = () => `<a href="${esc(studioUrl())}" translate="no">Another Framework</a>`;
 
 // --- the shell: the sidebar (desktop) and the menu (phone), the same links
 function liensCoque(route, sub) {
@@ -81,7 +81,7 @@ export function frame(signedIn, route, sub, v) {
     stamp: signedIn ? "" : esc(location.host),
     fil: signedIn ? fil(v) : "",
     langue: langue(),
-    pied: `<a href="#/legal">${esc(F.legal)}</a><a href="#/legal">${esc(F.privacy)}</a><a href="#/legal">${esc(F.security)}</a><span>${esc(F.times)}</span><span class="signe">${F.signature(STUDIO)}</span>`,
+    pied: `<a href="#/legal">${esc(F.legal)}</a><a href="#/legal">${esc(F.privacy)}</a><a href="#/legal">${esc(F.security)}</a><span>${esc(F.times)}</span><span class="signe">${F.signature(studio())}</span>`,
     bandeaux: bandeaux(),
   };
 }
