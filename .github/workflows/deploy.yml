@@ -4,7 +4,7 @@
 #   1. the gate and the tests are green for this exact commit (the ci workflow's run for github.sha);
 #   2. the image is built here from a clean checkout at github.sha and pushed; it is deployed BY DIGEST,
 #      first to the operator's gateway (ADR-0016), which then runs `roles` (rw_admin) and `migrate`
-#      (rw_owner) on the private database, then `roles` again with grants: what rw_app and rw_maint may do
+#      (rw_owner) on the private database, then `grants` (rw_owner): what rw_app and rw_maint may do
 #      on the migrated base is what db/schema.snapshot.txt says, no more, no fewer, or the deploy stops;
 #      only then to the service: the schema is ready before the service switches;
 #   3. the revision served, read from the hoster's API (not from /api/version), carries that digest (S5),
@@ -90,12 +90,12 @@ jobs:
       - name: the operator's gateway serves the new digest (S5 on the gateway)
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", OPERATOR: "${{ vars.SCW_OPERATOR_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
         run: scripts/container-deploy.sh "$OPERATOR" "$DIGEST" "${{ github.sha }}"
-      - name: roles (rw_admin), migrate (rw_owner), then the grants of rw_app and rw_maint against the snapshot, through the gateway, before the service switches
+      - name: roles (rw_admin), migrate (rw_owner), then grants (rw_owner, the grants of rw_app and rw_maint against the snapshot), through the gateway, before the service switches
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", RW_OPERATOR_TOKEN: "${{ secrets.RW_OPERATOR_TOKEN }}", RW_OPERATOR_URL: "${{ vars.RW_OPERATOR_URL }}" }
         run: |
           scripts/operator-call.sh roles
           scripts/operator-call.sh migrate
-          scripts/operator-call.sh roles '{"grants":true}'
+          scripts/operator-call.sh grants
       - name: the service serves the new digest (S5, read from the hoster, not from the service)
         env: { SCW_SECRET_KEY: "${{ secrets.SCW_SECRET_KEY }}", CONTAINER: "${{ vars.SCW_CONTAINER_ID }}", DIGEST: "${{ steps.push.outputs.digest }}" }
         run: scripts/container-deploy.sh "$CONTAINER" "$DIGEST" "${{ github.sha }}"
@@ -172,6 +172,10 @@ jobs:
           PREV_COMMIT: "${{ needs.deploy.outputs.previous_commit }}"
           PREV_OPERATOR: "${{ needs.deploy.outputs.previous_operator }}"
         run: |
-          scripts/container-deploy.sh "$CONTAINER" "$PREV" "$PREV_COMMIT"
-          [ -z "$PREV_OPERATOR" ] || scripts/container-deploy.sh "$OPERATOR" "$PREV_OPERATOR"
+          # both containers are tried, whatever the first one answers (2026-11-10: the service's line failed and
+          # the gateway stayed on the new digest); the step then fails if either did
+          failed=""
+          scripts/container-deploy.sh "$CONTAINER" "$PREV" "$PREV_COMMIT" || failed=" service"
+          [ -z "$PREV_OPERATOR" ] || scripts/container-deploy.sh "$OPERATOR" "$PREV_OPERATOR" || failed="$failed gateway"
+          [ -z "$failed" ] || { echo "rollback failed on:$failed"; exit 1; }
           for i in $(seq 1 60); do [ "$(curl -sf --max-time 30 "$SERVICE/api/version" | jq -r .image)" = "$PREV" ] && exit 0; sleep 10; done; exit 1

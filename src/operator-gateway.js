@@ -3,8 +3,9 @@
 // that are not the service. Serverless Jobs cannot join a Private Network; this process runs in a second,
 // PRIVATE Serverless Container of the same image, attached to the private network, and runs one gesture
 // per authenticated call, as a child process that receives ONE database role's URL and nothing else:
-//   roles          scripts/roles.mjs [--grants]   rw_admin  (ADMIN_URL)
+//   roles          scripts/roles.mjs              rw_admin  (ADMIN_URL)
 //   migrate        scripts/migrate.mjs            rw_owner  (MIGRATE_URL)
+//   grants         scripts/grants.mjs             rw_owner  (MIGRATE_URL)
 //   isolation      scripts/isolation-deployed.mjs rw_app    (DATABASE_URL)
 //   retention, verify-chains, open-bootstrap, open-recovery, reset-access, maintenance, restore-replay
 //                  src/operator.js <gesture>      rw_maint  (DATABASE_URL, and the bucket's key)
@@ -13,6 +14,10 @@
 // hash is in its environment). The single exception is the hoster's schedule, which cannot carry a secret
 // it does not keep in clear: POST /scheduled/retention and /scheduled/verify-chains take no token, no
 // argument, and run idempotent gestures; nothing else is reachable without the token.
+// `grants` (after `migrate`, at each deploy) compares what rw_app and rw_maint may do in the service database
+// with db/schema.snapshot.txt. It runs under rw_owner, not rw_admin: at the hoster the administrator holds
+// no privilege on the service database and cannot connect to it (deploy run 43018993884, 2026-11-11), and
+// no gesture gets a second URL to make up for it. `roles` takes no argument.
 // One gesture at a time (409 otherwise), each bounded by its own deadline (killed, 504), each outcome one
 // JSON log line at the hoster (never a header, a body, a token or a URL).
 // A daily job that ends without having written its own note (killed at its deadline, ended before it could
@@ -52,8 +57,9 @@ const ROLES = {
 };
 const op = (name, args = {}, extra = {}) => ({ argv: ["src/operator.js", name], role: "rw_maint", s3: true, timeoutMs: 10 * MIN, args, ...extra });
 export const GESTURES = {
-  roles: { argv: ["scripts/roles.mjs"], role: "rw_admin", s3: false, timeoutMs: 2 * MIN, args: { grants: ["bool"] } },
+  roles: { argv: ["scripts/roles.mjs"], role: "rw_admin", s3: false, timeoutMs: 2 * MIN, args: {} },
   migrate: { argv: ["scripts/migrate.mjs"], role: "rw_owner", s3: false, timeoutMs: 10 * MIN, args: {} },
+  grants: { argv: ["scripts/grants.mjs"], role: "rw_owner", s3: false, timeoutMs: 2 * MIN, args: {} },
   isolation: { argv: ["scripts/isolation-deployed.mjs"], role: "rw_app", s3: false, timeoutMs: 5 * MIN, args: {} },
   retention: op("retention", {}, { scheduled: true, timeoutMs: 14 * MIN }),
   "verify-chains": op("verify-chains", {}, { scheduled: true, timeoutMs: 14 * MIN }),

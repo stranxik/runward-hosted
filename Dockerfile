@@ -16,11 +16,11 @@ COPY package.json ./
 COPY src ./src
 COPY web ./web
 COPY db ./db
-COPY scripts/migrate.mjs scripts/roles.mjs scripts/isolation-deployed.mjs ./scripts/
+COPY scripts/migrate.mjs scripts/roles.mjs scripts/grants.mjs scripts/isolation-deployed.mjs ./scripts/
 COPY vendor/runward-fleet.lock.json ./vendor/runward-fleet.lock.json
 USER node
 EXPOSE 8080
 # the service; the operator's gateway (ADR-0016) runs the same image with: node src/operator-gateway.js,
-# which runs scripts/roles.mjs, scripts/migrate.mjs, scripts/isolation-deployed.mjs and src/operator.js
+# which runs scripts/roles.mjs, scripts/migrate.mjs, scripts/grants.mjs, scripts/isolation-deployed.mjs and src/operator.js
 ENTRYPOINT ["node"]
 CMD ["src/main.js"]
