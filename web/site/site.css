@@ -411,6 +411,9 @@ h1 .l2{color:var(--text)}
 .pied a{display:inline-flex;align-items:center;min-height:32px;text-decoration:none;color:var(--text-2)}
 .pied a:hover{color:var(--text)}
 .pied .marque{color:var(--text);font-size:15px}
+/* the house's signature (ADR-0026): the same ink and size as the foot's links, no logo, no colour */
+.pied .signe{line-height:32px}
+.pied .signe a{display:inline;min-height:0;text-decoration:underline;text-decoration-color:var(--bar);text-underline-offset:3px}
 
 /* ============================================================================================================
    12. Mouvement réduit : rien ne bouge, chaque écran montre son état final

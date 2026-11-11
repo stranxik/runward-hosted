@@ -126,6 +126,31 @@ test("the frame follows the reader's language: in English, no French word in the
   assert.ok(frenchIn(fr).length > 20, "the detector sees French");
 });
 
+// ---- the house's signature (ADR-0026): the same in every foot, "runward" in lower case, the house's name the link
+/** What is wrong with a foot's signature for `lang`; [] when it is the house's. */
+export function signatureFaults(html, lang) {
+  const want = `runward, ${lang === "fr" ? "par" : "by"} <a href="https://anotherframework.dev/studio.html"`;
+  const faults = [];
+  if (!html.includes(want)) faults.push(`${lang}: the signature is not « ${want}…>Another Framework</a> »`);
+  if (!/>Another Framework<\/a>/.test(html)) faults.push(`${lang}: the house's name is not the link`);
+  if (/Runward,|RUNWARD,/.test(html)) faults.push(`${lang}: runward is not in lower case`);
+  if (/<(img|svg)\b/.test(html)) faults.push(`${lang}: a logo in the foot`);
+  return faults;
+}
+test("the foot carries the house's signature in the reader's language, signed in and signed out: « runward, par Another Framework », the name linking to the studio's page", () => {
+  for (const lang of ["fr", "en"]) for (const signed of [true, false]) {
+    state({ lang }); if (!signed) S.session = null;
+    assert.deepEqual(signatureFaults(frame(signed, signed ? "decision" : "entree", "", {}).pied, lang), [], `${lang} ${signed}`);
+  }
+  // planted controls: the other language's word, a capital, no link, a logo
+  state({ lang: "en" });
+  const pied = frame(true, "decision", "", {}).pied;
+  assert.equal(signatureFaults(pied, "fr").length, 1);
+  assert.deepEqual(signatureFaults(pied.replace("runward, by", "Runward, by"), "en"), ["en: the signature is not « runward, by <a href=\"https://anotherframework.dev/studio.html\"…>Another Framework</a> »", "en: runward is not in lower case"]);
+  assert.equal(signatureFaults(pied.replace(/<a href="https:\/\/anotherframework[^>]*>Another Framework<\/a>/, "Another Framework"), "en").length, 2);
+  assert.deepEqual(signatureFaults(`${pied}<svg></svg>`, "en"), ["en: a logo in the foot"]);
+});
+
 test("planted control: one string of the frame left in French is found in the English frame", () => {
   const en = Lx.MOTS.en.frame;
   const was = en.legal;
@@ -222,8 +247,9 @@ test("every word of web/index.html is written by the shell in the reader's langu
   assert.deepEqual(pageFaults(PAGE, Lx.MOTS), []);
   // the scan reads the page: the same page with its hooks taken off shows each of its words
   assert.deepEqual(pageFaults(PAGE.replace(/ data-mot(-aria)?="[^"]+"/g, ""), Lx.MOTS), [
-    "label not written by the shell: Navigation de l'app", "label not written by the shell: Pages publiques", "label not written by the shell: Navigation de l'app",
-    "label not written by the shell: Changer de thème, clair ou sombre",
+    "label not written by the shell: Navigation de l'app", "label not written by the shell: Fil d'Ariane", "label not written by the shell: Langue",
+    "label not written by the shell: Changer de thème, clair ou sombre", "label not written by the shell: Navigation de l'app",
+    "label not written by the shell: Fil d'Ariane", "label not written by the shell: Langue",
     "not written by the shell: runward hébergé", "not written by the shell: Aller au contenu", "not written by the shell: hébergé", "not written by the shell: Menu",
   ]);
   // planted controls: a word with no hook, a hook the lexicon does not know
@@ -272,7 +298,7 @@ test("one language for the reading and its frame: the switch of the decision rea
   assert.equal(kept.get("rw-accueil-lang"), "en", "the key of the public site's switch");
   assert.equal(D.readingLang(), "en");
   assert.ok(frame(true, "decision", "", {}).lat.includes("Portfolio"), "the frame follows the reading's switch");
-  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en">'));
+  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="port">'));
   kept.delete("rw-accueil-lang");
   S.index = { ...T.index, lang: "en" };
   assert.equal(Lx.lang(), "en", "no choice kept: the index's own language");

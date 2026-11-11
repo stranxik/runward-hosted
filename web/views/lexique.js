@@ -39,16 +39,16 @@ export const MOTS = {
     brand: "runward hébergé",
     // ---- the frame: web/index.html, the sidebar, the phone menu, the top bar, the banners, the foot
     frame: {
-      page: { brand: "runward hébergé", brandSuffix: " hébergé", skip: "Aller au contenu", navApp: "Navigation de l'app", navPublic: "Pages publiques", menu: "Menu", theme: "Changer de thème, clair ou sombre" },
+      page: { brand: "runward hébergé", brandSuffix: " hébergé", skip: "Aller au contenu", navApp: "Navigation de l'app", menu: "Menu", theme: "Changer de thème, clair ou sombre", crumb: "Fil d'Ariane", langGroup: "Langue" },
       portfolio: "Portefeuille", uploads: "Envois", access: "Accès", export: "Export",
       views: { flotte: "Tableau de bord", vue: "Vue complète", history: "Historique", proof: "Preuve", signatures: "Signatures", pr: "Dans la PR", sources: "Sources" },
       navService: "Vues du service", applications: "Applications", navApplications: "Applications, refusées par le contrôle d'abord", inPortfolio: "dans le portefeuille",
       technical: "Vues techniques",
       you: (role, n) => `vous · ${role} · ${n} passkey${s(n)}`, owner: "propriétaire",
-      signOut: "Se déconnecter", themeShort: "Changer de thème",
-      howItWorks: "Comment ça marche", trust: "Confiance", docs: "Documentation", signIn: "Se connecter", askAccess: "Demander l'accès",
-      mailto: "mailto:contact@runward.dev?subject=Acc%C3%A8s%20%C3%A0%20la%20pr%C3%A9version%20de%20runward%20h%C3%A9berg%C3%A9",
+      signOut: "Se déconnecter",
       legal: "Mentions légales", privacy: "Confidentialité", security: "Sécurité", times: "heures affichées à l'heure de Paris, avec leur décalage",
+      // the house's signature, the same on every product (ADR-0026): `studio` is the link to the studio's page
+      signature: (studio) => `runward, par ${studio}`,
       scrollTable: "Tableau, défilable",
       recovery: (opened, usable) => `<b>Une reprise d'accès est en cours pour votre compte.</b> Ouverte le ${opened}, elle deviendra utilisable le ${usable}. Si ce n'est pas vous, annulez-la.`,
       recoveryCancel: "Annuler la reprise",
@@ -153,6 +153,7 @@ export const MOTS = {
       confirmedQuarantine: "Dépôt confirmé. Son premier envoi reste en quarantaine.", confirmed: "Dépôt confirmé. La mission est publiée.",
       declared: "Dépôt déclaré, en attente du premier envoi.", modified: "Dépôt modifié.",
       copied: "Copié", inClipboard: "L'extrait est dans votre presse-papiers.", selected: "Extrait sélectionné : copiez-le avec ⌘C ou Ctrl+C.",
+      commandCopied: "La commande est dans votre presse-papiers.", commandSelected: "Commande sélectionnée : copiez-la avec ⌘C ou Ctrl+C.",
     },
     // ---- the screens
     entree: {
@@ -297,7 +298,7 @@ export const MOTS = {
       h2View: "La vue runward-fleet de cette mission", viewR: "telle que runward-fleet build la construit",
     },
     workflow: {
-      add: "Ajouter le workflow", copy: "Copier l'extrait",
+      add: "Ajouter le workflow", copy: "Copier l'extrait", copyCommand: "Copier la commande",
       addNote: (branch, name) => `« Ajouter le workflow » ouvre, dans un nouvel onglet, la page de GitHub qui crée <code>.github/workflows/runward.yml</code> sur la branche <code>${branch}</code> de <span translate="no">${name}</span>, déjà remplie : il ne vous reste qu'à valider le commit. Ce service n'écrit rien dans votre dépôt et n'y demande aucun droit.`,
       branch: (branch) => `Votre branche par défaut est <code>${branch}</code>. Aujourd'hui, seul un push sur <code>main</code> envoie : le workflow jugera vos commits, l'envoi attend l'acceptation des autres branches par défaut.`,
       extract: "Extrait du workflow à ajouter dans votre dépôt", noRelease: "aucune release",
@@ -381,16 +382,15 @@ export const MOTS = {
   en: {
     brand: "runward hosted",
     frame: {
-      page: { brand: "runward hosted", brandSuffix: " hosted", skip: "Skip to content", navApp: "App navigation", navPublic: "Public pages", menu: "Menu", theme: "Switch theme, light or dark" },
+      page: { brand: "runward hosted", brandSuffix: " hosted", skip: "Skip to content", navApp: "App navigation", menu: "Menu", theme: "Switch theme, light or dark", crumb: "Breadcrumb", langGroup: "Language" },
       portfolio: "Portfolio", uploads: "Uploads", access: "Access", export: "Export",
       views: { flotte: "Dashboard", vue: "Full view", history: "History", proof: "Proof", signatures: "Signatures", pr: "In the PR", sources: "Sources" },
       navService: "The service's views", applications: "Applications", navApplications: "Applications, those refused by the check first", inPortfolio: "in the portfolio",
       technical: "Technical views",
       you: (role, n) => `you · ${role} · ${n} passkey${pl(n)}`, owner: "owner",
-      signOut: "Sign out", themeShort: "Switch theme",
-      howItWorks: "How it works", trust: "Trust", docs: "Documentation", signIn: "Sign in", askAccess: "Ask for access",
-      mailto: "mailto:contact@runward.dev?subject=Access%20to%20the%20runward%20hosted%20preview",
+      signOut: "Sign out",
       legal: "Legal notice", privacy: "Privacy", security: "Security", times: "times shown in Paris time, with their offset",
+      signature: (studio) => `runward, by ${studio}`,
       scrollTable: "Table, scrollable",
       recovery: (opened, usable) => `<b>An access recovery is under way for your account.</b> Opened on ${opened}, it becomes usable on ${usable}. If this is not you, cancel it.`,
       recoveryCancel: "Cancel the recovery",
@@ -489,6 +489,7 @@ export const MOTS = {
       confirmedQuarantine: "Repository confirmed. Its first upload stays in quarantine.", confirmed: "Repository confirmed. The mission is published.",
       declared: "Repository declared, waiting for its first upload.", modified: "Repository modified.",
       copied: "Copied", inClipboard: "The extract is in your clipboard.", selected: "Extract selected: copy it with ⌘C or Ctrl+C.",
+      commandCopied: "The command is in your clipboard.", commandSelected: "Command selected: copy it with ⌘C or Ctrl+C.",
     },
     entree: {
       head: "runward hosted · sign-in", headR: "by passkey",
@@ -631,7 +632,7 @@ export const MOTS = {
       h2View: "This mission's runward-fleet view", viewR: "as runward-fleet build builds it",
     },
     workflow: {
-      add: "Add the workflow", copy: "Copy the extract",
+      add: "Add the workflow", copy: "Copy the extract", copyCommand: "Copy the command",
       addNote: (branch, name) => `“Add the workflow” opens, in a new tab, the GitHub page that creates <code>.github/workflows/runward.yml</code> on the branch <code>${branch}</code> of <span translate="no">${name}</span>, already filled in: you only have to confirm the commit. This service writes nothing in your repository and asks for no right on it.`,
       branch: (branch) => `Your default branch is <code>${branch}</code>. Today, only a push on <code>main</code> sends: the workflow will judge your commits, and the upload waits until other default branches are accepted.`,
       extract: "Extract of the workflow to add to your repository", noRelease: "no release",

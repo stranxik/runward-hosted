@@ -36,9 +36,9 @@ export function viewFlotte() {
     <div class="titre-d"><div><h1>${title}</h1><p class="rv">${provLigne()}</p></div>
       <div class="actions">${go("#/acces/export", T.exportAct, { q: true })}${go("#/declarer", C.declare)}</div></div>
     ${S.status?.quarantined ? `<p class="avert">${mk("inv", C.notPublished)} ${C.quarantined(esc(S.status.quarantined))} <a href="#/envois">${C.seeUploads}</a></p>` : ""}
-    <nav class="compteurs" aria-label="${esc(T.byState)}">
+    <div class="scr verre"><p class="scr-bar" aria-hidden="true">${esc(T.byState)}</p><nav class="compteurs" aria-label="${esc(T.byState)}">
       ${cpt("gaps", N.gaps, etq("inv", N.gaps > 1 ? V.gapsMany : V.gaps))}${cpt("level-not-met", N.lnm, etq("inv", V["level-not-met"]))}${cpt("not-observed", N.silent, etq("void", N.silent > 1 ? V.silentMany : V["not-observed"]))}
-      <a href="#/vue"><span class="v">${N.clean}</span>${etq("full", V.clean)}</a></nav>
+      <a href="#/vue"><span class="v">${N.clean}</span>${etq("full", V.clean)}</a></nav></div>
     <section class="sect" aria-labelledby="h-att"><header><h2 id="h-att">${T.awaits} <span>${attente.length}</span></h2></header>
       ${attente.length ? `<div class="attente">${lignesAtt}</div>` : `<p class="note">${T.nothingAwaits}</p>`}</section>
     <div class="duo-d">

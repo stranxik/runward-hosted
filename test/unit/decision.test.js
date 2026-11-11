@@ -122,10 +122,10 @@ test("the main screen is runward-fleet's reading, byte for byte, in the index's 
   const fr = paint("");
   assert.equal(fr.fleetRoute, "decision");
   assert.ok(fr.html.includes(views.renderView(P.index, "decision")), "the portfolio as runward-fleet writes it for this index");
-  assert.ok(fr.html.startsWith('<div class="lecture" lang="fr">'));
+  assert.ok(fr.html.startsWith('<div class="lecture" lang="fr" data-vue="port">'));
   const en = paint("", { lang: "en" });
   assert.ok(en.html.includes(views.renderView({ ...P.index, lang: "en" }, "decision")), "the same index, read in English");
-  assert.ok(en.html.startsWith('<div class="lecture" lang="en">'));
+  assert.ok(en.html.startsWith('<div class="lecture" lang="en" data-vue="port">'));
   assert.ok(en.html.includes("Before your go / no-go") && !en.html.includes("Avant votre go"));
   // the choice is the viewer's, kept under the key of the public site's switch
   D.setReadingLang("en");
@@ -171,7 +171,7 @@ test("the five states, the reason, the refusals by kind with their text as writt
 test("« Vérifier par vous-même »: the command, built only from values that pass their pattern, never with an extension option", () => {
   const html = paint("runward-hosted").html;
   const cmd = `git clone https://github.com/stranxik/runward-hosted &amp;&amp; git -C runward-hosted checkout ${COMMITS.hosted} &amp;&amp; npx --yes runward@0.46.0 check --strict --path runward-hosted`;
-  assert.ok(html.includes(`<code translate="no">${cmd}</code>`), "the command for this application, its commit and its version");
+  assert.ok(html.includes(`<code translate="no" id="cmd-texte">${cmd}</code>`), "the command for this application, its commit and its version");
   assert.ok(html.includes("Ce n&#39;est pas notre écran qui le dit."));
   assert.ok(html.includes(`href="https://github.com/stranxik/runward-hosted/actions/runs/42837002"`), "the run of the chain, by its id");
   assert.equal(/--hooks|--no-verify/.test(html), false);
@@ -203,7 +203,7 @@ test("« Vérifier par vous-même »: the command, built only from values that p
 
 test("the checks received: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words", () => {
   const html = paint("runward-hosted").html;
-  assert.match(html, /<h2>Contrôles reçus<\/h2>/);
+  assert.match(html, /<h2 class="scr-bar">Contrôles reçus<\/h2>/, "the panel's title is the bar of its window");
   assert.match(html, /non accepté : <code translate="no">workflow-not-pinned<\/code>, envoyé par une autre chaîne que celle déclarée/);
   assert.match(html, /1 contrôle non accepté depuis le dernier contrôle accepté\./);
   assert.match(paint("runward-hosted", { lang: "en" }).html, /not accepted: <code translate="no">workflow-not-pinned<\/code>, sent by another chain than the one declared/);
@@ -218,22 +218,22 @@ test("the checks received: accepted and not accepted, by date, each refusal with
 
 test("the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named", () => {
   const empty = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null } });
-  assert.ok(empty.html.includes("<b>Aucune application dans votre portefeuille.</b>"));
+  assert.ok(empty.html.includes('<p class="h2">Aucune application dans votre portefeuille.</p>'));
   assert.ok(empty.html.includes("Branchez une application : son prochain contrôle arrivera ici, avec une phrase et de quoi le vérifier."));
   assert.ok(empty.html.includes('data-go="#/declarer">Brancher une première application</button>'));
   const emptyEn = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null }, lang: "en" });
-  assert.ok(emptyEn.html.includes("<b>No application in your portfolio.</b>"));
+  assert.ok(emptyEn.html.includes('<p class="h2">No application in your portfolio.</p>'));
   const waiting = paint("", { index: null, status: { lines: [{ mission: "m", repository: "stranxik/<b>x</b>", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] }], quarantined: 0, recent: [], head: null, index: null } });
   assert.ok(waiting.html.includes("En attente du premier contrôle."));
   assert.ok(waiting.html.includes("stranxik/&lt;b&gt;x&lt;/b&gt;"), "a name is data, escaped");
   // every application removed: the index carries no mission, and the screen says the same as before the first one
   const none = paint("", { index: { ...P.index, missions: [] }, status: { lines: [], quarantined: 0, recent: [], head: null, index: P.status.index } });
-  assert.ok(none.html.includes("<b>Aucune application dans votre portefeuille.</b>"));
+  assert.ok(none.html.includes('<p class="h2">Aucune application dans votre portefeuille.</p>'));
   // a repository declared beside published ones: the portfolio names it, its first check awaited
   const status = JSON.parse(JSON.stringify(P.status));
   status.lines.push({ mission: "next-one", repository: "stranxik/next", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] });
   const beside = paint("", { status }).html;
-  assert.ok(beside.includes(views.renderView(P.index, "decision")) && beside.includes('<h2 id="h-attente">En attente du premier contrôle.</h2>') && beside.includes("stranxik/next"));
+  assert.ok(beside.includes(views.renderView(P.index, "decision")) && beside.includes('<p id="h-attente"><b>En attente du premier contrôle.</b></p>') && beside.includes("stranxik/next"));
   assert.equal(paint("").html.includes("h-attente"), false, "the control: nothing awaited, no such section");
   assert.equal(paint("", { status: null }).html.includes("Chargement"), true, "loading");
   const err = paint("", { fleetError: { status: 503, requestId: "req-1" } });

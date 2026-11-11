@@ -7,8 +7,10 @@ import { mots } from "./lexique.js";
 export const mk = (shape, word) => shape === "inv"
   ? `<span class="st chip-inv"><span class="mk mk-full" aria-hidden="true"></span>${esc(word)}</span>`
   : `<span class="st"><span class="mk mk-${shape}" aria-hidden="true"></span>${esc(word)}</span>`;
-const rv = (html) => `<span class="rv">${html}</span>`;
-export const head = (l, r) => `<div class="head">${rv(l)}${rv(r)}</div>`;
+/** A screen's opening line: where one is, and a measure on the right (the public site's « amorce », no capitals). */
+export const head = (l, r) => `<p class="kick"><span>${l}</span>${r ? `<span class="soft">${r}</span>` : ""}</p>`;
+/** A window of the public site: a bar with three dots and its title in the mono, then its body; glass unless `plat`. */
+export const fenetre = (title, body, { plat = false, cls = "", tag = "section", h = "h2", attrs = "" } = {}) => `<${tag} class="scr ${plat ? "plat" : "verre"}${cls ? ` ${cls}` : ""}"${attrs}><${h} class="scr-bar">${title}</${h}><div class="scr-body">${body}</div></${tag}>`;
 export const go = (hash, label, { q = false } = {}) => `<button class="btn${q ? " btn-q" : ""}" type="button" data-go="${esc(hash)}">${esc(label)}</button>`;
 export const act = (name, label, { q = false, k = "", extra = "" } = {}) => `<button class="btn${q ? " btn-q" : ""}" type="button" data-do="${name}"${k ? ` data-k="${esc(k)}"` : ""}${extra}>${esc(label)}</button>`;
 const ICON_PK = `<svg class="ico" viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><circle cx="8" cy="7.5" r="3.5" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M2.5 20c0-3.2 2.5-5.8 5.5-5.8 1.5 0 2.8.5 3.8 1.4" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="17" cy="12.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M17 15.1V21m0-2.6h2m-2 2h1.4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>`;
@@ -19,4 +21,5 @@ export const MARK = `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="fa
 /** The theme switch's icon, the landing's (web/site/gabarit.html): a half-filled circle. */
 export const THEME_ICON = `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>`;
 export const etq = (shape, word) => `<span class="etq"><span class="mk mk-${shape}" aria-hidden="true"></span>${esc(word)}</span>`;
-export const loadingView = (title) => { const W = mots().marks; return { title, key: "fleet", signed: "in", html: `<h1 class="v">${esc(W.loading)}</h1><div class="charge" role="progressbar" aria-label="${esc(W.loadingLabel)}"></div><div class="squelette"></div><div class="squelette"></div>` }; };
+/** The screen shown while a screen's reads are made: its title, a line, a quiet skeleton of two sheets. */
+export const loadingView = (title) => { const W = mots().marks; return { title, key: "fleet", signed: "in", loading: true, html: `<h1 class="vh">${esc(W.loading)}</h1><div class="charge" role="progressbar" aria-label="${esc(W.loadingLabel)}"></div><div class="squelette" aria-hidden="true"><span class="sq sq-t"></span><span class="sq sq-l"></span><div class="sq-f"><span class="sq sq-a"></span><span class="sq sq-b"></span></div><div class="sq-f"><span class="sq sq-c"></span><span class="sq sq-d"></span><span class="sq sq-e"></span></div></div>` }; };

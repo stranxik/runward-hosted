@@ -60,9 +60,11 @@
   --gut:16px; --max:1180px;
   /* shape: the shell's single radius is the panel's; the mark of a state keeps a near-square corner */
   --radius:var(--r-panel); --r-mark:1px;
-  /* motion: the family's productive curve and durations apply (famille.css); no entrance animation in the
-     app. The one loop kept is the loading line, a progress indicator. */
+  /* motion: the family's productive curve and durations apply (famille.css). Two loops are kept: the loading
+     line, a progress indicator, and the drift of the haze behind the sign-in (the one screen that carries the
+     public site's whole scene, ADR-0025); both stop under reduced motion. */
   --ease-load:cubic-bezier(.45,.05,.25,1); --dur-load:1.6s;
+  --nue-d1:24s; --nue-d2:30s; --nue-d3:27s; --nue-d4:36s; --pts-d:46s;
 }
 
 /* ---- dark, an option */
@@ -81,7 +83,8 @@
 
 /* ---- the public pages (web/site/, ADR-0022): the landing at / and its pages stand on this layer, and what they
    add holds its values here too, ported from the mini-site of 2026-11-11 with each value unchanged (an RGB triplet
-   became its hex). Nothing of the shell reads these names.
+   became its hex). The shell's screens stand on the same scene and glass since ADR-0025
+   (web/app.css); the inverted section, the paper and the veil's use on the contact box stay the site's.
    - the scene: a haze of the two warm state hues and a cool grey (never the live blue), a grid of dots, a grain,
      a glass and two shadows;
    - the inverted section ("deep on a light page, light on a dark page"): the other theme's roles, two of them
@@ -100,6 +103,8 @@
   --inv-term:#111114; --inv-term-ink:#ededed; --inv-term-soft:#a1a1a1; --inv-dot:rgba(255,255,255,.09);
   --papier:#ffffff; --encre-papier:#171717;
   --masque:#000000; --voile:rgba(0,0,0,.42);
+  /* the shell stands on the same scene (ADR-0025): behind a screen of data the haze is pale and does not move */
+  --nue-a-calme:.20;
 }
 :root[data-theme="dark"]{
   --nue-3:#96461e; --nue-4:#464a5a; --nue-a:.40;
@@ -107,7 +112,7 @@
   --verre:rgba(12,12,14,.84); --verre-line:rgba(255,255,255,.12);
   --ombre:0 50px 120px -30px rgba(0,0,0,.85), inset 0 1px 0 rgba(255,255,255,.06);
   --ombre-2:0 40px 90px -30px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.05);
-  --scene:#0a0a0c;
+  --scene:#0a0a0c; --nue-a-calme:.22;
   --inv-bg:#ffffff; --inv-bg-2:#f7f7f8; --inv-line:#ebebeb; --inv-line-2:#dcdcdf; --inv-text:#171717; --inv-text-2:#5e5e5e;
   --inv-bar:#7e7e88; --inv-beat:#ececef; --inv-hit:#000000; --inv-refus:#9f4502;
   --inv-term:#f1f1f3; --inv-term-ink:#171717; --inv-term-soft:#5e5e5e; --inv-dot:rgba(23,23,23,.10);

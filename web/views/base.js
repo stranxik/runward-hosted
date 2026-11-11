@@ -7,7 +7,8 @@ const tt = window.trustedTypes ? window.trustedTypes.createPolicy("runward", { c
 export const setHTML = (el, html) => { el.innerHTML = tt ? tt.createHTML(html) : html; };
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const $ = (id) => document.getElementById(id);
-export const main = $("main"), stampEl = $("stamp"), latEl = $("lat"), mobEl = $("mob"), mobNavEl = $("mobnav"), pubEl = $("pub"), topActEl = $("topact");
+export const main = $("main"), stampEl = $("stamp"), latEl = $("lat"), mobNavEl = $("mobnav"), menuBtnEl = $("menub"), colonneEl = $("colonne");
+export const filEls = [$("fil"), $("fil2")], langueEls = [$("langue"), $("langue2")];
 export const bandEl = $("bandeaux"), piedEl = $("pied"), annonceEl = $("annonce");
 export const short = (h) => (h ? `${String(h).slice(0, 12)}…` : "");
 

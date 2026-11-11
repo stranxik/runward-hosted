@@ -14,9 +14,9 @@
 // by views.js; no example data.
 import { S, esc } from "./base.js";
 import { when } from "./time.js";
-import { go, act, reqNote, loadingView, THEME_ICON } from "./marks.js";
+import { go, act, reqNote, loadingView, fenetre } from "./marks.js";
 import { renderView } from "./fleet-views.js";
-import { lang, setLang } from "./lexique.js";
+import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
 
 // ------------------------------------------------------------- the language of the reading
@@ -30,7 +30,7 @@ export const setReadingLang = setLang;
 const plural = (n, one, many) => (Number(n) > 1 ? many : one);
 export const WORDS = {
   fr: {
-    title: "Avant votre go / no-go", portfolio: "Portefeuille", crumb: "Fil d'Ariane", langGroup: "Langue de la lecture", theme: "Changer de thème, clair ou sombre",
+    title: "Avant votre go / no-go", portfolio: "Portefeuille",
     updated: (at) => `Mis à jour le ${at} · calculé par la chaîne de livraison de chaque équipe`,
     setAside: (n) => `${esc(n)} ${plural(n, "contrôle mis de côté", "contrôles mis de côté")} : le portefeuille montre le dernier état publié.`,
     uploads: "Voir les envois", connect: "Brancher une application", retry: "Réessayer",
@@ -89,7 +89,7 @@ export const WORDS = {
     },
   },
   en: {
-    title: "Before your go / no-go", portfolio: "Portfolio", crumb: "Breadcrumb", langGroup: "Language of the reading", theme: "Switch theme, light or dark",
+    title: "Before your go / no-go", portfolio: "Portfolio",
     updated: (at) => `Updated on ${at} · computed by each team's delivery chain`,
     setAside: (n) => `${esc(n)} ${plural(n, "check set aside", "checks set aside")}: the portfolio shows the last state published.`,
     uploads: "See the uploads", connect: "Connect an application", retry: "Try again",
@@ -178,19 +178,14 @@ export function verifyCommand({ repository, commit, version, path }) {
 }
 
 // ------------------------------------------------------------- the pieces of the screen
-const LANG_BTN = (lang, w) => `<span class="langue" role="group" aria-label="${esc(w.langGroup)}">${["fr", "en"].map((l) => `<button type="button" data-do="lecture-lang" data-k="${l}" data-focus-key="lecture-lang:${l}" lang="${l}" aria-pressed="${l === lang}">${l.toUpperCase()}</button>`).join("")}</span>`;
-
-function bar(lang, w, name) {
-  const crumbs = name === undefined ? `<b>${esc(w.portfolio)}</b>` : `<a href="#/">${esc(w.portfolio)}</a><span aria-hidden="true">/</span><b translate="no">${esc(name)}</b>`;
-  return `<div class="lecture-barre"><nav class="lecture-fil" aria-label="${esc(w.crumb)}">${crumbs}</nav>
-    <div class="lecture-outils">${LANG_BTN(lang, w)}<button class="btn-t" type="button" data-theme-btn aria-label="${esc(w.theme)}">${THEME_ICON}</button></div></div>`;
-}
+// The frame's header carries the trail, the language and the theme (web/views/shell.js). The panels beside a reading
+// are windows of the public site, their title in the window's bar, in the mono (the author's decision of 2026-11-11).
 
 function verifyPanel(w, m) {
   const V = w.verify, L = typeof m.latest === "object" && m.latest ? m.latest : null;
   const st = ligne(m.id);
-  const head = `<h2>${esc(V.title)}</h2><p>${esc(V.lead)}</p>`;
-  if (!L) return `<section class="lecture-panneau verre" aria-label="${esc(V.title)}">${head}<p class="soft">${esc(V.none)}</p></section>`;
+  const win = (body) => fenetre(esc(V.title), body, { cls: "c-bar lecture-verif", attrs: ` aria-label="${esc(V.title)}"` });
+  if (!L) return win(`<p>${esc(V.lead)}</p><p class="note">${esc(V.none)}</p>`);
   const repository = String(m.repository ?? "").replace(/^github\.com\//, "");
   // the index carries the commit with where it was read from: { value, source, commitSource } (runward-fleet build)
   const commit = m.commit && typeof m.commit === "object" ? m.commit.value : m.commit;
@@ -201,11 +196,14 @@ function verifyPanel(w, m) {
       <dt>${esc(V.repository)}</dt><dd><code translate="no">${esc(repository)}</code></dd>
       <dt>${esc(V.commit)}</dt><dd><code translate="no">${esc(commit ?? "")}</code></dd>
       <dt>${esc(V.version)}</dt><dd><code translate="no">runward ${esc(L.runward ?? "")}</code></dd>${run}</dl>`;
+  // the command is copied as it is written, without the prompt and without a line end (a pasted line end would run it)
   const cmd = c.refused
     ? `<p class="lecture-refus">${esc(V.refused(V.field[c.refused]))}</p>`
-    : `<p class="vh" id="cmd-${esc(m.id)}">${esc(V.command)}</p><pre class="lecture-cmd" tabindex="0" aria-labelledby="cmd-${esc(m.id)}"><code translate="no">${esc(c.command)}</code></pre><p class="soft">${esc(V.note)}</p>`;
-  return `<section class="lecture-panneau verre" aria-label="${esc(V.title)}">${head}${dl}${cmd}
-    <p class="soft">${esc(V.record)}</p><div class="actions">${go("#/acces/export", V.recordAct, { q: true })}</div></section>`;
+    : `<p class="vh" id="cmd-${esc(m.id)}">${esc(V.command)}</p><pre class="term lecture-cmd" tabindex="0" aria-labelledby="cmd-${esc(m.id)}"><span class="inv" aria-hidden="true">$ </span><code translate="no" id="cmd-texte">${esc(c.command)}</code></pre>
+      <div class="actions"><button class="btn btn-q" type="button" data-do="copy" data-copy-target="cmd-texte" data-copy-plain data-label="${esc(mots().workflow.copyCommand)}">${esc(mots().workflow.copyCommand)}</button></div>
+      <p class="note">${esc(V.note)}</p>`;
+  return win(`<p>${esc(V.lead)}</p>${dl}${cmd}
+    <p class="note">${esc(V.record)}</p><div class="actions">${go("#/acces/export", V.recordAct, { q: true })}</div>`);
 }
 
 /** A refusal's code, as the service writes it, then its line for the screen; a code this lexicon does not know is shown as written. */
@@ -226,18 +224,18 @@ function receivedPanel(w, lang, m) {
   }).join("");
   const consent = st && st.consent === false ? `<p>${esc(R.consent)}</p><div class="actions">${go("#/acces", R.consentAct, { q: true })}</div>` : "";
   const since = st?.notAcceptedSince ? `<p>${R.since(st.notAcceptedSince)}</p>` : "";
-  return `<section class="lecture-panneau" aria-label="${esc(R.title)}"><h2>${esc(R.title)}</h2>
-    ${items ? `<ul class="lecture-recus">${items}</ul>` : `<p class="soft">${esc(R.none)}</p>`}${since}${consent}
-    <p class="soft">${esc(R.note)} <a href="#/envois">${esc(R.journal)}</a></p></section>`;
+  return fenetre(esc(R.title), `${items ? `<ul class="lecture-recus">${items}</ul>` : `<p class="note">${esc(R.none)}</p>`}${since}${consent}
+    <p class="note">${esc(R.note)} <a href="#/envois">${esc(R.journal)}</a></p>`, { plat: true, cls: "c-bar lecture-recu", attrs: ` aria-label="${esc(R.title)}"` });
 }
 
 function source(w) {
   const S0 = w.source;
-  return `<section class="lecture-source" aria-labelledby="h-source"><h2 id="h-source">${esc(S0.title)}</h2>
+  return `<section class="lecture-source" aria-labelledby="h-source"><h2 class="h2" id="h-source">${esc(S0.title)}</h2>
     <ol class="lecture-schema" aria-label="${esc(S0.label)}">${S0.nodes.map(([b, s]) => `<li><b>${esc(b)}</b><span>${esc(s)}</span></li>`).join("")}</ol></section>`;
 }
 
-const frame = (lang, html) => `<div class="lecture" lang="${lang}">${html}</div>`;
+const frame = (lang, html, vue = "") => `<div class="lecture" lang="${lang}"${vue ? ` data-vue="${vue}"` : ""}>${html}</div>`;
+const tete = (h1, p = "") => `<div class="tete"><h1 class="t1">${esc(h1)}</h1>${p}</div>`;
 
 // ------------------------------------------------------------- the screen
 /** The missions the service knows as declared and the index does not carry yet: their first check is awaited. */
@@ -251,29 +249,32 @@ export function viewDecision(sub) {
   let id = "";
   try { id = sub ? decodeURIComponent(sub) : ""; } catch { return null; }
   const base = { key: "fleet", signed: "in", fleetRoute: "decision", decision: id };
-  if (S.fleetError) return { ...base, title: w.portfolio, html: frame(lang, `${bar(lang, w)}<h1 class="lecture-t">${esc(w.errorTitle)}</h1><p class="lecture-p">${esc(w.errorText)}${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", w.retry)}${go("#/envois", w.uploads, { q: true })}</div>`) };
+  if (S.fleetError) return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete" data-erreur><h1 class="t1">${esc(w.errorTitle)}</h1><p class="sous">${esc(w.errorText)}${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", w.retry)}${go("#/envois", w.uploads, { q: true })}</div></div>`) };
   if (!S.status) return loadingView(w.portfolio);
   const st = S.status;
   const missions = S.index?.missions ?? [];
   const waiting = st.lines.filter((l) => !missions.some((m) => m.id === l.mission));
   if (!missions.length && !id) {
-    // nothing to read: no index yet, or every application removed. The mock-up's empty state; the declared ones,
-    // if any, are named while their first check is awaited
+    // nothing to read: no index yet, or every application removed. The mock-up's empty state, in a window whose bar
+    // says where one is; the declared ones, if any, are named while their first check is awaited
     const body = waiting.length
-      ? `<div class="lecture-vide"><p><b>${esc(w.waitTitle)}</b></p><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct)}${go("#/declarer", w.connect, { q: true })}</div></div>`
-      : `<div class="lecture-vide"><p><b>${esc(w.emptyTitle)}</b></p><p class="soft">${esc(w.emptyText)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div></div>`;
-    return { ...base, title: w.portfolio, html: frame(lang, `${bar(lang, w)}<h1 class="lecture-t">${esc(w.title)}</h1>${body}`) };
+      ? `<p class="h2">${esc(w.waitTitle)}</p><p class="sous">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct)}${go("#/declarer", w.connect, { q: true })}</div>`
+      : `<p class="h2">${esc(w.emptyTitle)}</p><p class="sous">${esc(w.emptyText)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`;
+    return { ...base, title: w.portfolio, html: frame(lang, `${tete(w.title)}${fenetre(esc(w.portfolio), body, { tag: "div", h: "p", cls: "lecture-vide" })}`) };
   }
   const idx = S.index && S.index.lang !== lang ? { ...S.index, lang } : S.index;
   const setAside = st.quarantined ? `<p class="avert">${w.setAside(st.quarantined)} <a href="#/envois">${esc(w.uploads)}</a></p>` : "";
   if (!id) {
-    const updated = st.index ? `<p class="lecture-maj">${w.updated(when(st.index.publishedAt, { sec: false }))}</p>` : "";
-    const pending = waiting.length ? `<section class="lecture-panneau lecture-attendues" aria-labelledby="h-attente"><h2 id="h-attente">${esc(w.waitTitle)}</h2><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct, { q: true })}</div></section>` : "";
-    return { ...base, title: w.portfolio, html: frame(lang, `${bar(lang, w)}${updated}${setAside}${renderView(idx, "decision")}${pending}
-      <div class="actions lecture-actions">${go("#/declarer", w.connect, { q: true })}</div>`) };
+    // the portfolio: runward-fleet's reading, whose parts the layer lays out (web/app.css): the title and its lede,
+    // the tiles in a glass window whose bar is the line « Mis à jour le… », the applications on a sheet
+    const updated = st.index ? `<p class="lecture-maj scr-bar num">${w.updated(when(st.index.publishedAt, { sec: false }))}</p>` : `<p class="lecture-maj scr-bar">${esc(w.portfolio)}</p>`;
+    const pending = waiting.length ? `<section class="bandeau lecture-attendues" aria-labelledby="h-attente"><p id="h-attente"><b>${esc(w.waitTitle)}</b></p><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct, { q: true })}</div></section>` : "";
+    return { ...base, title: w.portfolio, html: frame(lang, `${setAside}${updated}${renderView(idx, "decision")}${pending}
+      <div class="actions lecture-actions">${go("#/declarer", w.connect, { q: true })}</div>`, "port") };
   }
   const m = missions.find((x) => x.id === id);
-  if (!m) return { ...base, title: w.portfolio, html: frame(lang, `${bar(lang, w)}<h1 class="lecture-t">${esc(w.unknownTitle)}</h1><p class="lecture-p">${esc(w.unknownText)} <code translate="no">${esc(id)}</code></p><div class="actions">${go("#/", w.all)}</div>`) };
-  return { ...base, title: m.name, html: frame(lang, `${bar(lang, w, m.name)}${setAside}<div class="lecture-fiche"><div class="lecture-g">${renderView(idx, "decision", m.id)}</div>
-    <aside class="lecture-d">${verifyPanel(w, m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`) };
+  const crumb = (name) => [[w.portfolio, "#/"], [name, null, true]];
+  if (!m) return { ...base, title: w.portfolio, crumb: crumb(id), html: frame(lang, `<div class="tete"><h1 class="t1">${esc(w.unknownTitle)}</h1><p class="sous">${esc(w.unknownText)} <code translate="no">${esc(id)}</code></p><div class="actions">${go("#/", w.all)}</div></div>`) };
+  return { ...base, title: m.name, crumb: crumb(m.name), html: frame(lang, `${setAside}<div class="lecture-fiche"><div class="lecture-g">${renderView(idx, "decision", m.id)}</div>
+    <aside class="lecture-d">${verifyPanel(w, m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`, "app") };
 }

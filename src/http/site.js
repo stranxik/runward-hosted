@@ -1,7 +1,8 @@
 // The public site of runward hosted (ADR-0022): the landing at / and its pages, public, without an account, in
 // French and English. Rendered once, at start, from web/site/ (the template, the page fragments, the data), by a
 // port of the mini-site's build.py of 2026-11-11 that keeps its output: the same markup, the same 324 bilingual
-// texts (web/site/textes_fr_en.tsv, which test/unit/site.test.js compares with what is served, text for text).
+// texts, and since ADR-0026 the house's signature in the foot, the 325th (web/site/textes_fr_en.tsv, which
+// test/unit/site.test.js compares with what is served, text for text).
 //
 // What differs from build.py, so the pages pass the app's content security policy unchanged:
 //   - no inline style or script: the template links the app's own files (web/famille.css, web/couche-runward-app.css,
