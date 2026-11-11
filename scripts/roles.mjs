@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // db/roles.sql on a Scaleway managed PostgreSQL, run once by the database administrator (rw_admin),
 // before the first migration. Usage: ADMIN_URL=postgres://rw_admin@host/rdb node scripts/roles.mjs
+// (the URL may name any database of the server the administrator can connect to)
 // The hoster's API has already created rw_owner, rw_app and rw_maint as LOGIN users with their passwords
 // (infra/scaleway/main.tf) and granted CONNECT on the service database; it cannot create a NOLOGIN role,
 // set an attribute or grant a membership. This script does that part, then CHECKS what roles.sql asks
@@ -26,6 +27,18 @@
 // What is not: TEMPORARY on the database (read and said above, it depends on what the hoster lets its
 // administrator revoke), the schema public and any other schema (the service has nothing there), and the
 // rights on functions and sequences (the snapshot holds the functions' owner and settings, not their ACL).
+// WHERE it reads (found on 2026-11-11, deploy run 42930736032): pg_class and pg_namespace hold the tables
+// and schemas of the database the session is connected to, and of no other. The administrator's URL at
+// the hoster names the hoster's default database (`rdb`, infra/scaleway/main.tf), where the schema rw does
+// not exist: read there, every table and schema line of the snapshot was "fewer" and the deploy stopped.
+// So the comparison opens its OWN session on the service database (RW_DATABASE, the one name used for the
+// database lines too), with the credentials and host of ADMIN_URL, whatever database that URL names,
+// checks that it is where it meant to be, and closes it. Whether the hoster lets its administrator
+// connect to the service database is not known before the first call against it: when it does not, the
+// gesture fails and says "cannot connect to the service database ... as ...", never a count of grants.
+// Everything else in this script reads or changes what the whole server shares (pg_roles, memberships,
+// has_database_privilege and `revoke ... on database` by the database's NAME), so it holds from any
+// database, the hoster's default one included.
 // It fails closed: a snapshot that cannot be read, or that holds no line for one of the two roles, is a
 // refusal. What differs is said in ONE line (the gateway keeps the last line of a failed gesture, 300
 // characters): names of tables, roles and privileges only, never a row, so never a tenant.
@@ -54,7 +67,8 @@ export function expectedGrants(text) {
   return lines;
 }
 
-/** What rw_app and rw_maint may do on this base, in the snapshot's own lines. */
+/** What rw_app and rw_maint may do on this base, in the snapshot's own lines. `sql` MUST be a session on
+ * the service database: the tables and schemas are read from the catalog of the session's database. */
 async function effectiveGrants(sql) {
   const [{ version }] = await sql`select current_setting('server_version_num')::int as version`;
   const privileges = version >= 170000 ? [...TABLE_PRIVILEGES, "MAINTAIN"] : TABLE_PRIVILEGES;
@@ -74,8 +88,9 @@ async function effectiveGrants(sql) {
 
 const some = (lines) => `${lines.slice(0, 4).map((l) => l.slice("grant ".length)).join(", ")}${lines.length > 4 ? ", ..." : ""}`;
 
-/** Compares the grants in effect with the snapshot's; throws, in one line, when they differ. */
-async function compareGrants(sql, snapshot) {
+/** Compares the grants in effect, as the session `sql` reads them in ITS database, with the snapshot's;
+ * throws, in one line, when they differ. Exported for the test's control only: `roles` is the gesture. */
+export async function compareGrants(sql, snapshot) {
   const expected = new Set(expectedGrants(snapshot));
   const actual = new Set(await effectiveGrants(sql));
   const more = [...actual].filter((l) => !expected.has(l)).sort(), fewer = [...expected].filter((l) => !actual.has(l)).sort();
@@ -86,14 +101,31 @@ async function compareGrants(sql, snapshot) {
   return expected.size;
 }
 
+/** Runs `fn` with a session on the service database, under the credentials and host of `url`, whatever
+ * database `url` names; the session is closed whatever happens. Refuses, in one line, when the service
+ * database cannot be reached under that user, or when the session is not on it. */
+async function inServiceDatabase(url, fn) {
+  const u = new URL(url);
+  u.pathname = `/${DATABASE}`;
+  const db = postgres(u.toString(), { max: 1, onnotice: () => {}, ssl: migrationTls(u.toString()) });
+  try {
+    let name;
+    try { [{ name }] = await db`select current_database() as name`; } catch (e) {
+      throw new Error(`cannot connect to the service database ${DATABASE} as ${decodeURIComponent(u.username)}: ${String(e?.message ?? e).replace(/\s+/g, " ").slice(0, 160)}`);
+    }
+    if (name !== DATABASE) throw new Error(`the session meant for the service database ${DATABASE} is on another one: nothing compared, refused`);
+    return await fn(db);
+  } finally { await db.end({ timeout: 5 }); }
+}
+
 export async function roles(url, { log = console.log, grants = false, snapshot = null } = {}) {
+  if (!NAME.test(DATABASE)) throw new Error("RW_DATABASE is not a plain database name");
   const sql = postgres(url, { max: 1, onnotice: () => {}, ssl: migrationTls(url) });
   try {
     await sql.unsafe(`do $$ begin
       if not exists (select 1 from pg_roles where rolname = 'rw_resolve') then create role rw_resolve nologin; end if;
     end $$`);
     await sql.unsafe("grant rw_resolve to rw_owner");
-    if (!NAME.test(DATABASE)) throw new Error("RW_DATABASE is not a plain database name");
     // a role that does not own the database gets a warning here, not an error: the check below tells
     await sql.unsafe(`revoke temporary on database ${DATABASE} from public`).catch(() => {});
     const rows = await sql`select rolname, rolcanlogin, rolsuper, rolbypassrls, rolcreaterole, rolcreatedb
@@ -122,8 +154,10 @@ export async function roles(url, { log = console.log, grants = false, snapshot =
     const temporary = t.app || t.maint ? "TEMPORARY NOT revoked (the administrator may not: the definer functions' search_path remains the control)" : "no temporary objects for rw_app and rw_maint";
     const said = `roles: rw_resolve (nologin) exists, rw_owner is its member, rw_app and rw_maint do not bypass RLS; ${temporary}`;
     if (!grants) { log(said); return { temporaryRevoked: !(t.app || t.maint) }; }
-    const compared = await compareGrants(sql, snapshot ?? readFileSync(SNAPSHOT, "utf8"));
-    log(`${said}; the ${compared} table, schema and database grants of rw_app and rw_maint are those of db/schema.snapshot.txt, no more, no fewer`);
+    const reference = snapshot ?? readFileSync(SNAPSHOT, "utf8");
+    // in the service database, never in the one this session is on (the hoster's default one, at the hoster)
+    const compared = await inServiceDatabase(url, (db) => compareGrants(db, reference));
+    log(`${said}; the ${compared} table, schema and database grants of rw_app and rw_maint are those of db/schema.snapshot.txt, no more, no fewer (read in the database ${DATABASE})`);
     return { temporaryRevoked: !(t.app || t.maint), grants: compared };
   } finally { await sql.end({ timeout: 5 }); }
 }
