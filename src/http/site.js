@@ -1,3 +1,7 @@
+// NOT SERVED since ADR-0028 (2026-11-11): the public site is runward.dev, and this origin answers its former pages
+// by a redirection (src/http/moved.js). This renderer and web/site/ stay in the tree, read by their tests only, until
+// their removal, a change of its own. What follows describes the site as it was served (ADR-0022).
+//
 // The public site of runward hosted (ADR-0022): the landing at / and its pages, public, without an account, in
 // French and English. Rendered once, at start, from web/site/ (the template, the page fragments, the data), by a
 // port of the mini-site's build.py of 2026-11-11 that keeps its output: the same markup, the same 324 bilingual

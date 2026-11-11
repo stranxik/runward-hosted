@@ -16,7 +16,7 @@ const SLOT = "__VIEWS__"; // the served path of the pinned runward-fleet views, 
 
 /**
  * The scripts under web/: app.js and every file of views/, by their path under web/. The public site's scripts
- * (web/site/, ADR-0022) are not modules of the shell: they are another closed list (SITE_FILES), held to the files on
+ * (web/site/, ADR-0022; not served since ADR-0028) are not modules of the shell: they are another list (SITE_FILES), held to the files on
  * disk by test/unit/site.test.js.
  */
 const onDisk = () => readdirSync(WEB, { recursive: true }).map((f) => f.split("\\").join("/")).filter((f) => f.endsWith(".js") && !f.startsWith("site/")).sort();

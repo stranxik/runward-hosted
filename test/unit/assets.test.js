@@ -1,5 +1,5 @@
-// The shell's files as the service serves them, on a real socket (the shell's page is served at /app since the
-// public site took /, ADR-0022): every slot of the page is filled, every file the page names is served with its
+// The shell's files as the service serves them, on a real socket (the shell's page is served at / and at /app, the
+// path it had while the public site held /, ADR-0022 then ADR-0028): every slot of the page is filled, every file the page names is served with its
 // media type, the app's layer and fonts included (web/fonts/, by a closed list), and a path off the list is answered 404, the fonts the app used to take from the pinned
 // fleet package included. The shell's scripts are modules (web/app.js and web/views/), served by a closed
 // list under one folder named by the digest of them all. The content security policy is unchanged: fonts and styles from this origin only.

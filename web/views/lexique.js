@@ -166,7 +166,7 @@ export const MOTS = {
       inconnue: { title: "Passkey inconnue", h1: "Cette passkey n'ouvre aucun accès ici.", mk: "inconnue", face: "Elle n'est enregistrée pour aucun membre de ce service. Elle a peut-être été retirée, ou créée pour un autre site.", other: "Essayer une autre passkey", note: 'Vous étiez membre et n\'avez plus de passkey valable ? <a href="#/reprise">Reprendre l\'accès</a>. Sinon, <a href="#/entree/sans-compte">comment on entre</a>.' },
       expiree: { title: "Demande expirée", h1: "La demande a expiré.", mk: "expirée", face: "Elle a duré plus de 5 minutes. Rien n'a été accordé.", again: "Recommencer" },
       sansPasskey: { title: "Navigateur sans passkey", h1: "Ce navigateur ne propose pas de passkey.", face: "Il ne sait pas créer ni utiliser de passkey ici : navigation privée, poste partagé, ou navigateur trop ancien.", note: "Ouvrez cette page dans votre navigateur habituel ; s'il propose les passkeys, il affiche aussi un code QR pour valider avec votre téléphone." },
-      sansCompte: { title: "Comment on entre", h1: "L'accès est ouvert par l'opérateur du service.", face: "runward hébergé rassemble ce que les missions d'une équipe prouvent. Chaque accès est ouvert par l'opérateur, avec un lien à usage unique ; il n'y a pas d'inscription en libre-service.", own: 'Pour lire vos propres missions sans compte, runward-fleet construit la même vue chez vous, à partir des mêmes fichiers : <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.', back: "Revenir à la connexion" },
+      sansCompte: { title: "Comment on entre", h1: "L'accès est ouvert par l'opérateur du service.", face: "runward hébergé rassemble ce que les missions d'une équipe prouvent. Chaque accès est ouvert par l'opérateur, avec un lien à usage unique ; il n'y a pas d'inscription en libre-service.", own: 'Pour lire vos propres missions sans compte, runward-fleet construit la même vue chez vous, à partir des mêmes fichiers : <a href="https://runward.dev/">runward.dev</a>.', back: "Revenir à la connexion" },
       sortie: { title: "Déconnecté", h1: "Vous êtes déconnecté.", mk: "session fermée", face: "Cette session est fermée sur ce navigateur. Vos autres sessions restent ouvertes ; vous pouvez les fermer depuis Accès.", again: "Se reconnecter" },
       fermee: { title: "Session fermée", h1: "Votre session s'est fermée.", mk: "fermée", face: "La passkey qui l'avait ouverte vient d'être retirée, comme annoncé. Connectez-vous avec une passkey qui vous reste." },
       fin: { title: "Session expirée", h1: "Votre session a pris fin.", face: "Après 12 heures sans activité, ou 7 jours au plus, la session se ferme. Reconnectez-vous ; vous reviendrez où vous étiez." },
@@ -372,6 +372,7 @@ export const MOTS = {
       title: "Mentions et sécurité", head: "runward hébergé · mentions", headR: "écran public, non indexé", h1: "Mentions, confidentialité, sécurité.",
       notice: "Mentions légales", publisher: "éditeur", publisherDefault: "Thibault Souris, personne physique", host: "hébergeur", hostName: "Scaleway, région Paris",
       service: "service", serviceText: "runward hébergé, sous licence FSL-1.1-MIT ; la vue est runward-fleet, sous licence MIT.",
+      site: "site public", siteText: (link) => `Le site de runward, sa documentation et ses mentions légales : ${link}.`,
       privacy: "Confidentialité",
       privacyItems: ["Pour vous connecter : la clé publique de vos passkeys et vos sessions, rien d'autre. Aucune adresse e-mail, aucun mot de passe.", "Pour vos missions : le contenu des exports des dépôts que vous avez consentis, gardé tant que le dépôt est déclaré, puis 30 jours.", "Un seul cookie, celui de la session. Aucune mesure d'audience, aucun service tiers dans la page.", "Tout est hébergé dans l'Union européenne. Effacement dans Accès, ou sur demande."],
       security: "Sécurité", report: 'Pour signaler une faille : le contact de <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
@@ -501,7 +502,7 @@ export const MOTS = {
       inconnue: { title: "Unknown passkey", h1: "This passkey opens no access here.", mk: "unknown", face: "It is registered for no member of this service. It may have been removed, or created for another site.", other: "Try another passkey", note: 'You were a member and have no valid passkey left? <a href="#/reprise">Recover access</a>. Otherwise, <a href="#/entree/sans-compte">how to get in</a>.' },
       expiree: { title: "Request expired", h1: "The request expired.", mk: "expired", face: "It lasted more than 5 minutes. Nothing was granted.", again: "Start again" },
       sansPasskey: { title: "Browser without passkeys", h1: "This browser does not offer passkeys.", face: "It cannot create or use a passkey here: private browsing, a shared computer, or a browser that is too old.", note: "Open this page in your usual browser; if it offers passkeys, it also shows a QR code to confirm with your phone." },
-      sansCompte: { title: "How to get in", h1: "Access is opened by the service's operator.", face: "runward hosted gathers what a team's missions prove. Each access is opened by the operator, with a single-use link; there is no self-service sign-up.", own: 'To read your own missions without an account, runward-fleet builds the same view on your side, from the same files: <a href="https://runward.dev" rel="noreferrer">runward.dev</a>.', back: "Back to sign-in" },
+      sansCompte: { title: "How to get in", h1: "Access is opened by the service's operator.", face: "runward hosted gathers what a team's missions prove. Each access is opened by the operator, with a single-use link; there is no self-service sign-up.", own: 'To read your own missions without an account, runward-fleet builds the same view on your side, from the same files: <a href="https://runward.dev/en">runward.dev</a>.', back: "Back to sign-in" },
       sortie: { title: "Signed out", h1: "You are signed out.", mk: "session closed", face: "This session is closed in this browser. Your other sessions stay open; you can close them from Access.", again: "Sign in again" },
       fermee: { title: "Session closed", h1: "Your session closed.", mk: "closed", face: "The passkey that opened it was just removed, as announced. Sign in with a passkey you still have." },
       fin: { title: "Session expired", h1: "Your session ended.", face: "After 12 hours without activity, or 7 days at most, the session closes. Sign in again; you will come back where you were." },
@@ -706,6 +707,7 @@ export const MOTS = {
       title: "Notice and security", head: "runward hosted · notice", headR: "public screen, not indexed", h1: "Legal notice, privacy, security.",
       notice: "Legal notice", publisher: "publisher", publisherDefault: "Thibault Souris, natural person", host: "host", hostName: "Scaleway, Paris region",
       service: "service", serviceText: "runward hosted, under the FSL-1.1-MIT licence; the view is runward-fleet, under the MIT licence.",
+      site: "public site", siteText: (link) => `The site of runward, its documentation and its legal notice: ${link}.`,
       privacy: "Privacy",
       privacyItems: ["To sign you in: the public key of your passkeys and your sessions, nothing else. No email address, no password.", "For your missions: the content of the exports of the repositories you consented to, kept as long as the repository is declared, then 30 days.", "One cookie only, the session's. No audience measurement, no third-party service in the page.", "Everything is hosted in the European Union. Erasure in Access, or on request."],
       security: "Security", report: 'To report a vulnerability: the contact in <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
@@ -724,6 +726,13 @@ export const mots = () => MOTS[lang()];
  */
 const STUDIO = { fr: "https://anotherframework.dev/studio.html?depuis=runward", en: "https://anotherframework.dev/studio.html?depuis=runward" };
 export const studioUrl = () => STUDIO[lang()];
+/**
+ * An address of the public site, runward.dev, by the reader's language (ADR-0028): French at /<page>, English at
+ * /en/<page>; no page, its home. The pages this origin served until 2026-11-11 are there, under the same names
+ * (src/http/moved.js holds the same origin for the server's redirections). Written here and nowhere else in the shell.
+ */
+const SITE = "https://runward.dev";
+export const siteUrl = (page = "") => (lang() === "en" ? `${SITE}/en${page ? `/${page}` : ""}` : `${SITE}/${page}`);
 
 // The values the service writes in French, said in the reader's language (the API is unchanged): a fleet's title when
 // it is the store's default, the product's French name (src/adapters/store/tables.js); a passkey's provider when the
