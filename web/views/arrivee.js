@@ -41,7 +41,7 @@ export function viewArrivee(sub) {
   }
   const declared = a.repositories.filter((r) => r.state === "pending")[0];
   const step2 = !open ? ferme : declared
-    ? `<p>${mk("half", C.waitingFirst)} <span data-verbatim translate="no">${esc(declared.name)}</span>${A.declared(declared.missions.length, declared.missions.map((m) => `<code>${esc(m.id)}</code>`).join(", "), `<code>${esc(declared.workflow)}</code>`, declared.consent)}</p>
+    ? `<p>${declared.pendingSend ? `${mk("half", C.firstReceived)} <span class="soft">${C.toConfirm(when(declared.pendingSend.receivedAt, { sec: false }))}</span>` : mk("half", C.waitingFirst)} <span data-verbatim translate="no">${esc(declared.name)}</span>${A.declared(declared.missions.length, declared.missions.map((m) => `<code>${esc(m.id)}</code>`).join(", "), `<code>${esc(declared.workflow)}</code>`, declared.consent)}</p>
        <p class="note">${A.expires(when(declared.expiresAt, { sec: false }))}</p>`
     : declareForm();
   const step4 = !open ? ferme : declared?.pendingSend

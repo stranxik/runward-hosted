@@ -7,6 +7,7 @@ import { FIELD_OF } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write } from "./gestures.js";
+import { retour, versDepot } from "./liens.js";
 
 document.addEventListener("click", async (e) => {
   const g = e.target.closest("[data-go]");
@@ -48,7 +49,7 @@ document.addEventListener("click", async (e) => {
     const r = await write("POST", `/api/v0/repositories/${id}/confirm`, {}, { gesture: "repository-confirm", object: id });
     if (!r.ok) { S.failed = k; return rerender(); }
     say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
-    await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? "#/" : "#/arrivee"; return;
+    await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
   }
   if (what === "export") {
     S.export = { busy: true }; rerender();
@@ -86,6 +87,6 @@ main.addEventListener("submit", async (e) => {
     const body = { workflow: val("wf"), defaultBranch: val("branch") || "main", addMissions: val("mission") ? [{ id: val("mission"), path: val("path") || "." }] : [], removeMissions: remove, knowingSendsStay: remove.length > 0 };
     const r = await write("PATCH", `/api/v0/repositories/${id}`, body);
     if (!r.ok) { const x = r.data ? r : { message: mots().common.verifyFailed, action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
-    S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = "#/acces";
+    S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = retour(versDepot(id));
   }
 });

@@ -44,6 +44,7 @@ export const MODULES = Object.freeze([
   "views/confirm.js",
   "views/workflow.js",
   "views/claims.js",
+  "views/liens.js",
   // ---- the shell, its theme selector, the router, the gestures
   "views/shell.js",
   "views/theme.js",
@@ -76,6 +77,7 @@ export const MODULES = Object.freeze([
   "views/acces/ajout.js",
   "views/acces/export.js",
   "views/acces/effacer.js",
+  "views/acces/depot.js",
 ]);
 const SCRIPT = "text/javascript; charset=utf-8";
 const CSS = "text/css; charset=utf-8";
