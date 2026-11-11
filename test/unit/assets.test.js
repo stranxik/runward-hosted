@@ -41,7 +41,7 @@ test("every slot of the page is filled, and every file it names is served with i
   const html = await (await get("/app")).text();
   assert.deepEqual(unfilled(html), []);
   const named = [...html.matchAll(/(?:href|src)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
-  assert.equal(named.length, 6, "famille, the layer, the fleet stylesheet, app.css, views.js, app.js");
+  assert.equal(named.length, 7, "famille, the layer, the fleet stylesheet, app.css, mouvement.css, views.js, app.js");
   for (const p of named) {
     const r = await get(p);
     assert.equal(r.status, 200, p);

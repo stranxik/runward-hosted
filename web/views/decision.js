@@ -14,7 +14,7 @@
 // by views.js; no example data.
 import { S, esc } from "./base.js";
 import { when } from "./time.js";
-import { go, act, reqNote, loadingView, fenetre } from "./marks.js";
+import { go, act, reqNote, loadingView, fenetre, copier } from "./marks.js";
 import { renderView } from "./fleet-views.js";
 import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
@@ -200,7 +200,7 @@ function verifyPanel(w, m) {
   const cmd = c.refused
     ? `<p class="lecture-refus">${esc(V.refused(V.field[c.refused]))}</p>`
     : `<p class="vh" id="cmd-${esc(m.id)}">${esc(V.command)}</p><pre class="term lecture-cmd" tabindex="0" aria-labelledby="cmd-${esc(m.id)}"><span class="inv" aria-hidden="true">$ </span><code translate="no" id="cmd-texte">${esc(c.command)}</code></pre>
-      <div class="actions"><button class="btn btn-q" type="button" data-do="copy" data-copy-target="cmd-texte" data-copy-plain data-label="${esc(mots().workflow.copyCommand)}">${esc(mots().workflow.copyCommand)}</button></div>
+      <div class="actions">${copier(mots().workflow.copyCommand, "cmd-texte", { plain: true })}</div>
       <p class="note">${esc(V.note)}</p>`;
   return win(`<p>${esc(V.lead)}</p>${dl}${cmd}
     <p class="note">${esc(V.record)}</p><div class="actions">${go("#/acces/export", V.recordAct, { q: true })}</div>`);

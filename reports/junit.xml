@@ -209,6 +209,12 @@
 	<testcase name="C13: no `execute` passes inside a body, and a trigger's clause passes only in a create trigger statement (the four reproductions that dropped a table)" classname="test"/>
 	<testcase name="C13: a table moved to another schema is refused, a rename in effect" classname="test"/>
 	<testcase name="migrations: the one file exempt from the dynamic-statement rule is exempt by the sha256 of its bytes, and only as committed" classname="test"/>
+	<testcase name="the motion tokens live in the app's layer: 160, 240 and 320 ms, 420 ms for a change of screen, one curve without overshoot, 10 px at most; the family's structure keeps its 150 to 240 ms" classname="test"/>
+	<testcase name="no stylesheet of the shell writes a duration (each is a token of the layer) or animates a property of layout: transform and opacity, and the paint of a hover" classname="test"/>
+	<testcase name="the engine reads its values from the layer and writes none: the tokens as the layer says them" classname="test"/>
+	<testcase name="every animation that starts ends: one that never finishes by itself is forced to its end by its guard, its duration and its delay and 300 ms after it started" classname="test"/>
+	<testcase name="reduced motion: no transform is animated; what only moved does not play, what also faded keeps its fade, 160 ms at most and without delay" classname="test"/>
+	<testcase name="the blocks of a screen arrive once, on a navigation forward: never on the same address painted again (a refresh, a re-render, a check that arrives), never on a way back" classname="test"/>
 	<testcase name="the object store is ok only when an object written to the bucket reads back: a bucket that does not exist, though it accepts writes, is down" classname="test"/>
 	<testcase name="the health check costs the store at most one write and one read per period, whatever the traffic; a failure is checked again sooner" classname="test"/>
 	<testcase name="/api/health answers 503 with objectStore down when the bucket does not read back" classname="test"/>
@@ -352,14 +358,14 @@
 	<testcase name="planted controls: the audit refuses a layer broken on purpose, for the reason planted" classname="test"/>
 	<testcase name="planted control: the contrast measure is the WCAG one" classname="test"/>
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
-	<testcase name="no entrance animation in the app's stylesheet; two loops only, the loading line and the drift of the haze behind the sign-in (ADR-0025), both stopped under reduced motion" classname="test"/>
+	<testcase name="the loops of the stylesheets: the loading line, the drift of the haze behind the sign-in (ADR-0025) and the breath of the line while a passkey is awaited (ADR-0027), each stopped under reduced motion; no entrance in a stylesheet" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 356 -->
+	<!-- tests 362 -->
 	<!-- suites 0 -->
-	<!-- pass 356 -->
+	<!-- pass 362 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

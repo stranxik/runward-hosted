@@ -26,11 +26,13 @@ function liensCoque(route, sub) {
   const cur = (cond) => (cond ? ' aria-current="page"' : "");
   const exp = route === "acces" && /^export/.test(sub);
   const N = comptes();
-  const a = (h, w, n, c) => `<a class="it" href="${h}"${cur(c)}>${esc(w)}${n != null ? `<span class="n0 num">${n}</span>` : ""}</a>`;
+  // the marker of the current line is a piece of its own: it is carried from one screen to the next (web/mouvement.css)
+  const REPERE = `<span class="repere" aria-hidden="true"></span>`;
+  const a = (h, w, n, c) => `<a class="it" href="${h}"${cur(c)}>${c ? REPERE : ""}${esc(w)}${n != null ? `<span class="n0 num">${n}</span>` : ""}</a>`;
   const principaux = [a("#/", F.portfolio, S.index ? N.N : null, route === "decision" && !sub), a("#/envois", F.uploads, S.status?.head?.seq ?? S.journal?.head?.seq ?? null, route === "envois"), a("#/acces", F.access, null, route === "acces" && !exp), a("#/acces/export", F.export, null, exp)].join("");
   // the applications, each opening its decision reading, its state said by the reading's own mark (shape, then hue);
   // a name of any length wraps inside its line (web/app.css), never past the sidebar or the menu
-  const missions = triees().map((m) => `<a class="it mis" href="#/decision/${esc(m.id)}"${cur((route === "decision" || route === "mission") && sub === m.id)}><span class="etq" data-state="${esc(verdictOf(m))}"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(nomCourt(m))}</span></span></a>`).join("");
+  const missions = triees().map((m) => `<a class="it mis" href="#/decision/${esc(m.id)}"${cur((route === "decision" || route === "mission") && sub === m.id)}>${(route === "decision" || route === "mission") && sub === m.id ? REPERE : ""}<span class="etq" data-state="${esc(verdictOf(m))}"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(nomCourt(m))}</span></span></a>`).join("");
   const vues = ["flotte", "vue", "history", "proof", "signatures", "pr", "sources"].map((r) => a(`#/${r}`, F.views[r], null, route === r)).join("");
   return { principaux, missions, vues };
 }
@@ -130,7 +132,7 @@ function shell(signedIn, route, sub, v) {
 export function paint(v) {
   const { route, sub } = parts();
   shell(Boolean(S.session) && v.signed !== "out", v.fleetRoute ?? route, sub, v);
-  main.className = v.main ?? "";
+  main.className = v.main ?? ""; main.style.minHeight = "";
   setHTML(main, v.html);
   document.title = `${v.title ? `${v.title} · ` : ""}${mots().brand}`;
   after(v);

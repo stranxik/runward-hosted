@@ -6,8 +6,9 @@
 // data-theme-btn switches the theme; the shell places those elements (web/index.html for the top bar,
 // web/views/shell.js for the sidebar's foot and the phone menu). A lot that redraws the selector (two named
 // states instead of one button, the system's preference) changes this file and those three places only.
+import { theme } from "./mouvement.js";
 
-(function theme() {
+(function selector() {
   const KEY = "runward-hosted-theme";
   let saved = null; try { saved = localStorage.getItem(KEY); } catch { saved = null; }
   if (saved === "dark" || saved === "light") document.documentElement.setAttribute("data-theme", saved);
@@ -15,7 +16,8 @@
     if (!e.target.closest("[data-theme-btn]")) return;
     const cur = document.documentElement.getAttribute("data-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
+    // a fade of the whole page; nothing changes its place (ADR-0027)
+    theme(() => document.documentElement.setAttribute("data-theme", next));
     try { localStorage.setItem(KEY, next); } catch { /* a per-viewer convenience only */ }
   });
 })();

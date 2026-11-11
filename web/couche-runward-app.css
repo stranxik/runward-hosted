@@ -60,11 +60,29 @@
   --gut:16px; --max:1180px;
   /* shape: the shell's single radius is the panel's; the mark of a state keeps a near-square corner */
   --radius:var(--r-panel); --r-mark:1px;
-  /* motion: the family's productive curve and durations apply (famille.css). Two loops are kept: the loading
-     line, a progress indicator, and the drift of the haze behind the sign-in (the one screen that carries the
-     public site's whole scene, ADR-0025); both stop under reduced motion. */
+  /* the loops: the loading line, a progress indicator, and the drift of the haze behind the sign-in (the one
+     screen that carries the public site's whole scene, ADR-0025); both stop under reduced motion. */
   --ease-load:cubic-bezier(.45,.05,.25,1); --dur-load:1.6s;
   --nue-d1:24s; --nue-d2:30s; --nue-d3:27s; --nue-d4:36s; --pts-d:46s;
+  /* the motion of the shell (ADR-0027; web/mouvement.css and web/views/mouvement.js read these and write none). They
+     are runward's own, not the family's: the family's structure says 150 to 240 ms and no entrance for an app;
+     runward's layer goes to 320 ms, 420 ms for a change of screen and for it alone, and animates the arrival on a
+     screen. One curve, the public site's soft deceleration, without overshoot; the waiting line alone breathes on a
+     symmetric one. Transform and opacity only. */
+  --mv-d1:160ms;    /* an answer: a hover, a press, the way out of a state */
+  --mv-d2:240ms;    /* a state that changes: a message that settles, the copy, the veil, a number that rolls, the theme */
+  --mv-d3:320ms;    /* a block that moves: the arrival, the fold, the menu's sheet, the switch of language */
+  --mv-ecran:420ms; /* a change of screen, and it alone */
+  --mv-doux:cubic-bezier(.22,.61,.36,1);
+  --mv-pas:35ms;    /* between two blocks that arrive */
+  --mv-seuil:300ms; /* the whole stagger of an arrival at most; and what a loading waits before it shows anything */
+  --mv-monte:8px;   /* an arrival */
+  --mv-pose:6px;    /* a message that settles */
+  --mv-leve:1px;    /* a hover */
+  --mv-feuille:10px;/* the menu's sheet */
+  --mv-souffle:2600ms; /* the breath of the line while a passkey is awaited */
+  --mv-tenue:1600ms;   /* how long « Copié » is held */
+  --mv-eclat:1800ms;   /* the veil that goes out on a row whose check just arrived */
 }
 
 /* ---- dark, an option */

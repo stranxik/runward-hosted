@@ -5,7 +5,7 @@
 // read from the pinned runward-fleet package, never copied into this
 // repository (PADR-0011 point 4); the fleet stylesheet is the <style> of its template.html with its :root
 // token blocks removed, so web/couche-runward-app.css (the app's layer, ADR "app layer") is the only source
-// of values. The app's fonts (Geist, Geist Mono, SIL OFL 1.1) are served from web/fonts/, by a closed list:
+// of values; the motion's rules (web/mouvement.css, ADR-0027) come last. The app's fonts (Geist, Geist Mono, SIL OFL 1.1) are served from web/fonts/, by a closed list:
 // nothing else in that folder, and nothing outside it, is ever served.
 //
 // The public site (ADR-0022): the landing at / and its pages are rendered here once, at start (src/http/site.js),
@@ -33,8 +33,9 @@ export const FONTS = Object.freeze([
  */
 export const MODULES = Object.freeze([
   "app.js",
-  // ---- the base: the page, its words (FR, EN), the API, the pinned fleet views
+  // ---- the base: the page, its motion (ADR-0027), its words (FR, EN), the API, the pinned fleet views
   "views/base.js",
+  "views/mouvement.js",
   "views/lexique.js",
   "views/time.js",
   "views/marks.js",
@@ -145,6 +146,7 @@ export function buildAssets({ pin, commit }) {
   const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), CSS);
   const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), CSS);
   const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), CSS);
+  const mouvementCss = add("mouvement", "css", readFileSync(join(WEB, "mouvement.css")), CSS);
   // the modules: the slot of the pinned views filled first, then one digest over every name and every byte
   const modules = MODULES.map((f) => [f, Buffer.from(readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(viewsPath)))]);
   const folder = modulesFolder(modules);
@@ -153,7 +155,7 @@ export function buildAssets({ pin, commit }) {
   for (const [f, type] of FONTS) files.set(`/assets/fonts/${f}`, { bytes: readFileSync(join(WEB, "fonts", f)), type, immutable: false });
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
     .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
-    .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
+    .replace("__APP_CSS__", appCss).replace("__MOUVEMENT_CSS__", mouvementCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
   // the public site: its files by digest, then its pages, rendered once from web/site/ and its one data file
   const links = { famille, couche };
   for (const [f, key, type] of SITE_FILES) { const [name, ext] = f.split("."); links[key] = add(name, ext, readFileSync(join(WEB, "site", f)), type); }

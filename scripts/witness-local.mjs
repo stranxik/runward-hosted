@@ -153,7 +153,7 @@ try {
     && (await page.locator("a[data-install]").getAttribute("target")) === "_blank" && /noopener/.test(await page.locator("a[data-install]").getAttribute("rel"));
   if (!okLink) { console.log(`witness: FAULT the install link is not GitHub's create-file page, prefilled (${href})`); failed++; }
   await page.getByRole("button", { name: "Copier l'extrait" }).click(); await page.waitForTimeout(300);
-  const copied = (await page.locator("[data-do=copy]").textContent()) === "Copié" && (await page.evaluate(() => navigator.clipboard.readText())) === `${value}`;
+  const copied = (await page.locator("[data-do=copy] [data-actif]").textContent()) === "Copié" && (await page.evaluate(() => navigator.clipboard.readText())) === `${value}`;
   if (!copied) { console.log("witness: FAULT the copy button did not copy the extract, or said nothing"); failed++; }
   await screen("08b-arrivee-copie", { mobile: true });
   // 5. the CI's first upload: kept, awaiting confirmation

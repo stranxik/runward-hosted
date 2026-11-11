@@ -1,6 +1,6 @@
 // The send workflow call, as the app shows it.
 import { S, esc } from "./base.js";
-import { mk } from "./marks.js";
+import { mk, copier } from "./marks.js";
 import { mots } from "./lexique.js";
 
 // The install path without any right (PADR-0021 point 7, proposed): the extract, a button that opens GitHub's
@@ -36,7 +36,7 @@ export function snippet(repo) {
   const w = workflowText(repo);
   const install = repo?.name ? `<div class="actions install">
       ${w.sha ? `<a class="btn" href="${esc(installUrl(repo, w.text))}" target="_blank" rel="noopener noreferrer" data-install>${T.add}</a>` : `<button class="btn" type="button" disabled>${T.add}</button>`}
-      <button class="btn btn-q" type="button" data-do="copy" data-copy-target="extrait" aria-describedby="copie-etat">${T.copy}</button>
+      ${copier(T.copy, "extrait", { extra: ' aria-describedby="copie-etat"' })}
       <span class="small soft" id="copie-etat" role="status" aria-live="polite"></span></div>
     <p class="note">${T.addNote(esc(w.branch), esc(repo.name))}</p>
     ${w.branch !== "main" ? `<p class="avert">${T.branch(esc(w.branch))}</p>` : ""}` : "";

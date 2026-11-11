@@ -1,7 +1,7 @@
 // Links: bootstrap, recovery, invitation (seven states).
 import { S, esc } from "./base.js";
 import { when } from "./time.js";
-import { head, mk, act, reqNote, go, pkPlain, forge } from "./marks.js";
+import { head, mk, act, reqNote, go, pkPlain, forge, souffle } from "./marks.js";
 import { mots, titreFlotte } from "./lexique.js";
 
 export function viewLien(sub) {
@@ -14,7 +14,7 @@ export function viewLien(sub) {
   const kind = info.kind;
   const fleet = esc(titreFlotte(info.fleet));
   const create = (label) => `<div class="actions">${act("redeem", label, { k: "device" })}${act("redeem", T.onPhone, { q: true, k: "phone" })}</div>`;
-  if (sub === "attente") return frame(T.attente.title, C.confirmOnDevice, `<p class="face">${T.attente.face}</p><div class="charge" role="progressbar" aria-label="${esc(T.attente.label)}"></div>`);
+  if (sub === "attente") return frame(T.attente.title, C.confirmOnDevice, `<p class="face">${T.attente.face}</p>${souffle(T.attente.label)}`);
   if (sub === "annulee") return frame(T.annulee.title, T.annulee.h1, `<p class="face">${mk("void", T.annulee.mk)} ${T.annulee.face(until)}</p>${create(T.retry)}`);
   if (sub === "panne") return frame(T.panne.title, T.panne.h1, `<p class="face">${mk("inv", T.panne.mk)} ${T.panne.face}</p>${create(T.retry)}<p class="note">${T.panne.note}${reqNote(S.lastError)}</p>`);
   const st = info.state;
