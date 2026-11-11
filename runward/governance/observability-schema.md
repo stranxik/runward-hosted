@@ -14,7 +14,7 @@ Created by the server for each request (`r-` and 12 hex), returned in `Runward-R
 
 ## 3. Provenance
 
-Each upload's entry keeps the verified claims of its token (repository and owner by id, calling and called workflows with their SHA, event, ref, commit, runner), the run, attempt and order epoch, and each publication the runward-fleet version and the digests of the archive, the inventory and the index.
+Each upload's entry keeps the verified claims of its token (repository and owner by id, calling and called workflows with their SHA, event, ref, commit, runner; for GitLab: the project and its namespace by id, the pipeline definition and its commit, the pipeline's source, the ref and whether it is protected, the pipeline and job numbers, and, informative only, the user's access level and the runner; never a login or an e-mail address), the level of evidence the upload reached with what it rests on (`level`: its code, the issuer key and whether the issuer is public or registered, the `kid` and the thumbprint of the key that signed, whether a protected branch was required: ADR-0029 section 2), the run, attempt and order epoch, and each publication the runward-fleet version and the digests of the archive, the inventory and the index.
 
 ## 4. Unfolding a consolidated memory (audit)
 

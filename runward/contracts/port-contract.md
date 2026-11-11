@@ -8,7 +8,7 @@ Filled on 2026-11-10 (the independent review of a4ede14 found this file still th
 |---|---|---|---|
 | TenantStore and Ledger | v0 | secondary | `src/adapters/store/postgres.js` (production), `src/adapters/store/memory.js` (the reference adapter, ADR-0015) |
 | ExportStore, SecurityLog, Archive (one object store) | v0 | secondary | `src/adapters/objects/objects.js`: `s3Objects` (aws4fetch, any S3), `memoryObjects` |
-| WorkloadVerifier | v0 | secondary | `src/adapters/oidc/github.js` (GitHub Actions OIDC) |
+| WorkloadVerifier | v0 | secondary | `src/adapters/oidc/registry.js` (the registry of issuers, ADR-0029) over `github.js` (GitHub Actions OIDC), `gitlab.js` (gitlab.com) and the keys a tenant registered for a GitLab instance; the signature check is shared in `jws.js` |
 | HumanAuthenticator | v0 | secondary | `src/adapters/webauthn/simplewebauthn.js`; a stand-in that checks the challenge in the tests (`test/helpers.js#fakeAuthn`) |
 | Clock, Log | v0 | secondary | `src/adapters/system/clock.js`, `src/adapters/system/log.js` |
 
@@ -16,7 +16,7 @@ Filled on 2026-11-10 (the independent review of a4ede14 found this file still th
 
 - **TenantStore and Ledger**: keep what a tenant owns (members, passkeys, sessions, links, repositories, missions, uploads, published indexes, archives) so that a read or a write under one tenant never reaches another, and append to each tenant's journal, whose entries are never changed. A few questions are asked before a tenant is known (which tenant a session, a credential, a link or a repository belongs to): they are answered by exact key only, one answer for absent and for elsewhere. "Tenant" means a fleet: the space one founder opened by a bootstrap link.
 - **ExportStore, SecurityLog, Archive**: keep the bytes a CI sent, addressed by their sha256 under their tenant; keep the security log of the access gestures, written before the database commits, so a restore of the database can replay them; keep a prepared export 24 hours. The keys are computed from server values, never received.
-- **WorkloadVerifier**: say whether a token is a GitHub Actions OIDC token of the pinned issuer, for this audience, now; and if it is not, name why, in one of four codes. "Workload" means a CI job, never a person.
+- **WorkloadVerifier**: say whether a token is the CI identity token of an issuer the service knows (GitHub's, gitlab.com's, or a GitLab instance a tenant registered, named by the token's audience), for this service, now, and which issuer and key signed it; and if it is not, name why, in a refusal code. The issuer's key set is chosen by exact equality on the token's `iss` (and `aud` for a registration) before the signature is checked with that set alone. "Workload" means a CI job, never a person.
 - **HumanAuthenticator**: run the passkey ceremonies (registration, authentication) against a challenge the application stored and consumes; it never decides who may do what.
 - **Clock, Log**: the service's time in UTC milliseconds, declared as the service's own; one JSON line per event, from a closed list of fields.
 
@@ -27,15 +27,16 @@ TenantStore     tx(tenantId | null, fn(tx) -> T) -> T             one transactio
   tx (tenant)   get(table, key) | list(table, where) | insert(table, row) | update(table, key, patch) | lockTenant()
                 ledgerHead() | ledgerAppend(entry) | ledgerPage({ before, limit }) | ledgerAll()
   tx (exact key, no tenant needed)
-                resolveRepository({ forge, repositoryId, nameKey }) | nameTaken({ forge, nameKey }) | resolveCredential(id)
-                resolveSession(tokenHash) | resolveLink(tokenHash) | putChallenge(c) | takeChallenge(id) | useJti(jti, expiresAt)
-                takeRate(repositoryId, bucket, runId, limit) | countRefused(repositoryId, bucket) | maintenance() | setMaintenance(m)
+                resolveRepository({ forge, issuerKey, repositoryId, nameKey }) | nameTaken({ forge, issuerKey, nameKey }) | resolveIssuer(id) | resolveCredential(id)
+                resolveSession(tokenHash) | resolveLink(tokenHash) | putChallenge(c) | takeChallenge(id) | useJti(jti, expiresAt, issuerKey)
+                takeRate(repositoryId, bucket, runId, limit, issuerKey) | countRefused(repositoryId, bucket, issuerKey) | maintenance() | setMaintenance(m)
                 tenantIds() | operatorNote(what, detail) | dailyJobs()
                 newId() | ping() | close()
 ObjectStore     putBytes(tenant, sha256, bytes) | getBytes(tenant, sha256) -> bytes | null | removeBytes(tenant, sha256)
                 writeSecurity(tenant, ulid, event) | securitySince(tenant, afterUlid) -> [{ id, event }]
                 putArchive(tenant, id, bytes) | getArchive(tenant, id) -> bytes | null | removeArchive(tenant, id) | ping() -> boolean
-WorkloadVerifier verify(token, { audience }) -> claims        throws TokenRefused(code) or KeysUnavailable
+WorkloadVerifier verify(token, { purpose: "send" | "read", audience }) -> { claims, forge, issuer: { key, kind, tenantId? }, kid, thumbprint }
+                throws TokenRefused(code) or a VerifierUnavailable; a forge's adapter keeps verify(token, { audience }) -> claims
 HumanAuthenticator registrationOptions({ memberId, label, exclude }) | verifyRegistration({ response, expectedChallenge }) -> credential | null
                 authenticationOptions({ allow }) | verifyAuthentication({ response, expectedChallenge, credential }) -> { newCounter } | null
 Clock           now() -> milliseconds (UTC)

@@ -182,7 +182,9 @@ try {
     const d = await c.app.repositories.declare(await grant(consent ? "declare-with-consent" : null, nk), { name, consent, missions: [{ id: mission, path: "." }] }, {});
     const bytes = Buffer.from(JSON.stringify({ ...fix, verdict: verdict ?? fix.verdict }));
     await upload({ repository: name, repository_id: rid, mission, run_number: "40", bytes });
-    await c.app.repositories.confirm(await grant("repository-confirm", d.id), d.id, {});
+    // the confirmation is bound to the repository and to the digest of the values the screen shows (ADR-0029 section 1)
+    const shown = (await c.app.identity.accessView(await grant(null))).repositories.find((r) => r.id === d.id).pending;
+    await c.app.repositories.confirm(await grant("repository-confirm", `${d.id}:${shown.digest}`), d.id, { digest: shown.digest }, {});
     return d;
   };
   await seed({ name: "stranxik/hitpoint", mission: "hitpoint", rid: "880215547", consent: true, verdict: "level-not-met" });
