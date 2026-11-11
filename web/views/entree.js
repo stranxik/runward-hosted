@@ -1,8 +1,8 @@
 // Entry (signed out): the sign-in and its states, as a page of the public site (ADR-0025): the display title on the
 // left, and on the right a glass window whose bar is the relevé « par passkey », standing on the whole haze, the one
 // screen where it drifts. The secondary states (unknown passkey, expired request, a browser without passkeys, no
-// account, signed out, session closed or ended) take the same layout. The public home is the site at / (web/site/,
-// ADR-0022); #/entree alone opens the sign-in.
+// account, signed out, session closed or ended) take the same layout. This origin has no public home: the public site
+// is runward.dev (ADR-0028); the signed-out root (/, #/) opens this screen, as #/entree does.
 import { S, esc } from "./base.js";
 import { act, forge, pkPlain, mk, go, fenetre } from "./marks.js";
 import { mots } from "./lexique.js";

@@ -88,6 +88,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | The public site served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept | decided: ADR-0022, accepted 2026-11-11 |
 | The shell in the grammar of its public site: the scene as the ground, glass windows, one header; the haze drifts on the sign-in only | pending: ADR-0025 (refines ADR-0019, accepted 2026-11-10), proposed |
 | The app's layer is the house's visual base; runward keeps its own signs; the house signs the foot | pending: ADR-0026, proposed |
+| The public site is runward.dev; the app's origin carries the app only: the shell at `/`, the sign-in for a signed-out visitor, the former public pages answering 308 to runward.dev | pending: ADR-0028 (supersedes ADR-0022, accepted 2026-11-11), proposed |
 
 ### Ratification
 - 2026-11-10 · rows: contracts-governance, hexa-adapter-pattern, hexa-architecture, hexa-typescript-native, process-adr-and-journal, security-mcp-server-pinning · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: contracts-governance@3819c661f85728cf, hexa-adapter-pattern@b76e0f90c6a7b5b3, hexa-architecture@611e39392ab4085f, hexa-typescript-native@c33865aec11fb9dd, process-adr-and-journal@6d0c6b5a4da8f56b, security-mcp-server-pinning@2e6d819f82f30657 · mode: agent
