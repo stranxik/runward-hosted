@@ -20,8 +20,11 @@ column rw.fleet_index.seq bigint null=NO default=
 column rw.fleet_index.sha256 text null=NO default=
 column rw.fleet_index.tenant_id uuid null=NO default=rw.rw_tenant()
 column rw.fleet_index.version integer null=NO default=
+column rw.forge_repository.definition_ref text null=YES default=
 column rw.forge_repository.forge text null=NO default='github'::text
+column rw.forge_repository.forge_name text null=NO default='github'::text
 column rw.forge_repository.id uuid null=NO default=
+column rw.forge_repository.issuer_key text null=NO default='https://token.actions.githubusercontent.com'::text
 column rw.forge_repository.name text null=NO default=
 column rw.forge_repository.name_key text null=NO default=
 column rw.forge_repository.owner_id text null=YES default=
@@ -29,6 +32,21 @@ column rw.forge_repository.removed_at timestamp with time zone null=YES default=
 column rw.forge_repository.repository_id text null=YES default=
 column rw.forge_repository.state text null=NO default=
 column rw.forge_repository.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.issuer.added_at timestamp with time zone null=NO default=now()
+column rw.issuer.forge text null=NO default=
+column rw.issuer.id text null=NO default=
+column rw.issuer.issuer text null=NO default=
+column rw.issuer.removed_at timestamp with time zone null=YES default=
+column rw.issuer.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.issuer_key.added_at timestamp with time zone null=NO default=now()
+column rw.issuer_key.confirmed_at timestamp with time zone null=NO default=now()
+column rw.issuer_key.id uuid null=NO default=
+column rw.issuer_key.issuer_ref text null=NO default=
+column rw.issuer_key.jwk jsonb null=NO default=
+column rw.issuer_key.kid text null=NO default=
+column rw.issuer_key.retired_at timestamp with time zone null=YES default=
+column rw.issuer_key.tenant_id uuid null=NO default=rw.rw_tenant()
+column rw.issuer_key.thumbprint text null=NO default=
 column rw.ledger.at timestamp with time zone null=NO default=now()
 column rw.ledger.body jsonb null=NO default=
 column rw.ledger.hash text null=NO default=
@@ -99,9 +117,18 @@ column rw.repository.epoch integer null=NO default=0
 column rw.repository.id uuid null=NO default=
 column rw.repository.name text null=NO default=
 column rw.repository.pending_send jsonb null=YES default=
+column rw.repository.protection_lifted_at timestamp with time zone null=YES default=
 column rw.repository.removed_at timestamp with time zone null=YES default=
 column rw.repository.tenant_id uuid null=NO default=rw.rw_tenant()
 column rw.repository.workflow text null=NO default=
+column rw.send_rate.bucket bigint null=NO default=
+column rw.send_rate.issuer_key text null=NO default=
+column rw.send_rate.repository_id text null=NO default=
+column rw.send_rate.run_id text null=NO default=
+column rw.send_refused.bucket bigint null=NO default=
+column rw.send_refused.issuer_key text null=NO default=
+column rw.send_refused.n integer null=NO default=0
+column rw.send_refused.repository_id text null=NO default=
 column rw.service_state.id integer null=NO default=
 column rw.service_state.maintenance jsonb null=YES default=
 column rw.session.closed_at timestamp with time zone null=YES default=
@@ -121,6 +148,9 @@ column rw.tenant.id uuid null=NO default=rw.rw_tenant()
 column rw.tenant.lang text null=NO default='fr'::text
 column rw.tenant.title text null=NO default='runward hébergé'::text
 column rw.tenant.witness boolean null=NO default=false
+column rw.token_use.expires_at timestamp with time zone null=NO default=
+column rw.token_use.issuer_key text null=NO default=
+column rw.token_use.jti text null=NO default=
 column rw.upload.claims jsonb null=NO default=
 column rw.upload.commit text null=YES default=
 column rw.upload.epoch integer null=NO default=0
@@ -158,9 +188,21 @@ constraint rw.fleet_index fleet_index_erased_holds_no_byte CHECK (((erased_at IS
 constraint rw.fleet_index fleet_index_pkey PRIMARY KEY (tenant_id, version)
 constraint rw.fleet_index fleet_index_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
 constraint rw.forge_repository forge_repository_forge_check CHECK ((forge = 'github'::text))
+constraint rw.forge_repository forge_repository_forge_name_check CHECK ((forge_name = ANY (ARRAY['github'::text, 'gitlab'::text])))
+constraint rw.forge_repository forge_repository_keys_scoped CHECK ((((forge_name = 'github'::text) AND (issuer_key = 'https://token.actions.githubusercontent.com'::text)) OR ((forge_name <> 'github'::text) AND starts_with(name_key, (((forge_name || ':'::text) || issuer_key) || ':'::text)) AND ((repository_id IS NULL) OR starts_with(repository_id, (((forge_name || ':'::text) || issuer_key) || ':'::text))))))
 constraint rw.forge_repository forge_repository_pkey PRIMARY KEY (id)
 constraint rw.forge_repository forge_repository_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'pinned'::text])))
 constraint rw.forge_repository forge_repository_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.issuer issuer_forge_check CHECK ((forge = 'gitlab'::text))
+constraint rw.issuer issuer_id_check CHECK ((id ~ '^[0-9a-f]{32}$'::text))
+constraint rw.issuer issuer_issuer_check CHECK (((length(issuer) >= 1) AND (length(issuer) <= 200)))
+constraint rw.issuer issuer_pkey PRIMARY KEY (id)
+constraint rw.issuer issuer_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.issuer issuer_tenant_id_id_key UNIQUE (tenant_id, id)
+constraint rw.issuer_key issuer_key_issuer_ref_kid_key UNIQUE (issuer_ref, kid)
+constraint rw.issuer_key issuer_key_pkey PRIMARY KEY (id)
+constraint rw.issuer_key issuer_key_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.issuer_key issuer_key_tenant_id_issuer_ref_fkey FOREIGN KEY (tenant_id, issuer_ref) REFERENCES rw.issuer(tenant_id, id)
 constraint rw.ledger ledger_pkey PRIMARY KEY (tenant_id, seq)
 constraint rw.ledger ledger_seq_check CHECK ((seq >= 1))
 constraint rw.ledger ledger_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
@@ -187,6 +229,8 @@ constraint rw.refused_counter refused_counter_pkey PRIMARY KEY (repository_id, b
 constraint rw.repository repository_id_fkey FOREIGN KEY (id) REFERENCES rw.forge_repository(id)
 constraint rw.repository repository_pkey PRIMARY KEY (id)
 constraint rw.repository repository_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
+constraint rw.send_rate send_rate_pkey PRIMARY KEY (issuer_key, repository_id, bucket, run_id)
+constraint rw.send_refused send_refused_pkey PRIMARY KEY (issuer_key, repository_id, bucket)
 constraint rw.service_state service_state_id_check CHECK ((id = 1))
 constraint rw.service_state service_state_pkey PRIMARY KEY (id)
 constraint rw.session session_member_id_fkey FOREIGN KEY (member_id) REFERENCES rw.member(id)
@@ -196,6 +240,7 @@ constraint rw.session session_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES 
 constraint rw.session session_token_hash_key UNIQUE (token_hash)
 constraint rw.tenant tenant_lang_check CHECK ((lang = ANY (ARRAY['fr'::text, 'en'::text])))
 constraint rw.tenant tenant_pkey PRIMARY KEY (id)
+constraint rw.token_use token_use_pkey PRIMARY KEY (issuer_key, jti)
 constraint rw.upload upload_pkey PRIMARY KEY (id)
 constraint rw.upload upload_rank_check CHECK ((rank = ANY (ARRAY['current'::text, 'historical'::text, 'pending'::text, 'quarantine'::text, 'superseded'::text])))
 constraint rw.upload upload_repository_ref_fkey FOREIGN KEY (repository_ref) REFERENCES rw.repository(id)
@@ -203,16 +248,23 @@ constraint rw.upload upload_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw
 constraint rw.webauthn_challenge webauthn_challenge_pkey PRIMARY KEY (id)
 constraint rw_meta.migration migration_pkey PRIMARY KEY (name)
 function rw.count_refused(p_repository_id text, p_bucket bigint) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.count_send_refused(p_issuer_key text, p_repository_id text, p_bucket bigint) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.daily_jobs() definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.fleet_index_written_once() definer=f owner=rw_owner config=search_path=pg_catalog, rw, pg_temp
+function rw.forge_repository_issuer() definer=f owner=rw_owner config=search_path=pg_catalog, rw, pg_temp
+function rw.issuer_key_written_once() definer=f owner=rw_owner config=search_path=pg_catalog, rw, pg_temp
+function rw.issuer_written_once() definer=f owner=rw_owner config=search_path=pg_catalog, rw, pg_temp
 function rw.ledger_refuse() definer=f owner=rw_owner config=
 function rw.link_dates() definer=f owner=rw_owner config=
 function rw.link_dates_frozen() definer=f owner=rw_owner config=
 function rw.maintenance() definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.name_key_taken(p_issuer_key text, p_name_key text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.name_taken(p_forge text, p_name_key text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.operator_note(p_what text, p_detail jsonb) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.put_challenge(p_id uuid, p_challenge text, p_purpose text, p_session uuid, p_link uuid, p_gesture text, p_object text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.resolve_credential(p_credential_id text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.resolve_forge_repository(p_issuer_key text, p_id_key text, p_name_key text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.resolve_issuer(p_id text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.resolve_link(p_token_hash text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.resolve_repository(p_forge text, p_repository_id text, p_name_key text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.resolve_session(p_token_hash text) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
@@ -220,8 +272,10 @@ function rw.rw_tenant() definer=f owner=rw_owner config=
 function rw.set_maintenance(p jsonb) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.take_challenge(p_id uuid) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.take_rate(p_repository_id text, p_bucket bigint, p_run_id text, p_limit integer) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.take_send_rate(p_issuer_key text, p_repository_id text, p_bucket bigint, p_run_id text, p_limit integer) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.tenant_ids() definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 function rw.use_jti(p_jti text, p_expires_at timestamp with time zone) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
+function rw.use_token(p_issuer_key text, p_jti text, p_expires_at timestamp with time zone, p_legacy boolean) definer=t owner=rw_resolve config=search_path=pg_catalog, rw, pg_temp
 grant database rw_app CONNECT
 grant database rw_maint CONNECT
 grant database rw_owner CONNECT
@@ -275,6 +329,32 @@ grant rw.forge_repository rw_owner TRIGGER
 grant rw.forge_repository rw_owner TRUNCATE
 grant rw.forge_repository rw_owner UPDATE
 grant rw.forge_repository rw_resolve SELECT
+grant rw.issuer rw_app INSERT
+grant rw.issuer rw_app SELECT
+grant rw.issuer rw_app UPDATE
+grant rw.issuer rw_maint SELECT
+grant rw.issuer rw_maint UPDATE
+grant rw.issuer rw_owner DELETE
+grant rw.issuer rw_owner INSERT
+grant rw.issuer rw_owner REFERENCES
+grant rw.issuer rw_owner SELECT
+grant rw.issuer rw_owner TRIGGER
+grant rw.issuer rw_owner TRUNCATE
+grant rw.issuer rw_owner UPDATE
+grant rw.issuer rw_resolve SELECT
+grant rw.issuer_key rw_app INSERT
+grant rw.issuer_key rw_app SELECT
+grant rw.issuer_key rw_app UPDATE
+grant rw.issuer_key rw_maint SELECT
+grant rw.issuer_key rw_maint UPDATE
+grant rw.issuer_key rw_owner DELETE
+grant rw.issuer_key rw_owner INSERT
+grant rw.issuer_key rw_owner REFERENCES
+grant rw.issuer_key rw_owner SELECT
+grant rw.issuer_key rw_owner TRIGGER
+grant rw.issuer_key rw_owner TRUNCATE
+grant rw.issuer_key rw_owner UPDATE
+grant rw.issuer_key rw_resolve SELECT
 grant rw.ledger rw_app INSERT
 grant rw.ledger rw_app SELECT
 grant rw.ledger rw_maint INSERT
@@ -397,6 +477,26 @@ grant rw.repository rw_owner SELECT
 grant rw.repository rw_owner TRIGGER
 grant rw.repository rw_owner TRUNCATE
 grant rw.repository rw_owner UPDATE
+grant rw.send_rate rw_owner DELETE
+grant rw.send_rate rw_owner INSERT
+grant rw.send_rate rw_owner REFERENCES
+grant rw.send_rate rw_owner SELECT
+grant rw.send_rate rw_owner TRIGGER
+grant rw.send_rate rw_owner TRUNCATE
+grant rw.send_rate rw_owner UPDATE
+grant rw.send_rate rw_resolve DELETE
+grant rw.send_rate rw_resolve INSERT
+grant rw.send_rate rw_resolve SELECT
+grant rw.send_refused rw_owner DELETE
+grant rw.send_refused rw_owner INSERT
+grant rw.send_refused rw_owner REFERENCES
+grant rw.send_refused rw_owner SELECT
+grant rw.send_refused rw_owner TRIGGER
+grant rw.send_refused rw_owner TRUNCATE
+grant rw.send_refused rw_owner UPDATE
+grant rw.send_refused rw_resolve INSERT
+grant rw.send_refused rw_resolve SELECT
+grant rw.send_refused rw_resolve UPDATE
 grant rw.service_state rw_owner DELETE
 grant rw.service_state rw_owner INSERT
 grant rw.service_state rw_owner REFERENCES
@@ -431,6 +531,16 @@ grant rw.tenant rw_owner TRIGGER
 grant rw.tenant rw_owner TRUNCATE
 grant rw.tenant rw_owner UPDATE
 grant rw.tenant rw_resolve SELECT
+grant rw.token_use rw_owner DELETE
+grant rw.token_use rw_owner INSERT
+grant rw.token_use rw_owner REFERENCES
+grant rw.token_use rw_owner SELECT
+grant rw.token_use rw_owner TRIGGER
+grant rw.token_use rw_owner TRUNCATE
+grant rw.token_use rw_owner UPDATE
+grant rw.token_use rw_resolve DELETE
+grant rw.token_use rw_resolve INSERT
+grant rw.token_use rw_resolve SELECT
 grant rw.upload rw_app INSERT
 grant rw.upload rw_app SELECT
 grant rw.upload rw_app UPDATE
@@ -475,6 +585,10 @@ index CREATE UNIQUE INDEX fleet_index_pkey ON rw.fleet_index USING btree (tenant
 index CREATE UNIQUE INDEX forge_repository_pending_name ON rw.forge_repository USING btree (forge, name_key) WHERE ((state = 'pending'::text) AND (removed_at IS NULL))
 index CREATE UNIQUE INDEX forge_repository_pinned_id ON rw.forge_repository USING btree (forge, repository_id) WHERE (repository_id IS NOT NULL)
 index CREATE UNIQUE INDEX forge_repository_pkey ON rw.forge_repository USING btree (id)
+index CREATE UNIQUE INDEX issuer_key_issuer_ref_kid_key ON rw.issuer_key USING btree (issuer_ref, kid)
+index CREATE UNIQUE INDEX issuer_key_pkey ON rw.issuer_key USING btree (id)
+index CREATE UNIQUE INDEX issuer_pkey ON rw.issuer USING btree (id)
+index CREATE UNIQUE INDEX issuer_tenant_id_id_key ON rw.issuer USING btree (tenant_id, id)
 index CREATE UNIQUE INDEX ledger_pkey ON rw.ledger USING btree (tenant_id, seq)
 index CREATE UNIQUE INDEX link_pkey ON rw.link USING btree (id)
 index CREATE UNIQUE INDEX link_token_hash_key ON rw.link USING btree (token_hash)
@@ -490,10 +604,13 @@ index CREATE UNIQUE INDEX rate_counter_pkey ON rw.rate_counter USING btree (repo
 index CREATE UNIQUE INDEX reader_pkey ON rw.reader USING btree (tenant_id)
 index CREATE UNIQUE INDEX refused_counter_pkey ON rw.refused_counter USING btree (repository_id, bucket)
 index CREATE UNIQUE INDEX repository_pkey ON rw.repository USING btree (id)
+index CREATE UNIQUE INDEX send_rate_pkey ON rw.send_rate USING btree (issuer_key, repository_id, bucket, run_id)
+index CREATE UNIQUE INDEX send_refused_pkey ON rw.send_refused USING btree (issuer_key, repository_id, bucket)
 index CREATE UNIQUE INDEX service_state_pkey ON rw.service_state USING btree (id)
 index CREATE UNIQUE INDEX session_pkey ON rw.session USING btree (id)
 index CREATE UNIQUE INDEX session_token_hash_key ON rw.session USING btree (token_hash)
 index CREATE UNIQUE INDEX tenant_pkey ON rw.tenant USING btree (id)
+index CREATE UNIQUE INDEX token_use_pkey ON rw.token_use USING btree (issuer_key, jti)
 index CREATE UNIQUE INDEX upload_idempotence ON rw.upload USING btree (tenant_id, run_id, run_attempt, mission, kind)
 index CREATE UNIQUE INDEX upload_pkey ON rw.upload USING btree (id)
 index CREATE UNIQUE INDEX webauthn_challenge_pkey ON rw.webauthn_challenge USING btree (id)
@@ -501,6 +618,8 @@ policy rw.archive archive_tenant ALL to={public} using=((tenant_id = rw.rw_tenan
 policy rw.blob blob_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
 policy rw.fleet_index fleet_index_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
 policy rw.forge_repository forge_repository_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.issuer issuer_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
+policy rw.issuer_key issuer_key_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
 policy rw.ledger ledger_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
 policy rw.link link_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
 policy rw.member member_tenant ALL to={public} using=((tenant_id = rw.rw_tenant()) OR (CURRENT_USER = 'rw_resolve'::name)) check=(tenant_id = rw.rw_tenant())
@@ -515,6 +634,8 @@ table rw.archive rls=t force=t
 table rw.blob rls=t force=t
 table rw.fleet_index rls=t force=t
 table rw.forge_repository rls=t force=t
+table rw.issuer rls=t force=t
+table rw.issuer_key rls=t force=t
 table rw.ledger rls=t force=t
 table rw.link rls=t force=t
 table rw.member rls=t force=t
@@ -526,13 +647,19 @@ table rw.rate_counter rls=f force=f
 table rw.reader rls=t force=t
 table rw.refused_counter rls=f force=f
 table rw.repository rls=t force=t
+table rw.send_rate rls=f force=f
+table rw.send_refused rls=f force=f
 table rw.service_state rls=f force=f
 table rw.session rls=t force=t
 table rw.tenant rls=t force=t
+table rw.token_use rls=f force=f
 table rw.upload rls=t force=t
 table rw.webauthn_challenge rls=f force=f
 table rw_meta.migration rls=f force=f
 trigger CREATE TRIGGER fleet_index_written_once BEFORE UPDATE ON rw.fleet_index FOR EACH ROW EXECUTE FUNCTION rw.fleet_index_written_once()
+trigger CREATE TRIGGER forge_repository_issuer BEFORE INSERT OR UPDATE ON rw.forge_repository FOR EACH ROW EXECUTE FUNCTION rw.forge_repository_issuer()
+trigger CREATE TRIGGER issuer_key_written_once BEFORE UPDATE ON rw.issuer_key FOR EACH ROW EXECUTE FUNCTION rw.issuer_key_written_once()
+trigger CREATE TRIGGER issuer_written_once BEFORE UPDATE ON rw.issuer FOR EACH ROW EXECUTE FUNCTION rw.issuer_written_once()
 trigger CREATE TRIGGER ledger_no_truncate BEFORE TRUNCATE ON rw.ledger FOR EACH STATEMENT EXECUTE FUNCTION rw.ledger_refuse()
 trigger CREATE TRIGGER ledger_no_update BEFORE DELETE OR UPDATE ON rw.ledger FOR EACH ROW EXECUTE FUNCTION rw.ledger_refuse()
 trigger CREATE TRIGGER link_dates BEFORE INSERT ON rw.link FOR EACH ROW EXECUTE FUNCTION rw.link_dates()
