@@ -19,6 +19,21 @@ const layer = () => strip(readFileSync(`${WEB}couche-runward-app.css`, "utf8"));
 const famille = () => strip(readFileSync(`${WEB}famille.css`, "utf8"));
 const sheets = () => ({ "web/app.css": strip(readFileSync(`${WEB}app.css`, "utf8")), "web/mouvement.css": strip(readFileSync(`${WEB}mouvement.css`, "utf8")) });
 
+// ---- the engine, run as the app serves it, over a page reduced to what it touches. It is set up before the first
+// case is declared: a case declared earlier would run, and the file's after hook with it, while these imports wait
+const reduced = { matches: false };
+const tokensOf = Object.fromEntries([...strip(readFileSync(`${WEB}couche-runward-app.css`, "utf8")).matchAll(/(--mv-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+globalThis.window = globalThis;
+globalThis.document = { documentElement: { classList: { add() {}, remove() {}, toggle() {} }, style: {} }, querySelector: () => null, querySelectorAll: () => [], getElementById: () => ({ style: {} }) };
+globalThis.matchMedia = () => reduced;
+globalThis.getComputedStyle = () => ({ getPropertyValue: (n) => tokensOf[n] ?? "" });
+const served = mkdtempSync(join(tmpdir(), "rw-motion-"));
+test.after(() => rmSync(served, { recursive: true, force: true }));
+for (const f of MODULES) { const p = join(served, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(VIEWS.href))); }
+const M = await import(pathToFileURL(join(served, "views/mouvement.js")).href);
+const { motionOf } = await import(pathToFileURL(join(served, "views/router.js")).href);
+
+
 // ---- the tokens
 const token = (css, name) => (new RegExp(`${name}\\s*:\\s*([^;]+);`).exec(css) ?? [])[1]?.trim();
 const ms = (v) => (/^([\d.]+)ms$/.exec(v ?? "") ? parseFloat(v) : /^([\d.]+)s$/.exec(v ?? "") ? parseFloat(v) * 1000 : NaN);
@@ -85,19 +100,6 @@ test("no stylesheet of the shell writes a duration (each is a token of the layer
   assert.deepEqual(sheetFaults("x", "@keyframes x{ from{ width:0; } to{ width:10px; } }"), ["x: @keyframes x animates width", "x: @keyframes x animates width"]);
   assert.deepEqual(sheetFaults("x", ".a{ transition:visibility 0s linear var(--mv-d2); }"), []);
 });
-
-// ---- the engine, run as the app serves it, over a page reduced to what it touches
-const reduced = { matches: false };
-const tokensOf = Object.fromEntries([...layer().matchAll(/(--mv-[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
-globalThis.window = globalThis;
-globalThis.document = { documentElement: { classList: { add() {}, remove() {}, toggle() {} }, style: {} }, querySelector: () => null, querySelectorAll: () => [], getElementById: () => ({ style: {} }) };
-globalThis.matchMedia = () => reduced;
-globalThis.getComputedStyle = () => ({ getPropertyValue: (n) => tokensOf[n] ?? "" });
-const served = mkdtempSync(join(tmpdir(), "rw-motion-"));
-test.after(() => rmSync(served, { recursive: true, force: true }));
-for (const f of MODULES) { const p = join(served, f); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(VIEWS.href))); }
-const M = await import(pathToFileURL(join(served, "views/mouvement.js")).href);
-const { motionOf } = await import(pathToFileURL(join(served, "views/router.js")).href);
 
 /** An element whose animations never end by themselves: only finish() or cancel() ends them. */
 function stuckElement() {
