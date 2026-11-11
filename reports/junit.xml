@@ -94,6 +94,14 @@
 	<testcase name="the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)" classname="test"/>
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
+	<testcase name="the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot" classname="test"/>
+	<testcase name="planted control: one string of the frame left in French is found in the English frame" classname="test"/>
+	<testcase name="every screen of the shell, in each of its states, painted in English, carries no French word" classname="test"/>
+	<testcase name="planted control: one screen's string left in French is found in the English screen" classname="test"/>
+	<testcase name="every word of web/index.html is written by the shell in the reader's language (data-mot, data-mot-aria)" classname="test"/>
+	<testcase name="the lexicon: the same keys and the same arities in French and English, none of the words never said, no em dash" classname="test"/>
+	<testcase name="one language for the reading and its frame: the switch of the decision reading reaches the frame, the index's language when no choice is kept" classname="test"/>
+	<testcase name="the API is asked in the reader's language (the service already answers its refusals in the one Accept-Language names)" classname="test"/>
 	<testcase name="the pre-commit hook is wired by npm install and runs the repository's own checks" classname="test"/>
 	<testcase name="the pre-commit plan: the format always, the lint of staged sources, the workflows' guards, the unit tests that reach what is staged" classname="test"/>
 	<testcase name="the hook, run in a throwaway clone: a staged lint error stops the commit, the fixed file passes" classname="test"/>
@@ -330,9 +338,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 329 -->
+	<!-- tests 337 -->
 	<!-- suites 0 -->
-	<!-- pass 329 -->
+	<!-- pass 337 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
