@@ -33,6 +33,6 @@ export function viewEntree(sub) {
   const v = V[sub || "connexion"];
   if (!v) return null;
   const [title, h1, face, body] = v;
-  return { title, key: "entree", signed: "out", scene: "pleine", main: "hero-g", state: k, html: `<div class="hero-t" data-porte="${esc(k)}"><p class="amorce">${E.head}</p><h1 class="t-hero">${h1}</h1><p class="sous">${face}</p></div>
+  return { title, key: "entree", signed: "out", scene: "pleine", main: "hero-g", html: `<div class="hero-t" data-porte="${esc(k)}"><p class="amorce">${E.head}</p><h1 class="t-hero">${h1}</h1><p class="sous">${face}</p></div>
     <div class="hero-e">${NUE}${fenetre(E.headR, `<div class="porte" data-porte="${esc(k)}">${body}</div>`, { tag: "div", h: "p", cls: "c-bar" })}</div>` };
 }

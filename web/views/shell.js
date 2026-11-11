@@ -10,7 +10,7 @@
 //
 // The frame is the public site's (ADR-0025): one header on every screen (the screen's title or its trail, the
 // language, the theme; on a phone the brand and the menu), a translucent sidebar, the scene behind.
-import { S, esc, setHTML, latEl, mobNavEl, menuBtnEl, colonneEl, bandEl, stampEl, filEls, langueEls, piedEl, parts, main, annonceEl } from "./base.js";
+import { S, esc, setHTML, latEl, mobNavEl, menuBtnEl, colonneEl, bandEl, barTelEl, stampEl, filEls, langueEls, piedEl, parts, main, annonceEl } from "./base.js";
 import { when } from "./time.js";
 import { MARK, go, act } from "./marks.js";
 import { lang, mots, titreFlotte, appareil, studioUrl } from "./lexique.js";
@@ -90,13 +90,25 @@ function pageWords() {
   for (const el of document.querySelectorAll("[data-mot]")) if (Object.hasOwn(P, el.dataset.mot)) el.textContent = P[el.dataset.mot];
   for (const el of document.querySelectorAll("[data-mot-aria]")) if (Object.hasOwn(P, el.dataset.motAria)) el.setAttribute("aria-label", P[el.dataset.motAria]);
 }
-/** The phone menu: open or closed (the sheet, its veil, the button's state; the screen under it is inert while open). */
+/**
+ * The phone menu: open or closed (the sheet, its veil, the button's state). While it is open it is the one thing that
+ * answers: the screen under it, the trail's line, the banners and the foot are inert.
+ */
 export function menu(open) {
   const on = Boolean(open ?? !colonneEl.classList.contains("menu-ouvert")) && !menuBtnEl.hidden;
   colonneEl.classList.toggle("menu-ouvert", on);
   menuBtnEl.setAttribute("aria-expanded", String(on));
-  main.inert = on; mobNavEl.inert = !on;
+  for (const el of [main, barTelEl, bandEl, piedEl]) el.inert = on;
+  mobNavEl.inert = !on;
   return on;
+}
+/**
+ * The menu exists under 900 px only (web/app.css hides its button, its veil and its sheet above). A window that
+ * crosses that width with the menu open (a tablet turned, a window widened) would keep a screen that ignores every
+ * tap with nothing to show for it: the menu is closed when the width is crossed.
+ */
+export function closeMenuWhenWide(wide) {
+  wide.addEventListener("change", (e) => { if (e.matches) menu(false); });
 }
 function shell(signedIn, route, sub, v) {
   const f = frame(signedIn, route, sub, v);

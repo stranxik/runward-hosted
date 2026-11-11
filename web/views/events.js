@@ -2,7 +2,7 @@
 // data-do names a gesture), and the two forms.
 import { S, main, parts, colonneEl } from "./base.js";
 import { api, loadSession } from "./api.js";
-import { say, menu } from "./shell.js";
+import { say, menu, closeMenuWhenWide } from "./shell.js";
 import { FIELD_OF } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
@@ -57,6 +57,8 @@ document.addEventListener("click", async (e) => {
     return rerender();
   }
 });
+
+closeMenuWhenWide(matchMedia("(min-width:900px)"));
 
 // the keyboard: Escape closes the phone menu
 document.addEventListener("keydown", (e) => {
