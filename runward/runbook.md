@@ -144,15 +144,17 @@ Described in `infra/scaleway/main.tf` (OpenTofu, provider scaleway 2.88.0), proj
 
 | Resource | Setting | Monthly cost |
 |---|---|---|
-| Serverless Container `runward-hosted` (the service) | 0.25 vCPU, 536 MB (536000000 bytes, what the hoster keeps of the 512 MiB asked: it counts in MB of 10^6 bytes), scale 0 to 1, public, in the private network | about 0 EUR within the monthly free tier (200 000 vCPU-s, 400 000 GB-s); about 6.50 EUR if the minimum scale becomes 1 |
+| Serverless Container `runward-hosted` (the service) | 0.5 vCPU (500 mvCPU, since 2026-11-11; 0.25 before), 536 MB (536000000 bytes, what the hoster keeps of the 512 MiB asked: it counts in MB of 10^6 bytes), scale `service_min_scale` to 1 (0 by default; 1 from 2026-11-16 to 2026-11-19), public, in the private network | asleep (minimum scale 0): 0 EUR, and about 0 EUR for the time it is awake, within the monthly free tier (200 000 vCPU-s, 400 000 GB-s per account: 111 hours awake at 0.5 vCPU, where 0.25 vCPU gave 222). Always on (minimum scale 1): about 0.52 EUR a day before the free tier (see below), so about 2.10 EUR for the four days of November, and about 13.20 EUR a month if it stayed on |
 | Serverless Containers namespace `runward-hosted-operator` and container `runward-hosted-operator` (the operator's gateway, ADR-0016) | 0.25 vCPU, 536 MB (same), scale 0 to 1, **private**, in the private network, request timeout 900 s | about 0 EUR (a few minutes a day, within the same free tier) |
 | Two scheduled triggers of the gateway | `retention` 03:23 and `verify-chains` 03:53, time zone `Europe/Paris` | 0 EUR |
 | Domain `app.runward.dev` | container domain, applied with `-var app_domain=true` once the CNAME resolves | 0 EUR |
 | Cockpit (logs and metrics) | the products' own logs and metrics, at the default retention: logs 7 days, metrics 31 days (`governance/observability-schema.md` §6) | 0 EUR (free at the default retention, the hoster's documentation) |
-| **Total** | | **about 12.3 EUR a month** (phase 1 alone about 12.3 EUR) |
+| **Total** | | **about 12.3 EUR a month** (phase 1 alone about 12.3 EUR); at most about 14.4 EUR in November 2026, with the service kept on for four days |
 | One-off: restore drill | a throwaway DB-DEV-S for a few hours | cents |
 
 No Serverless Job and no Secret Manager entry is created any more (ADR-0016): the provisioning key needs no Secret Manager right.
+
+**The service's processor and minimum scale** (the author's decision of 2026-11-11, for the cold start: the service sleeps after 15 idle minutes, the hoster's fixed delay, and the first visit that wakes it waited several seconds at 0.25 vCPU). Two settings, both in `main.tf`: `cpu_limit = 500`, from 2026-11-11 on; `min_scale = var.service_min_scale`, 0 by default and 1 from 2026-11-16 to 2026-11-19 (§12 has the two commands). The gateway keeps 0.25 vCPU and a minimum scale of 0. The pair 500 mvCPU and 536 MB: the hoster's limits name 70 to 6000 mvCPU and 128 to 12228 MB per container and no pairing between them (its page "Containers limitations", read on 2026-11-11); the provider 2.88.0's page still carries a table of memory and vCPU pairs (512 MB with 280 mvCPU, 1024 MB with 560), which the 250 mvCPU and 536 MB applied on 2026-11-10 already did not follow. The memory is unchanged, so its cost is too. The cost, from the hoster's FAQ read on 2026-11-11 (0.00001 EUR per vCPU-s, 0.000002 EUR per GB-s, after 200 000 vCPU-s and 400 000 GB-s free per account and per month): one instance on for a day is 86 400 s, so 43 200 vCPU-s (0.432 EUR) and 46 310 GB-s (0.093 EUR), **about 0.52 EUR a day**; asleep, nothing. Four days on are 172 800 vCPU-s and 185 242 GB-s, under the month's free tier if nothing else had used it; the estimate above counts them in full. Kept on for a whole month (730 hours) it would be about 15.96 EUR, 13.16 EUR after the free tier, which with phase 1 passes the budget of 20 EUR: the minimum scale goes back to 0 on the 20th.
 
 **What the hoster does not allow, as of 2026-11-08, and how it is met:**
 - Serverless Jobs cannot join a Private Network (Scaleway's Serverless Jobs FAQ: "does not currently support Scaleway VPC or Private Networks"; no such field in the provider 2.88.0). The database has no public endpoint (and will not have one). So roles, migrate, isolation and the operator's gestures go through the operator's gateway, a private container attached to the private network (ADR-0016).
@@ -202,6 +204,25 @@ run apply "$HOME/Desktop/Thibault_Souris_Architecture/08_Runward/app-hebergee/in
 ```
 
 After phase 1: no public endpoint (`run state show scaleway_rdb_instance.rw | grep -c load_balancer` gives 0), the certificate's names (§11, TLS), and the four passwords absent from the state (`grep -c -F` of each keychain value on the decrypted `run show -json` gives 0). Phase 2 adds `-var image=<digest>`, `-var operator_token_sha256=<sha256>`, `TF_VAR_container_db_password` (keychain `runward-hosted-db` / `rw_app`), `TF_VAR_operator_db_password_admin`, `TF_VAR_operator_db_password_rw_owner`, `TF_VAR_operator_db_password_rw_maint` (keychain `runward-hosted-db` / `admin`, `rw_owner`, `rw_maint`), `TF_VAR_s3_access_key_id` and `TF_VAR_s3_secret_access_key` (keychain `runward-hosted-s3`); it refuses to plan, naming what is missing, without any of them. A password rotation: new values in the keychain, then `-var credentials_version=<n+1>`.
+
+**The service kept on for the event** (the author's decision of 2026-11-11; §11 for the cost). Two applies, by a session, with the shell functions of "Applying" above and the secret variables of phase 2 named there; every other variable as currently applied, so that the plan shows one change and nothing else (`min_scale` of `scaleway_container.rw[0]`): the image is the digest that `https://app.runward.dev/api/version` names that day, `witness_tenants` is read from the file beside the state, `send_workflow_shas` is the `sendWorkflow` of `/api/version` (several: comma separated).
+
+```sh
+E="$HOME/Desktop/Thibault_Souris_Architecture/08_Runward/app-hebergee/infra-etat"
+v() { curl -fsS https://app.runward.dev/api/version | jq -r "$1"; }
+# 2026-11-16: one instance always on
+run plan -out="$E/2026-11-16_service_min_scale_1.tfplan" -var service_min_scale=1 \
+  -var image="$(v .image)" -var send_workflow_shas="$(v '.sendWorkflow|join(",")')" -var app_domain=true \
+  -var operator_token_sha256="$(cat "$E/operator-token.sha256")" -var witness_tenants="$(cat "$E/witness-tenants.txt")"
+run apply "$E/2026-11-16_service_min_scale_1.tfplan"   # once the plan is read: min_scale 0 -> 1, nothing else
+# 2026-11-20: asleep when idle again (the default; said in full so that the command reads as what it does)
+run plan -out="$E/2026-11-20_service_min_scale_0.tfplan" -var service_min_scale=0 \
+  -var image="$(v .image)" -var send_workflow_shas="$(v '.sendWorkflow|join(",")')" -var app_domain=true \
+  -var operator_token_sha256="$(cat "$E/operator-token.sha256")" -var witness_tenants="$(cat "$E/witness-tenants.txt")"
+run apply "$E/2026-11-20_service_min_scale_0.tfplan"   # once the plan is read: min_scale 1 -> 0, nothing else
+```
+
+`run` is here the function of "Applying" with the six secret variables of phase 2 added to it (`TF_VAR_container_db_password`, `TF_VAR_operator_db_password_admin`, `_rw_owner`, `_rw_maint`, `TF_VAR_s3_access_key_id`, `TF_VAR_s3_secret_access_key`, each read from the keychain as the paragraph above says), after `run init -reconfigure` on the state. A plan that shows anything else than the minimum scale is read, not applied. Between the two dates, any other apply carries `-var service_min_scale=1` too, or it puts the service back to sleep; after the 20th, none does. A deploy leaves both settings alone (`scripts/container-deploy.sh` sends the image and the environment only). An apply redeploys the service with the image it already serves (the CI owns the image, `ignore_changes`): `/api/version` is read before and after, and names the same commit and image. The 16th is checked at the hoster (`min_scale` 1 on the container `runward-hosted`) and by a first visit after 20 idle minutes that does not wait; the 20th by `min_scale` 0.
 
 **A plan after `roles` and `migrate` proposes nothing** when nothing was changed on purpose. Two changes it proposed on 2026-11-10, and why it no longer should (a plan that shows either again is read before anything is applied): `permission = "custom" -> "readonly"` on the privileges of `rw_app` and `rw_maint` (§11: ignored after creation, the grants of `db/grants.sql` are not the hoster's to reset), and `memory_limit_bytes = 536000000 -> 536870912` on both containers (`main.tf` now holds 536000000, the value the hoster stores; it is still compared at each plan).
 

@@ -160,6 +160,15 @@ variable "operator_token_sha256" {
     error_message = "operator_token_sha256 is the sha256 of the token, 64 lower-case hex characters"
   }
 }
+variable "service_min_scale" {
+  type        = number
+  default     = 0
+  description = "the service's minimum scale: 0 lets it sleep after 15 idle minutes (the first visit then waits for a cold start), 1 keeps one instance on. Decided by the author on 2026-11-11: 1 from 2026-11-16 to 2026-11-19 (applied on the 16th, back to 0 on the 20th), 0 otherwise. The gateway is not concerned"
+  validation {
+    condition     = contains([0, 1], var.service_min_scale)
+    error_message = "service_min_scale is 0 (asleep when idle) or 1 (one instance always on); max_scale stays 1"
+  }
+}
 variable "app_domain" {
   type        = bool
   default     = false
@@ -363,8 +372,13 @@ resource "scaleway_rdb_privilege" "rw_maint" {
 }
 
 # ---------------------------------------------------------------------------------------------- phase 2
-# The service: 0.25 vCPU, 536 MB, scale 0 to 1, public, in the private network. The CI deploys (image,
-# RW_COMMIT, RW_IMAGE); OpenTofu owns the rest.
+# The service: 0.5 vCPU, 536 MB, scale `service_min_scale` (0 or 1) to 1, public, in the private network.
+# The CI deploys (image, RW_COMMIT, RW_IMAGE); OpenTofu owns the rest.
+# The processor and the minimum scale were decided by the author on 2026-11-11, for the cold start (the
+# first visit after 15 idle minutes waited several seconds at 0.25 vCPU): 0.5 vCPU from that day on, and
+# one instance kept on from 2026-11-16 to 2026-11-19 only (`-var service_min_scale=1` on the 16th, back to
+# the default 0 on the 20th; runward/runbook.md §11 for the cost, §12 for the commands). The hoster
+# documents 70 to 6000 mvCPU and 128 to 12228 MB per container; the gateway keeps 0.25 vCPU and scale 0.
 # The memory is written as the hoster stores it. It counts in MB of 10^6 bytes: asked for 512 MiB
 # (536870912), it kept 536000000 (536 MB, about 511.2 MiB) and every plan proposed to change it back
 # (found on 2026-11-10). The stored value is the truth of what runs, and written here it is still
@@ -375,9 +389,9 @@ resource "scaleway_container" "rw" {
   namespace_id           = scaleway_container_namespace.rw.id
   image                  = var.image
   port                   = 8080
-  cpu_limit              = 250
+  cpu_limit              = 500
   memory_limit_bytes     = 536000000 # 536 MB as the hoster stores it (512 MiB asked)
-  min_scale              = 0
+  min_scale              = var.service_min_scale
   max_scale              = 1
   privacy                = "public"
   protocol               = "http1"

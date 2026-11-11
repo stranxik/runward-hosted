@@ -307,3 +307,12 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the author in chat, 2026-11-11: "j'accepte l'ADR-0028 et les deux liens" (the foot's first link and the legal screen's line to runward.dev, both added by this pull request).
 - Decided: ADR-0028 accepted (the author).
 - Next: the removal of `web/site/` and its renderer, once #23 is merged or closed.
+
+## 2026-11-11 - the service at half a processor, its minimum scale a variable
+
+- Done: `infra/scaleway/main.tf` gives the service's container 500 mvCPU (250 before) and reads its minimum scale from `service_min_scale` (0 or 1, validated, default 0); the gateway is unchanged (250 mvCPU, scale 0 to 1). The runbook says the setting and its cost (§11: about 0.52 EUR a day when one instance stays on, nothing asleep) and the two applies of the event (§12: `-var service_min_scale=1` on 2026-11-16, back to 0 on 2026-11-20).
+- Why: the cold start. The service sleeps after 15 idle minutes and the first visit waited several seconds at 0.25 vCPU.
+- Evidence: the author in chat, 2026-11-11: "ok pour ½ processeur et allumé du 16 au 19". The hoster's limits (70 to 6000 mvCPU, 128 to 12228 MB per container, no pairing named) and its FAQ's prices, read on 2026-11-11. The plan against the real state, from this branch, with the variables as applied: `scaleway_container.rw[0]`, `cpu_limit = 250 -> 500`, 1 to change, 0 to add, 0 to destroy; the 17 other resources unchanged. `tofu fmt -check` and `tofu validate` pass; `node --test test/unit/infra.test.js` 2 of 2; `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0.
+- Decided: nothing structural, so no ADR: `process-adr-and-journal` asks one for "a boundary, a port, a model, a persistence choice, a safety guard", and a container's size is none of them (the mono-instance placement of `architecture.md` holds: the maximum scale stays 1). The service's size was in no ADR; ADR-0016 names the gateway's, which does not change. The paid setting was the author's to approve (`AGENTS.md`, rule 3), and he did.
+- Not done: no test holds the two new settings (a new case changes the census of `reports/junit.xml`, rewritten in the reference environment only).
+- Next: apply `-var service_min_scale=1` on 2026-11-16 and `-var service_min_scale=0` on 2026-11-20 (runbook §12).
