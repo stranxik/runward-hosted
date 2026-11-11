@@ -1,7 +1,7 @@
 # ADR-0028: The public site is runward.dev; the app's origin carries the app only; its former public pages answer 308 to runward.dev
 
 **Date**: 2026-11-11
-**Status**: proposed (written by an agent session; it records a decision the author took on 2026-11-11, relayed to this session by the session that coordinates it; this record awaits his acceptance). It supersedes ADR-0022 once accepted.
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte l'ADR-0028 et les deux liens", the two links being the foot's link and the legal screen's line to runward.dev); written by an agent session. It supersedes ADR-0022.
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the server's static paths, the shell's boot and its router at `6686854`; each target asked on runward.dev), challenge, durable position
 

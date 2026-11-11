@@ -300,3 +300,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session. Proposed: ADR-0028, which supersedes ADR-0022 once accepted.
 - Blocked / to dig: the number 0027 is taken by the motion's open pull request (#22), hence 0028. That pull request edits `router.js`, `shell.js`, `lexique.js` and `assets.js` too: the second of the two to merge takes the other's lines.
 - Next: remove `web/site/`, `src/http/site.js`, the layer's section for the public pages and their tests, once the open pull request that edits `web/site/` (#23) is merged or closed; the committed reports regenerated in the reference environment.
+
+## 2026-11-11 - ADR-0028 accepted, with the two links to runward.dev
+
+- Done: ADR-0028 records its acceptance; ADR-0022 records that it is superseded by it.
+- Evidence: the author in chat, 2026-11-11: "j'accepte l'ADR-0028 et les deux liens" (the foot's first link and the legal screen's line to runward.dev, both added by this pull request).
+- Decided: ADR-0028 accepted (the author).
+- Next: the removal of `web/site/` and its renderer, once #23 is merged or closed.
