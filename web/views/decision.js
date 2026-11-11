@@ -18,6 +18,7 @@ import { go, act, reqNote, loadingView, fenetre } from "./marks.js";
 import { renderView } from "./fleet-views.js";
 import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
+import { niveauLigne, ordre } from "./claims.js";
 
 // ------------------------------------------------------------- the language of the reading
 // The reader's language is the app's, one for the reading and its frame (web/views/lexique.js): the choice kept under
@@ -197,8 +198,9 @@ function verifyPanel(w, m) {
       <dt>${esc(V.commit)}</dt><dd><code translate="no">${esc(commit ?? "")}</code></dd>
       <dt>${esc(V.version)}</dt><dd><code translate="no">runward ${esc(L.runward ?? "")}</code></dd>${run}</dl>`;
   // the command is copied as it is written, without the prompt and without a line end (a pasted line end would run it)
+  // the command is built for a repository of github.com only: a GitLab repository is told so, in the app's words
   const cmd = c.refused
-    ? `<p class="lecture-refus">${esc(V.refused(V.field[c.refused]))}</p>`
+    ? `<p class="lecture-refus">${esc(st?.forge === "gitlab" && c.refused === "repository" ? mots().forge.verifyNote : V.refused(V.field[c.refused]))}</p>`
     : `<p class="vh" id="cmd-${esc(m.id)}">${esc(V.command)}</p><pre class="term lecture-cmd" tabindex="0" aria-labelledby="cmd-${esc(m.id)}"><span class="inv" aria-hidden="true">$ </span><code translate="no" id="cmd-texte">${esc(c.command)}</code></pre>
       <div class="actions"><button class="btn btn-q" type="button" data-do="copy" data-copy-target="cmd-texte" data-copy-plain data-label="${esc(mots().workflow.copyCommand)}">${esc(mots().workflow.copyCommand)}</button></div>
       <p class="note">${esc(V.note)}</p>`;
@@ -211,6 +213,17 @@ function reasonOf(w, lang, code) {
   const sep = lang === "fr" ? " : " : ": ";
   const known = Object.hasOwn(w.reasons, code) ? w.reasons[code] : null;
   return known ? `${sep}<code translate="no">${esc(code)}</code>, ${esc(known)}` : `${sep}<span class="soft">${esc(w.reasonAsWritten)}</span> <code translate="no">${esc(code)}</code>`;
+}
+
+/**
+ * The level of evidence of the path the file took (ADR-0029 section 2), in a window beside runward-fleet's reading,
+ * never inside it: the sentence first, what it does not prove, then the code; GitLab's order signal with its gesture.
+ * Its words are the app's lexicon (web/views/lexique.js), in the reading's language.
+ */
+function levelPanel(m) {
+  const st = ligne(m.id), L = mots().forge.level;
+  if (!st?.level) return "";
+  return fenetre(esc(L.h2), `<p class="note">${L.lead}</p>${niveauLigne(st)}${ordre(st)}`, { plat: true, cls: "c-bar lecture-niveau", attrs: ` aria-label="${esc(L.h2)}"` });
 }
 
 function receivedPanel(w, lang, m) {
@@ -276,5 +289,5 @@ export function viewDecision(sub) {
   const crumb = (name) => [[w.portfolio, "#/"], [name, null, true]];
   if (!m) return { ...base, title: w.portfolio, crumb: crumb(id), html: frame(lang, `<div class="tete"><h1 class="t1">${esc(w.unknownTitle)}</h1><p class="sous">${esc(w.unknownText)} <code translate="no">${esc(id)}</code></p><div class="actions">${go("#/", w.all)}</div></div>`) };
   return { ...base, title: m.name, crumb: crumb(m.name), html: frame(lang, `${setAside}<div class="lecture-fiche"><div class="lecture-g">${renderView(idx, "decision", m.id)}</div>
-    <aside class="lecture-d">${verifyPanel(w, m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`, "app") };
+    <aside class="lecture-d">${verifyPanel(w, m)}${levelPanel(m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`, "app") };
 }

@@ -6,6 +6,7 @@ import { mk, etq, go } from "./marks.js";
 import { renderView } from "./fleet-views.js";
 import { lang, mots } from "./lexique.js";
 import { verdictOf, ligne, sourceDe, jLigne, nomCourt, nomLong, chipOf, cause, sourceLigne } from "./lignes.js";
+import { niveauLigne, ordre } from "./claims.js";
 
 export function viewMissionDetail(id) {
   if (!S.index) return null;
@@ -29,12 +30,17 @@ export function viewMissionDetail(id) {
   if (v === "level-not-met") suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${M.nextLevel}</p></div>${go("#/proof", M.openProof, { q: true })}</div>`;
   if (v === "not-observed") suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${st?.consent ? M.nextConsented : M.nextConsent}</p></div>${st?.consent ? etq("full", C.consented) : go("#/acces", W.lines.consentInAccess, { q: true })}</div>`;
   const a = st?.accepted;
+  // a GitLab upload is ordered by its pipeline, then its job; what the declaration names is the pipeline definition
+  const gitlab = st?.forge === "gitlab", G = W.forge;
   const prov = a ? `<dl class="cl2"><dt>${M.file}</dt><dd><code>${esc(sourceDe(m) ?? "")}</code>${l?.runward ? M.writtenBy(esc(l.runward)) : ""}</dd>
-      <dt>${M.upload}</dt><dd>${M.receivedOn(esc(a.seq), when(a.receivedAt))}</dd><dt>${M.run}</dt><dd>${M.runLine(esc(a.runId), esc(a.runNumber), esc(a.runAttempt))}</dd>
-      <dt>${M.workflow}</dt><dd><code>${esc(a.workflow)}</code></dd><dt>${M.commit}</dt><dd><code>${esc(a.commit ?? "")}</code></dd>
+      <dt>${M.upload}</dt><dd>${M.receivedOn(esc(a.seq), when(a.receivedAt))}</dd><dt>${gitlab ? esc(G.pipeline) : M.run}</dt><dd>${gitlab ? G.pipelineLine(esc(a.runNumber), esc(a.runAttempt)) : M.runLine(esc(a.runId), esc(a.runNumber), esc(a.runAttempt))}</dd>
+      <dt>${gitlab ? esc(G.definition) : M.workflow}</dt><dd><code>${esc(a.workflow)}</code></dd><dt>${M.commit}</dt><dd><code>${esc(a.commit ?? "")}</code></dd>
       <dt>${M.level}</dt><dd>${etq("half", M.declaredOnly(l?.implemented ?? "ci-declared"))}</dd></dl>`
     : `<p class="note">${M.noProv}</p>`;
   const attendus = (m.findings ?? []).filter((f) => f.file).map((f) => `<li><span class="h">${M.expected}</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${M.expectedLine(esc(f.what))}<span class="sub"><code>${esc(f.file)}</code></span></span></li>`).join("");
+  // the level of evidence of the path the file took (ADR-0029 section 2), beside runward-fleet's reading and never
+  // inside it: the sentence, what it does not prove, then the code; a key since retired; GitLab's order signal
+  const chemin = st?.level ? `<section class="sect" aria-labelledby="h-niv"><header><h2 id="h-niv">${esc(G.level.h2)}</h2></header><p class="small soft">${G.level.lead}</p>${niveauLigne(st)}${ordre(st)}</section>` : "";
   const hist = (st?.activity ?? []).map(jLigne).join("");
   const L = lang(), idx = S.index.lang !== L ? { ...S.index, lang: L } : S.index;
   return { title: M.title(nomCourt(m)), key: "fleet", signed: "in", fleetRoute: "mission", html: `<div class="dash mission-d">
@@ -43,6 +49,7 @@ export function viewMissionDetail(id) {
     ${suivant}
     ${l && portes ? `<section class="sect" aria-labelledby="h-pp"><header><h2 id="h-pp">${v === "gaps" ? M.h2Missing : M.h2Deliverables}</h2></header><div class="manque">${portes}</div></section>` : ""}
     <section class="sect" aria-labelledby="h-prov"><header><h2 id="h-prov">${M.h2Prov}</h2></header>${prov}</section>
+    ${chemin}
     <section class="sect" aria-labelledby="h-hist"><header><h2 id="h-hist">${M.h2Activity}</h2><a href="#/envois">${C.wholeJournal}</a></header>${hist || attendus ? `<ul class="journal-d">${hist}${attendus}</ul>` : `<p class="note">${M.noActivity}</p>`}</section>
     <section class="sect vue-fleet" aria-labelledby="h-vf"><header><h2 id="h-vf">${M.h2View}</h2><span class="rv">${M.viewR}</span></header>${renderView(idx, "mission", m.id)}</section>
   </div>` };

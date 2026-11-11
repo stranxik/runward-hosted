@@ -11,6 +11,9 @@ export const KINDS = {
   passkey: { g: "passkey-remove" }, session: { g: null }, repo: { g: null }, consent: { g: "consent-withdraw", choice: true }, consentir: { g: "consent" },
   purge: { g: "content-erase" }, restore: { g: null }, restorerepo: { g: null }, reader: { g: "reader-withdraw" }, readeron: { g: "reader-authorize" },
   closeothers: { g: null }, recovery: { g: "recovery-cancel" }, lang: { g: null },
+  // the forge port (ADR-0029): a GitLab repository's protection and order epoch, a registered instance and its keys
+  liftprot: { g: "protection-lift" }, restoreprot: { g: "protection-restore" }, epoch: { g: "order-epoch-open" },
+  keyretire: { g: "issuer-key-retire" }, issuerremove: { g: "issuer-remove" },
 };
 export function confirmBox(k) {
   if (S.confirming !== k) return "";
@@ -21,6 +24,8 @@ export function confirmBox(k) {
     const opened = S.access.sessions.filter((s) => s.openedBy === id);
     d = C.passkey(opened.map((s) => appareil(s.device) ?? C.device).join(", "), opened.some((s) => s.current));
   }
+  // lifting the protection lowers the level: the sentence the uploads will then carry is said before the gesture
+  if (kind === "liftprot") { const L = W.forge.level; d = `${t.d} ${L.said(L.P3b.proves, `${L.P3.not} ${L.P3b.not}`, L.code("P3b"))}`; }
   const geste = t.g ? W.common.askedForGesture : W.common.askedIfOld;
   if (S.busy === k) return `<div class="confirm" role="group" aria-label="${esc(t.q)}"><p><b>${esc(W.common.confirmOnDevice)}</b> ${esc(geste)}</p><div class="charge" role="progressbar" aria-label="${esc(W.common.waitingPasskey)}"></div></div>`;
   const failed = S.failed === k ? `<p class="erreur" role="alert">${mk("inv", W.common.notVerified)} ${esc(S.failedText ?? W.common.verifyFailed)}</p>` : "";

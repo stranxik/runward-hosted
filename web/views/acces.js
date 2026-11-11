@@ -6,7 +6,7 @@ import { head, mk, reqNote, act, loadingView } from "./marks.js";
 import { mots, titreFlotte } from "./lexique.js";
 import { sectionPasskeys } from "./acces/passkeys.js";
 import { sectionSessions } from "./acces/sessions.js";
-import { sectionDepots } from "./acces/depots.js";
+import { sectionDepots, sectionInstances, viewInstance } from "./acces/depots.js";
 import { sectionReglages } from "./acces/reglages.js";
 import { sectionMembres } from "./acces/membres.js";
 import { sectionDonnees } from "./acces/donnees.js";
@@ -16,12 +16,14 @@ import { viewExport } from "./acces/export.js";
 import { viewEffacer } from "./acces/effacer.js";
 
 /** The sections of the screen, in the order they are shown; each takes the access view and gives its HTML. */
-const SECTIONS = [sectionPasskeys, sectionSessions, sectionDepots, sectionReglages, sectionMembres, sectionDonnees, sectionLimites];
+const SECTIONS = [sectionPasskeys, sectionSessions, sectionDepots, sectionInstances, sectionReglages, sectionMembres, sectionDonnees, sectionLimites];
 
 export function viewAcces(sub) {
   if (sub === "export") return viewExport();
   if (sub === "effacer") return viewEffacer();
   if (sub === "ajout") return viewAjout();
+  // a GitLab instance registered (#/acces/instance), or a key added to one (#/acces/instance/<id>): ADR-0029 section 4
+  if (sub === "instance" || sub.startsWith("instance/")) return viewInstance(sub.slice(9));
   if (sub) return null;
   const W = mots(), A = W.acces, C = W.common;
   const a = S.access;

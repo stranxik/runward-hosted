@@ -1,7 +1,7 @@
 // Gestures: the sign-in, the verification a gesture asks, a write, a passkey added, a link redeemed, a
 // confirmation.
 import { S, parts } from "./base.js";
-import { api, loadSession } from "./api.js";
+import { api, loadSession, loadAccess } from "./api.js";
 import { ceremony, HINT } from "./webauthn.js";
 import { KINDS } from "./confirm.js";
 import { mots } from "./lexique.js";
@@ -89,6 +89,10 @@ const ROUTE_OF = {
   repo: (id) => ["DELETE", `/api/v0/repositories/${id}`], restorerepo: (id) => ["POST", `/api/v0/repositories/${id}/restore`], consentir: (id) => ["POST", `/api/v0/repositories/${id}/consent`],
   consent: (id) => ["DELETE", `/api/v0/repositories/${id}/consent`], purge: (id) => ["DELETE", `/api/v0/repositories/${id}/content`], reader: () => ["DELETE", "/api/v0/reader"],
   readeron: () => ["POST", "/api/v0/reader"], closeothers: () => ["POST", "/api/v0/sessions/close-others"], recovery: () => ["POST", "/api/v0/recovery/cancel"], lang: () => ["POST", "/api/v0/tenant/settings"],
+  // the forge port (ADR-0029): a GitLab repository's protection and order epoch; a registered instance's key (its
+  // confirmation names « <registration>.<key> ») and the registration itself
+  liftprot: (id) => ["POST", `/api/v0/repositories/${id}/protection/lift`], restoreprot: (id) => ["POST", `/api/v0/repositories/${id}/protection/restore`], epoch: (id) => ["POST", `/api/v0/repositories/${id}/epoch`],
+  keyretire: (id) => { const [issuer, key] = id.split("."); return ["DELETE", `/api/v0/issuers/${issuer}/keys/${key}`]; }, issuerremove: (id) => ["DELETE", `/api/v0/issuers/${id}`],
 };
 // what the page announces once a gesture is done: the lexicon's done.<kind>, else done.other
 export async function confirmGesture(k) {
@@ -98,7 +102,8 @@ export async function confirmGesture(k) {
   S.busy = k; S.failed = null; rerender();
   const [method, path] = ROUTE_OF[kind](id);
   const body = kind === "consent" ? { erase } : kind === "lang" ? { lang: id } : {};
-  const object = ["reader", "readeron", "closeothers", "lang"].includes(kind) ? "" : kind === "recovery" ? id : id;
+  // the object a gesture is bound to: none, the object's id, or for a key retired the key's id alone
+  const object = ["reader", "readeron", "closeothers", "lang"].includes(kind) ? "" : kind === "keyretire" ? id.split(".")[1] : id;
   const r = await write(method, path, body, { gesture: t.g, object });
   S.busy = null;
   if (!r.ok) { S.failed = k; S.failedText = r.message ? `${r.message} ${r.action ?? ""}` : null; return rerender(); }
@@ -108,4 +113,63 @@ export async function confirmGesture(k) {
   if ((kind === "passkey" && r.data?.closedCurrent) || (kind === "session" && r.data?.closedCurrent)) { S.session = null; S.closedBy = "passkey"; location.hash = "#/entree/session-fermee"; return; }
   S.focusKey = k;
   await refreshScreen();
+}
+
+// ------------------------------------------------------------- the forge port (ADR-0029)
+/**
+ * Confirm a repository. The gesture is bound to the repository and to the digest of the values the screen showed
+ * (`pending.digest` of the access view): what is pinned is what the member saw. `confirmation-stale` says the values
+ * changed since they were shown: the access view is read again and the screen shows the new ones.
+ */
+export async function confirmRepository(id) {
+  const k = `confirm:${id}`;
+  const digest = S.access?.repositories.find((r) => r.id === id)?.pending?.digest ?? "";
+  S.failed = null; S.failedText = null; S.stale = null;
+  const r = await write("POST", `/api/v0/repositories/${id}/confirm`, { digest }, { gesture: "repository-confirm", object: `${id}:${digest}` });
+  if (!r.ok) {
+    S.failed = k; S.failedText = r.message ? `${r.message} ${r.action ?? ""}` : null;
+    if (r.refusal === "confirmation-stale") { S.stale = id; await loadAccess(); }
+    return rerender();
+  }
+  say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
+  await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? "#/" : "#/arrivee";
+}
+
+/** Where a refusal of a registration or of a key is shown: under its field, else above the form. */
+const ISSUER_FIELD = { "issuer-malformed": "issuer", "issuer-not-allowed": "issuer", "key-malformed": "keys" };
+function issuerRefused(r) {
+  const x = r.data ? r : r.verify?.r ?? {};
+  return { field: ISSUER_FIELD[x.refusal] ?? null, message: x.message ?? mots().common.verifyFailed, action: x.action ?? "", why: x.data?.why ?? null, requestId: x.requestId };
+}
+/** The key set the member pasted, as JSON: an object, or nothing. */
+function keySet(text) {
+  try { const v = JSON.parse(text); return v !== null && typeof v === "object" ? v : null; } catch { return null; }
+}
+/**
+ * A registration (`id` empty) or a key of one, read before the gesture: the service answers the issuer, the kid, the
+ * key's RFC 7638 thumbprint and the digest the gesture will be bound to, and writes nothing. The screen shows them.
+ */
+export async function issuerPreview(id, values) {
+  const I = mots().forge.instance;
+  S.issuer = { id, values, preview: null, error: null };
+  const keys = keySet(values.keys);
+  if (!keys) { S.issuer.error = { field: "keys", message: I.notJson, action: I.notJsonAction }; return rerender(); }
+  const r = id ? await api("POST", `/api/v0/issuers/${id}/keys/preview`, { keys, kid: values.kid }) : await api("POST", "/api/v0/issuers/preview", { issuer: values.issuer, keys, kid: values.kid });
+  if (r.ok) S.issuer.preview = r.data; else S.issuer.error = issuerRefused(r);
+  return rerender();
+}
+/** The gesture on what the preview showed: `issuer-register` or `issuer-key-add`, bound to the preview's digest. */
+export async function issuerWrite() {
+  const f = S.issuer;
+  if (!f?.preview) return;
+  const keys = keySet(f.values.keys), digest = f.preview.digest, kid = f.values.kid;
+  const r = f.id
+    ? await write("POST", `/api/v0/issuers/${f.id}/keys`, { keys, kid, digest }, { gesture: "issuer-key-add", object: digest })
+    : await write("POST", "/api/v0/issuers", { issuer: f.values.issuer, keys, kid, digest }, { gesture: "issuer-register", object: digest });
+  // the values changed since they were shown: back to the input, to read them again
+  if (!r.ok) { S.issuer = { ...f, preview: r.refusal === "confirmation-stale" ? null : f.preview, error: issuerRefused(r) }; return rerender(); }
+  S.issuer = null;
+  const done = mots().done;
+  say(!f.id ? done.issuerRegistered : r.data?.confirmed ? done.keyConfirmed : done.keyAdded);
+  await refreshScreen(); location.hash = "#/acces";
 }
