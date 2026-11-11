@@ -46,13 +46,40 @@ fi
 # the pause between two reads; a test against the loopback stand-in may shorten it, the hoster's API never
 pause=10
 [[ "$base" == http://127.0.0.1:* && "${CONTAINER_DEPLOY_PAUSE:-}" =~ ^[0-9]+(\.[0-9]+)?$ ]] && pause="$CONTAINER_DEPLOY_PAUSE"
-for _ in $(seq 1 60); do
+# The redeploy is proven, not assumed: `ready` on the digest right after the update may still be the
+# revision served before (registry_image is the configuration, and the hoster may not have left `ready`
+# yet). When the update changed the digest or the map, `ready` on the digest is accepted only once the
+# hoster showed the redeploy: `ready_at` ("last date when the container was successfully deployed and set
+# to ready", scaleway-sdk-go container/v1beta1 Container) differs from the one read before the update, or
+# a status other than `ready` was read since (the update's own answer counts). The first read waits one
+# pause. If neither shows in 6 reads (6 pauses after the update), `ready` on the digest is accepted and a
+# line says so. An update that changed nothing starts no redeploy: nothing to prove.
+changed=$(jq --argjson body "$body" '(.registry_image != $body.registry_image) or ((.environment_variables // {}) != $body.environment_variables)' <<<"$current")
+ready_before=$(jq -r '.ready_at // ""' <<<"$current")
+proven=""
+[ "$changed" = "true" ] || proven="the update changed nothing"
+observe() {
+  [ -z "$proven" ] || return 0
+  local st at
+  st=$(jq -r '.status // ""' <<<"$1" 2>/dev/null || true)
+  at=$(jq -r '.ready_at // ""' <<<"$1" 2>/dev/null || true)
+  if [ -n "$st" ] && [ "$st" != "ready" ]; then proven="redeploy seen: status $st"
+  elif [ -n "$at" ] && [ "$at" != "$ready_before" ]; then proven="redeploy seen: ready_at $at"; fi
+}
+observe "${answer%$'\n'*}"
+[ "$changed" = "true" ] && sleep "$pause"
+for n in $(seq 1 60); do
   c=$(curl -sSf --max-time 30 -H @<(auth) "$api")
-  if [ "$(jq -r .status <<<"$c")" = "ready" ] && [ "$(jq -r .registry_image <<<"$c")" = "$digest" ]; then
+  observe "$c"
+  if [ -z "$proven" ] && [ "$n" -ge 6 ]; then
+    proven="no redeploy seen"
+    echo "container-deploy: $id showed no redeploy in 6 reads, $pause s apart (ready_at unchanged, no status other than ready): ready on the digest is accepted from here"
+  fi
+  if [ "$(jq -r .status <<<"$c")" = "ready" ] && [ "$(jq -r .registry_image <<<"$c")" = "$digest" ] && [ -n "$proven" ]; then
     # the merge held: every key that was there before is still there
     missing=$(jq -r --argjson before "$env" '.environment_variables as $now | [$before | keys[] | select(. != "RW_COMMIT" and ($now[.] == null))] | join(",")' <<<"$c")
     [ -z "$missing" ] || { echo "container-deploy: variables lost by the update: $missing"; exit 1; }
-    echo "container-deploy: $id serves $digest"; exit 0
+    echo "container-deploy: $id serves $digest ($proven)"; exit 0
   fi
   [ "$(jq -r .status <<<"$c")" = "error" ] && { echo "container-deploy: $id is in error: $(jq -r '.error_message // ""' <<<"$c")"; exit 1; }
   sleep "$pause"
