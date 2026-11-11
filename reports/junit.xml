@@ -107,6 +107,7 @@
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
 	<testcase name="the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot" classname="test"/>
+	<testcase name="the foot carries the house's signature in the reader's language, signed in and signed out: « runward, par Another Framework », the name linking to the studio's page" classname="test"/>
 	<testcase name="planted control: one string of the frame left in French is found in the English frame" classname="test"/>
 	<testcase name="every screen of the shell, in each of its states, painted in English, carries no French word" classname="test"/>
 	<testcase name="planted control: one screen's string left in French is found in the English screen" classname="test"/>
@@ -312,7 +313,7 @@
 	<testcase name="the closed list of the site is its scripts and stylesheets on disk: none off the list, none missing" classname="test"/>
 	<testcase name="a source of the site is never served: the template, the fragments, the data, the stylesheet by its plain name" classname="test"/>
 	<testcase name="the site's scripts write no HTML from a string, evaluate nothing, call no network and set no cookie" classname="test"/>
-	<testcase name="the texts served are the 324 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)" classname="test"/>
+	<testcase name="the texts served are the 325 validated ones, text for text, in French and in English (web/site/textes_fr_en.tsv)" classname="test"/>
 	<testcase name="planted controls: one character changed in a fragment changes the texts; a pair left untreated and a slot left empty are refused" classname="test"/>
 	<testcase name="the data of the public view and the summary comes from one file, web/site/donnees.json, escaped as text; a state off the lexicon is refused" classname="test"/>
 	<testcase name="the contact is a mailto: to one address, and nothing is posted: no form action, no network call, the policy forbids a form's action" classname="test"/>
@@ -349,14 +350,14 @@
 	<testcase name="planted controls: the audit refuses a layer broken on purpose, for the reason planted" classname="test"/>
 	<testcase name="planted control: the contrast measure is the WCAG one" classname="test"/>
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
-	<testcase name="no entrance animation in the app (family rule); only the loading line loops" classname="test"/>
+	<testcase name="no entrance animation in the app's stylesheet; two loops only, the loading line and the drift of the haze behind the sign-in (ADR-0025), both stopped under reduced motion" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 353 -->
+	<!-- tests 354 -->
 	<!-- suites 0 -->
-	<!-- pass 353 -->
+	<!-- pass 354 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
