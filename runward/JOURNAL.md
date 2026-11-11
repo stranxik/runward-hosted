@@ -314,3 +314,13 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Blocked / to dig, for the author's eye: the reviewer's own wording of A7 did not reach this session; a registered instance at P4 whatever its care is a choice the author may temper; only `push` sends on GitLab until a witness of `api` with variables.
 - Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
 - Next: the author's decision on ADR-0029 and ADR-0030.
+
+## 2026-11-11 - the second pass of the review of ADR-0029 and ADR-0030: seven points, all made in the text
+
+- Done: the reviewer read the revision at `a8644fe`: ADR-0029 acceptable after text changes, two of which change behaviour; ADR-0030 acceptable as a direction once its open points are completed. The review file gains a second pass (B1 to B7).
+  - B1: GitLab issues the token when the job starts, so the send job is light and the witness measures `iat` to reception before the 10 minutes are frozen. B2: `key-retired` is answered and journaled only after a valid signature under the retired key.
+  - B3 to B6: what keeps registrations from being listed (the 128-bit identifier; the equal time is a best effort) and its cost; `confirmation-stale` on the values to pin, not on the pending send, and the gesture's new object said as a change that is not an addition; remedies per forge for three more refusals; the exact audiences, `/send/` reserved, P3b's whole sentence, the gestures named, the declared file bounded.
+  - B7: ADR-0030's open points completed (the circular resolution, who holds an identity, the unsigned order, the cached token, an application-only token, version 2 as the author's setting) and its level set below ADR-0029's P4, with its own sentence (P5).
+- Decided: nothing by the session. Proposed: ADR-0029 and ADR-0030, revised.
+- Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
+- Next: the author's decision on both records.

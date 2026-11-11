@@ -88,7 +88,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | The public site served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept | decided: ADR-0022, accepted 2026-11-11 |
 | The shell in the grammar of its public site: the scene as the ground, glass windows, one header; the haze drifts on the sign-in only | pending: ADR-0025 (refines ADR-0019, accepted 2026-11-10), proposed |
 | The app's layer is the house's visual base; runward keeps its own signs; the house signs the foot | pending: ADR-0026, proposed |
-| A forge port: an upload is bound by the identity each forge gives (GitHub, gitlab.com, registered GitLab instances), several issuers in one process, and the level of evidence it reaches is shown per application | pending: ADR-0029 (refines ADR-0003 and ADR-0001), proposed, revised after its review; no code yet |
+| A forge port: an upload is bound by the identity each forge gives (GitHub, gitlab.com, registered GitLab instances), several issuers in one process, and the level of evidence it reaches is shown per application | pending: ADR-0029 (refines ADR-0003 and ADR-0001), proposed, revised after the two passes of its review; no code yet |
 | Azure DevOps by an Entra access token for runward's application: a direction, its rules fixed after a real token is read | pending: ADR-0030, proposed; no code, no rule yet |
 
 ### Ratification
