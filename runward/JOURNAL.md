@@ -307,3 +307,51 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the author in chat, 2026-11-11: "j'accepte l'ADR-0028 et les deux liens" (the foot's first link and the legal screen's line to runward.dev, both added by this pull request).
 - Decided: ADR-0028 accepted (the author).
 - Next: the removal of `web/site/` and its renderer, once #23 is merged or closed.
+
+## 2026-11-11 - a forge port, proposed: GitLab and Azure DevOps beside GitHub, the level of evidence said per application
+
+- Done: ADR-0029 is written, proposed, with no code: this pull request carries the record, this entry and the architecture note's row.
+  - Reality-check, against `main@6686854`: one issuer per process (`src/main.js`, `RW_OIDC_ISSUER`, one `githubVerifier`, one egress host); the claims read by GitHub's names (`src/domain/workload.js`); `forge in ('github')` and the literal `"github"` in `src/application/ingest.js` and `src/application/repositories.js`; `rw.oidc_jti`, `rw.rate_counter` and `rw.refused_counter` keyed without the issuer, so project `1` of a GitLab instance would share its counters with GitHub's repository `1`; the pinned runward-fleet refuses a repository that is not `host/owner/repo` and a host with a port; the declared branch stored and not read by the verification.
+  - Read on real tokens (four pipelines of a self-managed GitLab CE 17.11.1 on the author's server, the same day): `ci_config_ref_uri` (`host:port/group/project//.gitlab-ci.yml@refs/heads/<branch>`, no scheme) and `ci_config_sha` (equal to `sha`) name the root definition; both are absent when the definition lives in another project; a job moved into an `include: local` file changes neither `sub` nor `ci_config_ref_uri`; `ref_protected` is a string; the discovery's `jwks_uri` reads `https` where `iss` reads `http`; RS256 with a `kid`, `exp - iat` 3600 s.
+- Decided: nothing by the session. Proposed: ADR-0029. One port, an adapter and pure rules per forge, issuers chosen by exact equality from a closed list or from a tenant's registered instances; four levels (P1 GitHub, P2 not built, P3 GitLab, P4 Azure DevOps route A), computed at each upload, journaled, shown on the application's screen with what they do not prove; GitLab refused without `ci_config_ref_uri` and `ci_config_sha`, the first pinned at the first-send confirmation, the second equal to `sha`; includes from outside the repository lower nothing further and are named in P3's sentence, the service reads no file; a self-managed instance registered by a passkey gesture with a static key set, never called, trusted by its tenant alone through a tenant-bound audience.
+- Blocked / to dig, for the author's eye:
+  - Two points where the record goes further than the plan as it was given: a registered instance's audience names the tenant (so that two tenants registering the same instance cannot receive or block each other's uploads); a `pipeline_source` never observed is refused until a witness (the plan had it informative only). `user_login` and `user_email` are not kept.
+  - Not witnessed: gitlab.com itself (an account is needed), a tag, a merge request, a child or triggered pipeline, a component, an execution policy; every fact of the Azure DevOps route (the token's version, `roles`, `uti`, its lifetime, the CLI's cache, the need of a subscription).
+  - runward-fleet must admit a host with a port as well as long paths: the witness instance's address carries one.
+- Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
+- Next: the author's decision on ADR-0029; then the port with GitHub alone behind it (step a), on the model reserved for critical code.
+
+## 2026-11-11 - the review of ADR-0029: not acceptable as written, sixteen findings answered, Azure DevOps split out
+
+- Done: an adversarial review of `49bf59d` on the model reserved for critical work (`runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`) found the record not acceptable: two blocking findings, eight important, six minor. ADR-0029 is revised in place (it is proposed, never accepted); no code.
+  - A1: for a registered instance, the issuer key of every key of the store is the tenant's registration row, never the issuer's string; a planted control of two tenants with the same string and the same `project_id` joins the witness. A2: P3 is gitlab.com's alone; a registered instance is P4, and its sentence says the service has not checked that the key belongs to a GitLab instance.
+  - A3 to A10: the audience names the registration (`/send/<id>`, a random identifier, disjoint from `/read`), one uniform refusal; P3's sentence names the variables, the runner and the protection's rules, and only `push` sends; lifting the protection gives a level of its own, P3b; the last key may be retired, a retirement is replayed by a restore, each upload names its key; a token more than 10 minutes old is refused; the confirmation is bound to a digest of what the screen shows, for GitHub too; the refusals' words, seven codes of them, are sorted per forge.
+  - A11 to A16: the code citations corrected; what a key must be; the issuer's string parsed at registration only; the order after an instance's restore, a signal and a gesture; the confirmed file compared with the declaration; the sentence before the code, no level shown that nothing reaches.
+- Decided: nothing by the session. Proposed: ADR-0029, revised; ADR-0030, new, Azure DevOps as a direction with nine open points and no rule (A7).
+- Blocked / to dig, for the author's eye: the reviewer's own wording of A7 did not reach this session; a registered instance at P4 whatever its care is a choice the author may temper; only `push` sends on GitLab until a witness of `api` with variables.
+- Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
+- Next: the author's decision on ADR-0029 and ADR-0030.
+
+## 2026-11-11 - the second pass of the review of ADR-0029 and ADR-0030: seven points, all made in the text
+
+- Done: the reviewer read the revision at `a8644fe`: ADR-0029 acceptable after text changes, two of which change behaviour; ADR-0030 acceptable as a direction once its open points are completed. The review file gains a second pass (B1 to B7).
+  - B1: GitLab issues the token when the job starts, so the send job is light and the witness measures `iat` to reception before the 10 minutes are frozen. B2: `key-retired` is answered and journaled only after a valid signature under the retired key.
+  - B3 to B6: what keeps registrations from being listed (the 128-bit identifier; the equal time is a best effort) and its cost; `confirmation-stale` on the values to pin, not on the pending send, and the gesture's new object said as a change that is not an addition; remedies per forge for three more refusals; the exact audiences, `/send/` reserved, P3b's whole sentence, the gestures named, the declared file bounded.
+  - B7: ADR-0030's open points completed (the circular resolution, who holds an identity, the unsigned order, the cached token, an application-only token, version 2 as the author's setting) and its level set below ADR-0029's P4, with its own sentence (P5).
+- Decided: nothing by the session. Proposed: ADR-0029 and ADR-0030, revised.
+- Evidence: `node scripts/format-check.mjs` and `npx -y runward@0.46.0 check --strict` exit 0 on this tree.
+- Next: the author's decision on both records.
+
+## 2026-11-11 - the forge records: third review pass, three wordings
+
+- Done: the final check of the third revision (a8644fe..b1d82df) found every second-pass item in the text and nothing new wrong; its three minor remarks are applied (the P5 sentence names "the directory it declared"; the moment GitLab issues its token is marked as documented, not observed; the Azure witness reads `ver`).
+- Evidence: `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`, section "Third pass".
+- Decided: nothing by the session; ADR-0029 and ADR-0030 stay proposed until the author accepts them.
+- Next: the author's acceptance; then the implementation of the port, written and reviewed on the critical model.
+
+## 2026-11-11 - ADR-0029 accepted, ADR-0030 accepted as a direction
+
+- Done: both records carry the author's acceptance.
+- Evidence: the author in chat, 2026-11-11: "j'accepte ADR-0029 et ADR-0030", after the three review passes recorded in `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`.
+- Decided: ADR-0029 accepted; ADR-0030 accepted as a direction, no rule before a real Entra token is read (the author).
+- Next: the implementation of the forge port and the GitLab adapter, written and reviewed on the critical model, witnessed on the self-managed GitLab instance.
