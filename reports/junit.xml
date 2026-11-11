@@ -26,7 +26,8 @@
 	<testcase name="rw.daily_jobs() evaluates the last note of each job and no other, found through its index" classname="test"/>
 	<testcase name="a security definer function resolves no name in the caller's temporary schema: a planted pg_temp.jsonb never runs as rw_resolve" classname="test"/>
 	<testcase name="the roles gesture takes temporary objects away from the service's roles, and says whether it could" classname="test"/>
-	<testcase name="the roles gesture, with --grants, refuses a base whose grants for rw_app or rw_maint are not the snapshot's" classname="test"/>
+	<testcase name="the grants gesture, as rw_owner, refuses a base whose grants for rw_app or rw_maint are not the snapshot's" classname="test"/>
+	<testcase name="the grants are compared in the service database only, by rw_owner; the administrator needs no access to it" classname="test"/>
 	<testcase name="catalog: every security definer function of rw sets search_path to pg_catalog, rw, pg_temp, in that order" classname="test"/>
 	<testcase name="the schema the migrations build is the committed snapshot (no drift)" classname="test"/>
 	<testcase name="the drill of runbook §16: a reset, removals and an erasure after the backup, the restore, the replay under rw_maint" classname="test"/>
@@ -53,6 +54,15 @@
 	<testcase name="container-deploy: planted control, a variable lost by the update fails the deploy and names it" classname="test"/>
 	<testcase name="container-deploy: an environment that reads empty is never sent back, and nothing is patched" classname="test"/>
 	<testcase name="container-deploy: a tag, another registry, or an API other than the hoster's or the loopback is refused before any call" classname="test"/>
+	<testcase name="container-deploy: the update alone deploys; no POST /deploy is sent to a container that already redeploys, and the digest is waited for" classname="test"/>
+	<testcase name="container-deploy: planted control, the script that still sends POST /deploy after the update fails on the stand-in's 409, as in production" classname="test"/>
+	<testcase name="container-deploy: a 409 of another kind, the update itself refused, fails with the status and the hoster's message, and nothing is waited for" classname="test"/>
+	<testcase name="container-deploy: a redeploy that ends in error fails and says the hoster's message; one that never ends fails after a bounded number of reads" classname="test"/>
+	<testcase name="container-deploy: the pause between two reads is shortened for the loopback stand-in only, never for the hoster's API" classname="test"/>
+	<testcase name="container-deploy: ready on the new digest right after the update is not believed; the script waits for the redeploy it then sees (a status other than ready)" classname="test"/>
+	<testcase name="container-deploy: planted control, the loop that accepts ready on the digest without the proof exits on the first read, while the container redeploys" classname="test"/>
+	<testcase name="container-deploy: a redeploy over between two reads is told by ready_at alone; without any sign, ready on the digest is accepted after 6 reads, and said" classname="test"/>
+	<testcase name="container-deploy: an update that changes nothing (the same digest, map and commit) has no redeploy to prove: one read" classname="test"/>
 	<testcase name="the API contract served is the committed one: same routes, same refusals, same digest" classname="test"/>
 	<testcase name="planted control: one more route, or a route opened to the public, changes the digest" classname="test"/>
 	<testcase name="every row of every file of src/http/routes is in the route table, once" classname="test"/>
@@ -94,6 +104,10 @@
 	<testcase name="the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)" classname="test"/>
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
+	<testcase name="the grants gesture refuses a URL that names another database than RW_DATABASE, before any connection" classname="test"/>
+	<testcase name="roles takes no argument and no option: the --grants of 2026-11-10 is refused, never ignored; grants takes none either" classname="test"/>
+	<testcase name="the snapshot's grant lines: both roles, the three kinds, or nothing to compare with" classname="test"/>
+	<testcase name="the image carries every script the gateway runs, and deploy.yml calls only gestures the gateway has" classname="test"/>
 	<testcase name="the pre-commit hook is wired by npm install and runs the repository's own checks" classname="test"/>
 	<testcase name="the pre-commit plan: the format always, the lint of staged sources, the workflows' guards, the unit tests that reach what is staged" classname="test"/>
 	<testcase name="the hook, run in a throwaway clone: a staged lint error stops the commit, the fixed file passes" classname="test"/>
@@ -330,9 +344,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 329 -->
+	<!-- tests 343 -->
 	<!-- suites 0 -->
-	<!-- pass 329 -->
+	<!-- pass 343 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
