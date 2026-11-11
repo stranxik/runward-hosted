@@ -245,7 +245,13 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
   - Evidence: `node scripts/verify-runward-fleet.mjs`, online: "the 24 files of vendor/runward-fleet-0.46.0-d0528149.tgz are the files npm packs from packages/runward-fleet at d05281492d724f09dfe821f0285571eacd3c540a, byte for byte, and nothing else is in it". `test/unit/decision.test.js`, 10 cases: the new one holds the grouping on the five real exports, the counts taken from the export files themselves, with planted controls (an ungrouped reading, a refusal removed, every text open, a wrong n / N, the portfolio in the inventory's order, a tile left out). `test/unit/assets.test.js`, 10 cases: the two added modules are not served. `test/unit/pin.test.js`: the chain of three archives.
 - Decided: ADR-0024 (proposed), which refines ADR-0021: the pin, and what happens to an index an earlier archive built (replayed as ADR-0021 says; read by the pinned views as it is, its refusals one by one until the tenant's next publication).
 - Blocked / to dig, for the author's eye:
-  - An index published before this pin keeps its bytes: its application pages fold each refusal alone (7 090 px for the 46 refusals) until that repository's next accepted check. The portfolio's order and tiles apply at once.
+  - An index published before this pin keeps its bytes: its application pages fold each refusal alone (7 090 px for the 46 refusals) until the tenant's next publication (any repository's accepted upload ranked current, or a gesture that changes the set: the index is rebuilt for the whole tenant), so one accepted upload per tenant regroups every application of it. The portfolio's order and tiles apply at once.
   - This session did not read any tenant's data: whether a tenant holds an index of the earlier archive is taken from `/api/version` (`sendWorkflow` is not empty) and from `deploy.yml` (`smoke-send`), not observed.
   - The mission (path, portfolio by step, series) and documents screens are not built: a later lot.
 - Next: the author's review and his decision on ADR-0024; the committed reports regenerated in the reference environment (next commit).
+
+## 2026-11-11 - the review of the re-pin: nothing blocking, the tenant-wide rebuild said right
+
+- Done: an adversarial review of `2177bf7` (`runward/governance/reviews/2026-11-11_code-review_2177bf7.md`): nothing blocks production; the archive was reproduced byte for byte from the runward commit. C61: ADR-0024 and this journal said an earlier index stays ungrouped per repository; the index is rebuilt for the whole tenant, so one accepted upload per tenant regroups it. C62: ADR-0021's trigger quoted exactly. C63: the rollback then roll-forward case in ADR-0024's negatives. C66: "three archives" in two comments.
+- Blocked / to dig: C64, the author's decision on ADR-0024; C65, a literal anchor for the oldest link of the lock chain in `test/unit/pin.test.js`.
+
