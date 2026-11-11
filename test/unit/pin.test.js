@@ -58,16 +58,16 @@ test("C40: the vendored tarball passes both modes, and the offline mode says wha
   assert.match(off.message, /offline: the files are NOT compared with the commit/);
   const on = await verify({ lock, tgz: TGZ, packageLock: PACKAGE_LOCK, remote: COMMIT });
   assert.equal(on.exit, 0, on.message);
-  assert.match(on.message, /the 22 files .* are the files npm packs .* and nothing else is in it/);
-  assert.equal(Object.keys(lock.files).length, 22);
+  assert.match(on.message, /the 24 files .* are the files npm packs .* and nothing else is in it/);
+  assert.equal(Object.keys(lock.files).length, 24);
   assert.equal(tarEntries(gunzipSync(TGZ)).every((e) => e.type === "0" && e.name.startsWith("package/")), true);
 });
 
 test("C40: the review's tarball (a second root over src/build.js, LICENSE missing, the lock set to its digests) is refused in both modes", async () => {
   const planted = pack([...genuineEntries((f) => f !== "LICENSE"), entry("zz/src/build.js", Buffer.from("export const planted = true;\n"))]);
-  // the control: this is the archive the check of 3afe41d passed. Its package/ tree is genuine, 21 files.
+  // the control: this is the archive the check of 3afe41d passed. Its package/ tree is genuine, 23 files.
   const names = tarEntries(gunzipSync(planted)).map((e) => e.name);
-  assert.equal(names.filter((n) => n.startsWith("package/")).length, 21);
+  assert.equal(names.filter((n) => n.startsWith("package/")).length, 23);
   assert.ok(names.includes("zz/src/build.js"));
   const withoutLicense = digests([...GENUINE].filter(([f]) => f !== "LICENSE"));
   for (const files of [lock.files, withoutLicense]) {
@@ -135,7 +135,7 @@ test("C40: what the check cannot read at the commit is a cannot-tell, never a pa
   assert.equal((await run(TGZ, lock, { remote: { ...COMMIT, file: async (rel) => (rel === "ui/views.js" ? null : GENUINE.get(rel)) } })).exit, 2);
   const pkg = JSON.parse(GENUINE.get("package.json").toString("utf8"));
   const tree = await COMMIT.tree();
-  assert.deepEqual(packList(pkg, tree).names, [...GENUINE.keys()].sort(), "the pack list of the commit is the tarball's 22 names; test/ is not packed");
+  assert.deepEqual(packList(pkg, tree).names, [...GENUINE.keys()].sort(), "the pack list of the commit is the tarball's 24 names; test/ is not packed");
   assert.match(packList({ ...pkg, files: ["src/*.js"] }, tree).cannotTell, /a pattern this check does not read/);
   assert.match(packList({ ...pkg, files: undefined }, tree).cannotTell, /no "files"/);
   assert.match(packList(pkg, [...tree, { path: "src/.npmignore", mode: "100644" }]).cannotTell, /changes what npm packs/);
@@ -170,7 +170,7 @@ test("C42: fleetPin gives the archive digest only when the install is the pinned
     const build = join(c.pkgDir, "src", "build.js");
     const genuine = readFileSync(build);
     writeFileSync(build, Buffer.concat([genuine, Buffer.from("// another archive\n")]));
-    assert.match(refused(pin), /is not the pinned archive fff950650d3a: changed: src\/build\.js\. Nothing is served or published with it; install again with npm ci/);
+    assert.match(refused(pin), /is not the pinned archive addcaa2dce4e: changed: src\/build\.js\. Nothing is served or published with it; install again with npm ci/);
     writeFileSync(build, genuine);
     assert.equal(refused(pin), null);
 
@@ -249,7 +249,8 @@ test("C41: the lock's archives are the pinned one and its previous chain, and no
   const a = lockArchives({ tarballSha256: "c", commit: "3", previous: { tarballSha256: "b", commit: "2", previous: { tarballSha256: "a", commit: "1" } } });
   assert.equal(a.archiveSha256, "c");
   assert.deepEqual([...a.known], [["c", "3"], ["b", "2"], ["a", "1"]]);
-  assert.deepEqual([...PIN.archives.known.keys()], [lock.tarballSha256, PREVIOUS]);
+  assert.deepEqual([...PIN.archives.known.keys()], [lock.tarballSha256, PREVIOUS, lock.previous.previous.tarballSha256]);
+  assert.deepEqual([...PIN.archives.known.values()], [lock.commit, lock.previous.commit, lock.previous.previous.commit], "each archive with the commit it is packed at: d0528149, d05b5974, 5a9cdf08");
   assert.equal(PIN.version, lock.version);
 });
 
@@ -365,7 +366,7 @@ test("C44: the replay CLI exits 0 when every index rebuilt here is the same, 1 o
     assert.match(different.stdout, /version 2: different /);
     const allOld = cli("all-old.tar", (await fleet({ 1: { archive: PREVIOUS }, 2: { archive: PREVIOUS }, 3: { archive: PREVIOUS } })).bytes);
     assert.equal(allOld.status, 2, "nothing rebuilt here: cannot tell, never a mismatch and never a pass");
-    assert.match(allOld.stdout, /version 1: other-archive \(built by the runward-fleet archive 99e941a5ea91, packed at 5a9cdf08a769, not the one pinned here\)/);
+    assert.match(allOld.stdout, /version 1: other-archive \(built by the runward-fleet archive fff950650d3a, packed at d05b59742bf1, not the one pinned here\)/);
     assert.match(allOld.stdout, /replay: same 0, different 0, not rebuilt here 3 \(3 built by another archive\); cannot tell: nothing was rebuilt here\n$/);
     const unknown = cli("unknown.tar", relabel(genuine.bytes, (v) => (v.version === 1 ? { ...v, runwardFleetArchiveSha256: "x" } : null)));
     assert.equal(unknown.status, 2);

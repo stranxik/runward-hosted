@@ -446,7 +446,7 @@ nav.views{ position:relative; }
    hue (vermilion for a refusal, orange for the level, the bar's grey for what was not received, ink for nothing
    blocking); never a coloured text, never an inverted ground, no green, no red and green pair, and the live blue is
    not used here. Light and dark come from the layer alone. Nothing under 12 px. The layout is CSS over the HTML as
-   runward-fleet writes it: the shell sets attributes on it (the fold), never a byte of its content.
+   runward-fleet writes it: the shell changes neither a byte nor an attribute of it.
    ============================================================================================================ */
 
 /* ---- the marks of the five states, wherever a state is said (the reading, the sidebar, the empty state) */
@@ -551,38 +551,40 @@ nav.views{ position:relative; }
 .lecture [data-view="application"] > section > *{ margin:0; min-width:0; }
 .lecture [data-view="application"] > section h2{ font-size:16px; font-weight:var(--fw-strong); letter-spacing:var(--ls-h3); line-height:1.35; }
 .lecture [data-view="application"] > section h3{ font-size:var(--fs-body); font-weight:var(--fw-text); color:var(--text-2); margin:0 0 6px; }
-/* the refusals, folded by default: runward-fleet's heading is the button that unfolds its list (web/views/shell.js) */
-.lecture [data-role="problems"] > h3[role="button"]{ display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:40px; margin:0; padding:6px 12px; border:1px solid var(--line-2); border-radius:var(--r-notice); background:var(--bg); font-size:var(--fs-body); font-weight:var(--fw-strong); color:var(--text); text-align:left; cursor:pointer; user-select:none; }
-.lecture [data-role="problems"] > h3[role="button"]::after{ content:""; flex:none; width:7px; height:7px; margin:0 4px 3px; border:solid var(--text); border-width:0 1.5px 1.5px 0; transform:rotate(45deg); }
-.lecture [data-role="problems"] > h3[aria-expanded="true"]::after{ margin-bottom:-3px; transform:rotate(225deg); }
-.lecture [data-role="problems"] > ol{ list-style:none; padding:0; margin:0; }
-.lecture [data-role="problems"] > ol[hidden]{ display:none; }
-.lecture [data-role="problems"] > ol > [data-role="problem"]{ display:grid; gap:8px; margin:0; padding:14px 0; border-top:1px solid var(--line); }
-.lecture [data-role="problems"] > ol > [data-role="problem"]:first-child{ border-top:0; }
-.lecture [data-role="problems"] > ol > [data-role="problem"] > *{ margin:0; min-width:0; }
-/* the grouped refusals (runward's ADR-0128, the reading of runward-fleet at d052814): by kind, each with its n / N;
-   within a kind, by the check's text, shown once and folded by runward-fleet's own <details>, then where each refusal
-   it stands for is, behind a second fold. These roles are styled here so that the layer holds for either pin */
+/* the refusals (runward's ADR-0128, the grouped reading of the pinned runward-fleet, ADR-0024): by kind, each with
+   its n / N, which stays in view; within a kind, by the check's text, shown once in the code block (the first of the
+   page open), then where each refusal it stands for is, folded by default behind « Où, refus par refus »: that
+   summary is the button that unfolds the list (the author's decision of 2026-11-11). The folds are runward-fleet's
+   own <details>: no script, and not a byte or an attribute of its HTML is changed */
 .lecture [data-role="problems"] [data-role="refusal-kinds"]{ list-style:none; padding:0; margin:0; }
-.lecture [data-role="refusal-kind"]{ margin:0; padding:14px 0; border-top:1px solid var(--line); }
+.lecture [data-role="refusal-kind"]{ display:grid; gap:10px; margin:0; padding:16px 0; border-top:1px solid var(--line); }
 .lecture [data-role="refusal-kind"]:first-child{ border-top:0; padding-top:0; }
-.lecture [data-role="refusal-text"]{ margin:8px 0 0; }
-.lecture [data-role="refusal-text"] + [data-role="refusal-text"]{ margin-top:14px; }
-.lecture [data-reading] summary{ cursor:pointer; width:fit-content; max-width:100%; padding:3px 0; border-radius:var(--r-mark); }
-.lecture details[data-role="detail"]{ display:block; padding:6px 12px; }
+.lecture [data-role="refusal-kind"]:last-child{ padding-bottom:0; }
+.lecture [data-role="refusal-kind"] > *{ margin:0; min-width:0; }
+.lecture [data-role="refusal-text"]{ display:grid; gap:8px; margin:0; }
+.lecture [data-role="refusal-text"] > *{ margin:0; min-width:0; }
+.lecture [data-reading] summary{ cursor:pointer; list-style:none; width:auto; max-width:none; border-radius:var(--r-thumb); }
+.lecture [data-reading] summary::-webkit-details-marker{ display:none; }
+.lecture details[data-role="detail"]{ display:block; padding:8px 12px; }
 .lecture details[data-role="detail"][open]{ padding-bottom:10px; }
-.lecture details[data-role="detail"][open] > [data-role="detail-label"]{ margin:0 0 4px; }
-.lecture [data-role="detail-label"] .n{ border-bottom-color:var(--term-soft); }
+.lecture details[data-role="detail"] > summary{ display:block; margin:0; }
+.lecture details[data-role="detail"] > summary::after{ display:inline-block; margin:0 0 0 10px; }
+.lecture details[data-role="detail"][open] > summary{ margin:0 0 6px; }
+.lecture [data-role="detail-label"] .n{ border-bottom:0; }
 .lecture [data-role="detail-label"]:focus-visible{ outline-color:var(--term-ink); }
-.lecture [data-role="where"]{ margin:6px 0 0; }
-.lecture [data-role="where-label"]{ font-size:var(--fs-ui); line-height:1.45; color:var(--text-2); }
-.lecture [data-role="refusals"]{ padding-left:1.6em; margin:4px 0 0; }
+.lecture [data-role="where"]{ margin:0; }
+.lecture [data-role="where"][open] > summary{ margin-bottom:0; }
+.lecture summary[data-role="where-label"]{ display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:40px; padding:6px 12px; border:1px solid var(--line-2); border-radius:var(--r-notice); background:var(--bg); font-size:var(--fs-body); font-weight:var(--fw-strong); line-height:1.45; color:var(--text); user-select:none; }
+/* the chevron of a fold, drawn (two strokes), turned when it is open */
+.lecture [data-reading] summary::after{ content:""; flex:none; width:7px; height:7px; margin:0 4px; border:solid currentColor; border-width:0 1.5px 1.5px 0; transform:translateY(-2px) rotate(45deg); }
+.lecture [data-reading] details[open] > summary::after{ transform:translateY(2px) rotate(225deg); }
+.lecture [data-role="refusals"]{ padding-left:1.8em; margin:10px 0 0; display:grid; gap:6px; }
 .lecture [data-role="refusals"] ::marker{ color:var(--text-2); font-variant-numeric:tabular-nums; }
-.lecture [data-role="refusals"] > [data-role="problem"]{ font-size:var(--fs-ui); line-height:1.45; margin:6px 0 0; padding:0; border:0; overflow-wrap:anywhere; }
+.lecture [data-role="problem"]{ font-size:var(--fs-ui); line-height:1.5; margin:0; padding:0; border:0; overflow-wrap:anywhere; }
 .lecture [data-role="problem"] code{ word-break:normal; overflow-wrap:anywhere; }
 .lecture [data-role="sentence"]{ font-size:var(--fs-body); line-height:1.45; font-weight:var(--fw-strong); }
-.lecture [data-role="detail"]{ display:grid; gap:4px; background:var(--term); color:var(--term-soft); border-radius:var(--r-panel); padding:10px 12px; font-size:var(--fs-small); line-height:1.5; }
-.lecture [data-role="detail"] > *{ margin:0; }
+.lecture [data-role="detail"]{ background:var(--term); color:var(--term-soft); border-radius:var(--r-panel); padding:10px 12px; font-size:var(--fs-small); line-height:1.5; }
+.lecture [data-role="detail"] > p{ margin:0; }
 .lecture [data-role="detail-label"]{ font-size:var(--fs-small); color:var(--term-soft); }
 .lecture [data-role="location"]{ font-size:var(--fs-small); color:var(--term-soft); overflow-wrap:anywhere; }
 .lecture [data-role="location"] code{ word-break:normal; overflow-wrap:anywhere; color:var(--term-ink); }

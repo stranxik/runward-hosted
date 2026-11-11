@@ -12,7 +12,8 @@ import { memoryObjects } from "../../src/adapters/objects/objects.js";
 import { manualClock } from "../../src/adapters/system/clock.js";
 import { silentLog } from "../../src/adapters/system/log.js";
 import { githubVerifier } from "../../src/adapters/oidc/github.js";
-import { FONTS, MODULES, modulesFolder } from "../../src/http/assets.js";
+import { FONTS, MODULES, modulesFolder, buildAssets } from "../../src/http/assets.js";
+import { fleetPin } from "../../src/adapters/fleet/assembler.js";
 import { fakeAuthn, testJwk, sha, SEND_SHA } from "../helpers.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
@@ -124,4 +125,38 @@ test("the modules' folder is named by every name and every byte: one byte or one
   assert.notEqual(modulesFolder([a[0], ["views/base.js", Buffer.from("export const x = 2;\n")]]), name, "one byte");
   assert.notEqual(modulesFolder([a[0], ["views/other.js", a[1][1]]]), name, "one name");
   assert.notEqual(modulesFolder([["app.js", Buffer.from("import \"./views/base.js\";\nviews/base.js")], ["", Buffer.from("export const x = 1;\n")]]), name, "bytes moved across the boundary of two files");
+});
+
+// ADR-0024: the archive pinned at main@d052814 ships two modules the app does not show yet (ui/mission.js, the
+// path, the portfolio by step and the series; ui/documents.js, the documents). Their screens are a later lot:
+// until then nothing of them is served, and the two files the app does take from the package ask for nothing more.
+/** What a served file of the pinned package would make a browser fetch: an import, a url(), an @import. */
+export const reaches = (text) => [...text.matchAll(/^\s*(?:import|export)\b[^;'"]*?\bfrom\s*["']([^"']+)["']|^\s*import\s*["']([^"']+)["']|\bimport\(\s*["']([^"']+)["']|url\(\s*["']?([^"')]+)|@import\s+["']([^"']+)/gm)].map((m) => m.slice(1).find(Boolean));
+test("the modules the pinned archive ships beside its views are not served, and what the app serves from the package reaches nothing", async () => {
+  const pkg = new URL("../../node_modules/runward-fleet/", import.meta.url);
+  const lock = JSON.parse(readFileSync(new URL("../../vendor/runward-fleet.lock.json", import.meta.url), "utf8"));
+  const shipped = Object.keys(lock.files).filter((f) => f.startsWith("ui/") && f.endsWith(".js"));
+  assert.deepEqual(shipped, ["ui/documents.js", "ui/mission.js", "ui/views.js"], "the scripts of the archive's ui/, from the lock");
+  const html = await (await get("/app")).text();
+  const viewsPath = /href="(\/assets\/views-[^"]+\.js)"/.exec(html)[1];
+  const fleetPath = /href="(\/assets\/fleet-[^"]+\.css)"/.exec(html)[1];
+  const views = await (await get(viewsPath)).text();
+  assert.equal(sha(Buffer.from(views)), lock.files["ui/views.js"], "the views served are the pinned ones");
+  assert.deepEqual(reaches(views), [], "views.js imports no module: the browser asks for no other file of the package");
+  const css = await (await get(fleetPath)).text();
+  assert.deepEqual(reaches(css).filter((u) => !/^(data:|%23)/.test(u)), [], "the fleet stylesheet names no file: its only url() is the inline grain, a data: image the policy already allows");
+  // every file the service serves (buildAssets, as src/main.js composes it), by its digest: none is one of the two modules
+  const built = buildAssets({ pin: fleetPin({ lockFile: new URL("../../vendor/runward-fleet.lock.json", import.meta.url).pathname }), commit: "c0ffee" });
+  assert.ok(built.files.has(viewsPath) && built.files.has(fleetPath), "the same files the socket serves");
+  const served = new Set([...built.files.values()].map((f) => sha(f.bytes)));
+  for (const f of ["ui/mission.js", "ui/documents.js"]) {
+    assert.equal(served.has(lock.files[f]), false, `${f} is not served`);
+    assert.equal(sha(readFileSync(new URL(f, pkg))), lock.files[f], `${f} is in the install, as the lock pins it`);
+    for (const p of [`/assets/${f.slice(3)}`, `/assets/${f}`, viewsPath.replace(/views-[^/]+$/, f.slice(3)), `/assets/app.0000000000000000/${f.slice(3)}`]) assert.equal((await get(p)).status, 404, p);
+  }
+  assert.ok(served.has(lock.files["ui/views.js"]), "the control: the views are among the files served");
+  // planted controls: an import, a dynamic import, a url() and an @import are each seen
+  assert.deepEqual(reaches('import { decide } from "./views.js";\nexport * from "./mission.js";\nimport "./x.js";\nconst m = await import("./documents.js");'), ["./views.js", "./mission.js", "./x.js", "./documents.js"]);
+  assert.deepEqual(reaches('@import "a.css";\n.x{ background:url(b.png); src:url("c.woff2"); }'), ["a.css", "b.png", "c.woff2"]);
+  assert.deepEqual(reaches(readFileSync(new URL("ui/mission.js", pkg), "utf8")), ["./views.js"], "the control on the real file: mission.js does import, so serving it alone would not be enough");
 });

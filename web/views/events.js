@@ -35,8 +35,6 @@ document.addEventListener("click", async (e) => {
   // the phone menu: its button, its veil; a link inside it closes it with the screen it opens (the shell's paint)
   if (what === "menu") { menu(); return; }
   if (what === "menu-close") { menu(false); return; }
-  // the refusals of a reading, folded by default: the heading unfolds its list, and folds it again
-  if (what === "fold") { S.unfolded = b.getAttribute("aria-expanded") === "true" ? null : (b.closest("[data-mission]")?.dataset.mission ?? ""); S.focusKey = "fold"; return rerender(); }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
   if (what === "confirm") return confirmGesture(k);
@@ -60,10 +58,9 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-// the keyboard: Escape closes the phone menu; Enter and Space press a heading that is a button (the fold)
+// the keyboard: Escape closes the phone menu
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && colonneEl.classList.contains("menu-ouvert")) { menu(false); document.getElementById("menub")?.focus(); return; }
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches?.('[role="button"][data-do]')) { e.preventDefault(); e.target.click(); }
+  if (e.key === "Escape" && colonneEl.classList.contains("menu-ouvert")) { menu(false); document.getElementById("menub")?.focus(); }
 });
 
 main.addEventListener("submit", async (e) => {

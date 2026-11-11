@@ -43,6 +43,7 @@
 	<testcase name="the shell's modules are served by a closed list under one folder named by their digest, immutable, the slot of the pinned views filled" classname="test"/>
 	<testcase name="a module off the list is answered 404: another name, the folder itself, another digest, the source folder" classname="test"/>
 	<testcase name="the modules' folder is named by every name and every byte: one byte or one name changed renames it (planted controls)" classname="test"/>
+	<testcase name="the modules the pinned archive ships beside its views are not served, and what the app serves from the package reaches nothing" classname="test"/>
 	<testcase name="the domain and the application keep their boundary" classname="test"/>
 	<testcase name="planted controls: an adapter imported by the domain, a package by the application, both fail" classname="test"/>
 	<testcase name="the charter: every script it names exists and can be run, and its shell scripts parse" classname="test"/>
@@ -73,6 +74,7 @@
 	<testcase name="« Vérifier par vous-même »: the command, built only from values that pass their pattern, never with an extension option" classname="test"/>
 	<testcase name="the checks received: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words" classname="test"/>
 	<testcase name="the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named" classname="test"/>
+	<testcase name="the grouped reading on the five real exports: refused first, n / N for every state, the refusals by kind then by the check's text, once, folded, none hidden" classname="test"/>
 	<testcase name="the service's lexicon: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
 	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue" classname="test"/>
 	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
@@ -352,9 +354,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 351 -->
+	<!-- tests 353 -->
 	<!-- suites 0 -->
-	<!-- pass 351 -->
+	<!-- pass 353 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

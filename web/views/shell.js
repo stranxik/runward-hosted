@@ -135,7 +135,6 @@ function nbsp(root) {
 }
 function after(v) {
   if (lang() === "fr") [main, bandEl, piedEl].forEach(nbsp);
-  fold();
   main.querySelectorAll("[data-verbatim], .md").forEach((el) => { if (/\b(the|and|is|not|of|to|does|it|no|that|this|are|be|has|by|for|or)\b/i.test(el.textContent)) el.setAttribute("lang", "en"); });
   main.querySelectorAll(".tw:not([tabindex])").forEach((el) => { el.tabIndex = 0; el.setAttribute("role", "region"); el.setAttribute("aria-label", mots().frame.scrollTable); });
   // a key may be carried twice (the language switch, in the header and on the trail's line of a phone): the one shown
@@ -143,20 +142,5 @@ function after(v) {
   const f = document.querySelector("[data-focus]") || keyed || (v.focus ? main.querySelector(v.focus) : null);
   (f ?? main).focus({ preventScroll: true });
   S.focusKey = null;
-}
-/**
- * The refusals of a reading are folded by default (the author's decision of 2026-11-11): runward-fleet's own heading
- * « Le détail, refus par refus » becomes the button that unfolds its list; the counts by kind stay above. Attributes
- * only are set on runward-fleet's HTML, never a byte of its content. What a reader unfolded stays so across a repaint.
- */
-function fold() {
-  const sec = main.querySelector('[data-reading] [data-role="problems"]');
-  const h = sec?.querySelector(":scope > h3"), ol = sec?.querySelector(":scope > ol");
-  if (!h || !ol) return;
-  const id = sec.closest("[data-mission]")?.dataset.mission ?? "";
-  const open = S.unfolded === id;
-  ol.id = "refus-detail"; ol.hidden = !open;
-  h.setAttribute("role", "button"); h.tabIndex = 0; h.dataset.do = "fold"; h.dataset.focusKey = "fold";
-  h.setAttribute("aria-expanded", String(open)); h.setAttribute("aria-controls", ol.id);
 }
 export function say(msg) { annonceEl.textContent = ""; setTimeout(() => { annonceEl.textContent = msg; }, 60); }
