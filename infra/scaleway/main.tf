@@ -173,6 +173,8 @@ locals {
   db_host  = var.database_host != "" ? var.database_host : local.pn.ip
   db_port  = local.pn.port
   # a password may hold any character: it is URL-encoded in the connection URL
+  # admin names the hoster's default database: `roles` acts on what the whole server shares, and opens its
+  # own session on the service database for the comparison of the grants (scripts/roles.mjs, 2026-11-11)
   db_url = { for k, v in {
     admin    = { user = "rw_admin", credential = var.operator_db_password_admin, database = "rdb" }
     rw_owner = { user = "rw_owner", credential = var.operator_db_password_rw_owner, database = local.database }
