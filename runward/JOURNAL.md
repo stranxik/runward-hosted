@@ -331,4 +331,3 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`, section "Third pass".
 - Decided: nothing by the session; ADR-0029 and ADR-0030 stay proposed until the author accepts them.
 - Next: the author's acceptance; then the implementation of the port, written and reviewed on the critical model.
-
