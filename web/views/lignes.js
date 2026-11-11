@@ -19,12 +19,22 @@ export const nomLong = (m) => m.name;
 export const nomCourt = (m) => (m.path && m.path !== "." ? m.path.split("/").pop() : m.name.split("/").pop());
 export const triees = () => (S.index ? [...S.index.missions].sort((a, b) => (ORDER[verdictOf(a)] ?? 9) - (ORDER[verdictOf(b)] ?? 9)) : []);
 export const ligne = (id) => S.status?.lines.find((l) => l.mission === id) ?? null;
-/** A gate as runward writes it (« 3 · Floor »), said with its phase's name; text, escaped by its caller. */
+/**
+ * A gate as runward writes it, said with its phase's name in the reader's language; text, escaped by its caller.
+ * runward writes « 3 · Floor » for one gate, and « deliverables filled, gate red at Floor, Govern » when the pieces
+ * are there but the control refuses at one or more steps: both are said with the phases' names, never as written.
+ */
 export function porte(gate) {
   const W = mots();
   if (!gate || gate === "all gates passed") return W.lines.allGates;
   const g = /^(\d+)\s*·\s*([A-Za-z]+)/.exec(gate);
-  return g ? W.lines.gate(g[1], W.phase[GATE_KEY[g[2].toLowerCase()]] ?? g[2]) : gate;
+  if (g) return W.lines.gate(g[1], W.phase[GATE_KEY[g[2].toLowerCase()]] ?? g[2]);
+  const red = /gate red at\s+(.+)$/i.exec(gate);
+  if (red) {
+    const names = red[1].split(",").map((p) => p.trim()).filter(Boolean).map((p) => W.phase[GATE_KEY[p.split(/\s+/)[0].toLowerCase()]] ?? p);
+    if (names.length) return W.lines.steps(names.length > 1 ? `${names.slice(0, -1).join(", ")}${W.lines.and}${names.at(-1)}` : names[0], names.length > 1);
+  }
+  return gate;
 }
 const manquants = (m) => (typeof m.latest === "object" ? (m.latest.deliverables?.list ?? []).filter((d) => d.state !== "filled") : []);
 export const sourceDe = (m) => (typeof m.latest === "object" ? S.index.sources.find((s) => s.id === m.latest.src)?.path : null);

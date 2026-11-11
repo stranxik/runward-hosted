@@ -103,9 +103,9 @@ export const MOTS = {
     refusal: { "workflow-not-pinned": "workflow appelant non déclaré", "content-not-consented": "contenu non consenti", "repository-pending": "dépôt en attente de votre confirmation", "repository-not-declared": "dépôt non déclaré ou retiré", "owner-changed": "propriétaire changé", "private-path": "chemin privé", "index-build-refused": "export que runward-fleet ne sait pas assembler", "index-rule-broken": "règle de vue cassée" },
     // ---- the lines the dashboard, a mission and the sidebar say (web/views/lignes.js)
     lines: {
-      allGates: "toutes les portes", gate: (n, phase) => `porte ${n}, ${phase}`, and: " et ",
-      blocked: (gate, n, list) => `Bloquée à la ${gate} : ${n} livrable${s(n)} absent${s(n)}, dont ${list}.`,
-      refusedAt: (gate) => `Refusée à la ${gate} : des lignes de conformité restent ouvertes.`,
+      allGates: "toutes les étapes", gate: (n, phase) => `étape ${n}, ${phase}`, steps: (list, many) => `${many ? "étapes" : "étape"} ${list}`, and: " et ",
+      blocked: (gate, n, list) => `Bloquée (${gate}) : ${n} pièce${s(n)} exigée${s(n)} manquante${s(n)}, dont ${list}.`,
+      refusedAt: (gate) => `Refusée par le contrôle (${gate}) : des exigences de l'équipe ne sont pas encore prouvées.`,
       levelNotMet: "Toutes les portes sont franchies, mais rien n'y est vérifié mécaniquement : le niveau demandé n'est pas atteint.",
       lastRefused: (at, seq, why) => `Aucun envoi accepté. Le dernier, à ${at} (entrée ${seq}), n'a pas été accepté : ${why}.`,
       noUpload: "Aucun envoi accepté pour cette mission déclarée : c'est un constat, pas un filtre.",
@@ -442,9 +442,9 @@ export const MOTS = {
     },
     refusal: { "workflow-not-pinned": "calling workflow not declared", "content-not-consented": "content not consented", "repository-pending": "repository waiting for your confirmation", "repository-not-declared": "repository not declared, or removed", "owner-changed": "owner changed", "private-path": "private path", "index-build-refused": "an export runward-fleet cannot assemble", "index-rule-broken": "a view rule broken" },
     lines: {
-      allGates: "all gates", gate: (n, phase) => `gate ${n}, ${phase}`, and: " and ",
-      blocked: (gate, n, list) => `Blocked at ${gate}: ${n} deliverable${pl(n)} missing, including ${list}.`,
-      refusedAt: (gate) => `Refused at ${gate}: conformance rows are still open.`,
+      allGates: "all steps", gate: (n, phase) => `step ${n}, ${phase}`, steps: (list, many) => `${many ? "steps" : "step"} ${list}`, and: " and ",
+      blocked: (gate, n, list) => `Blocked (${gate}): ${n} required item${pl(n)} missing, including ${list}.`,
+      refusedAt: (gate) => `Refused by the control (${gate}): some of the team's requirements are not proven yet.`,
       levelNotMet: "All gates are passed, but nothing in them is checked mechanically: the level asked for is not met.",
       lastRefused: (at, seq, why) => `No upload accepted. The last one, at ${at} (entry ${seq}), was not accepted: ${why}.`,
       noUpload: "No upload accepted for this declared mission: a finding, not a filter.",

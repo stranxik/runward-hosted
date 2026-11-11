@@ -355,3 +355,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the author in chat, 2026-11-11: "j'accepte ADR-0029 et ADR-0030", after the three review passes recorded in `runward/governance/reviews/2026-11-11_adr-review_49bf59d.md`.
 - Decided: ADR-0029 accepted; ADR-0030 accepted as a direction, no rule before a real Entra token is read (the author).
 - Next: the implementation of the forge port and the GitLab adapter, written and reviewed on the critical model, witnessed on the self-managed GitLab instance.
+
+## 2026-11-12 - a refusal at several steps is said in words, without English or "conformité"
+
+- Done: when runward writes the gate as « deliverables filled, gate red at Floor, Govern », the app now says it with the phases' names (« étapes Plancher et Gouverner »), as it already did for « 3 · Floor ». The refusal's sentence reads « Refusée par le contrôle (…) : des exigences de l'équipe ne sont pas encore prouvées. » instead of « Refusée à la deliverables filled, gate red at Floor, Govern : des lignes de conformité restent ouvertes. », found on the dashboard and the technical detail on 2026-11-12 by an audit of the app's wording. « porte » becomes « étape » and « livrable absent » « pièce exigée manquante » in the same lines.
+- Evidence: `test/unit/porte.test.js`, 3 cases (both forms in French and English on the real fixture `demo-renamed`; the sentence carries no English and no banned word; planted: a gate in neither form is returned as written).
+- Decided: nothing by the session.
+- Next: the wording pass of the app's simplification, if the author chooses it.

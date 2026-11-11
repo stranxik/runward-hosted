@@ -259,6 +259,9 @@
 	<testcase name="C43: an index of another archive after one rebuilt here is red, with its cause: a rollback to an earlier pin" classname="test"/>
 	<testcase name="C43, C44: the witness reader's words are same, different and not rebuilt here, with counts; it passes the lock's archives to the replay" classname="test"/>
 	<testcase name="C44: the replay CLI exits 0 when every index rebuilt here is the same, 1 on a difference, 2 when it cannot tell" classname="test"/>
+	<testcase name="a gate refused at several steps is said with the phases' names, in French and in English" classname="test"/>
+	<testcase name="the refusal's sentence carries no English and none of the app's banned words" classname="test"/>
+	<testcase name="planted: a gate in neither form is returned as written" classname="test"/>
 	<testcase name="the 5 newest tags stay, the older ones go, whatever order the API answers in" classname="test"/>
 	<testcase name="a digest still named by a container or the rollback target is never deleted" classname="test"/>
 	<testcase name="nothing is guessed: an unreadable tag or protection stops the purge" classname="test"/>
@@ -364,9 +367,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 363 -->
+	<!-- tests 366 -->
 	<!-- suites 0 -->
-	<!-- pass 363 -->
+	<!-- pass 366 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
