@@ -1,0 +1,146 @@
+<!-- ======================================================= Formats et référentiels : l'étagère des formats.
+     Source unique : 2026-11-10_fiche_formats_et_conformite.md, énoncés [vérifié] et [lu dans la doc] seulement.
+     Aucun logo : la fiche demande de relire chaque règle de marque à la main avant d'en afficher un. -->
+<section class="tet tet-f">
+  <div class="nue" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="points" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="wrap tet-i">
+    <p class="kick" t>Formats et référentiels ||| Formats and frameworks</p>
+    <h1 t>Des pièces que vos outils savent lire. ||| Pieces your tools can read.</h1>
+    <p class="sous" t>runward écrit son verdict dans des formats ouverts. Ce sont des pièces à l’appui d’un examen : la conformité reste celle de l’entité évaluée. ||| runward writes its verdict in open formats. They are supporting pieces for an assessment: compliance belongs to the assessed entity.</p>
+    <ol class="temps">
+      <li><a href="#formats"><span class="no">01</span><span t>Les formats ||| The formats</span></a></li>
+      <li><a href="#referentiels"><span class="no">02</span><span t>Les référentiels ||| The frameworks</span></a></li>
+      <li><a href="#usages"><span class="no">03</span><span t>Usages concrets ||| Concrete uses</span></a></li>
+    </ol>
+  </div>
+</section>
+
+<section class="sec porte etagere" id="formats">
+  <div class="trame" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="tete rv-s">
+      <div><p class="kick" t>Les formats ||| The formats</p>
+      <h2 t>Une commande, un format, un lecteur. ||| One command, one format, one reader.</h2></div>
+      <p class="lede" t>Ces sorties viennent de la commande runward, dans votre chaîne de livraison. Aucune n’appelle le réseau. <b>L’app, elle, reçoit aujourd’hui le seul compte rendu du contrôle.</b> ||| These outputs come from the runward command, in your delivery chain. None calls the network. <b>The app itself receives only the check’s report today.</b></p>
+    </div>
+
+    <div class="vue rv-s">
+      <div class="fmt-t" aria-hidden="true"><span t>Format ||| Format</span><span t>Ce qu’il porte ||| What it carries</span><span t>Qui le lit ||| Who reads it</span></div>
+      <div class="fmt">
+        <div class="fmt-n"><b t>JSON du contrôle ||| The check’s JSON</b><code>runward check --strict --json</code></div>
+        <p t>Le verdict, l’état de chaque pièce du dossier, les écarts un par un. ||| The verdict, the state of each document of the record, the gaps one by one.</p>
+        <p t>L’app runward : c’est le fichier qu’elle reçoit. ||| The runward app: this is the file it receives.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b>in-toto Statement v1</b><code>runward check --strict --attest</code></div>
+        <p t>Le verdict, lié à l’empreinte du dossier et des preuves citées. ||| The verdict, bound to the digest of the record and of the cited evidence.</p>
+        <p><span t>La commande ||| The command</span> <code>runward verify</code><span t>, qui le rejoue hors ligne. ||| , which replays it offline.</span></p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b>SARIF 2.1.0</b><code>runward check --strict --sarif</code></div>
+        <p t>Une annotation par cause de refus, sur la ligne du dossier concernée. ||| One annotation per cause of refusal, on the line of the record concerned.</p>
+        <p t>Validé contre le schéma SARIF 2.1.0 d’OASIS. Vous le téléversez vous-même dans votre forge. ||| Validated against the OASIS SARIF 2.1.0 schema. You upload it to your forge yourself.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b>OSCAL 1.2.3</b><code>runward compliance eu-ai-act</code></div>
+        <p t>Une définition de composant, au format du NIST : dix exigences, les catégories ASI01 à ASI10 de l’OWASP, chacune avec un statut dérivé du contrôle. ||| A component definition, in the NIST format: ten requirements, the OWASP categories ASI01 to ASI10, each with a status derived from the check.</p>
+        <p t>compliance-trestle 4.2.0 le charge à chaque exécution de la chaîne de runward. ||| compliance-trestle 4.2.0 loads it on every run of runward’s own chain.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b t>Brouillon de préparation ||| Readiness draft</b><code>runward compliance iso-42001</code></div>
+        <p t>Un brouillon par référentiel : ce que runward fournit, et ce qui reste à l’entité. La commande le dit elle-même : « a readiness draft, never a compliance claim ». ||| One draft per framework: what runward provides, and what remains with the entity. The command says it itself: “a readiness draft, never a compliance claim”.</p>
+        <p t>Un évaluateur. ||| An assessor.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b t>Résumé de vérification SLSA ||| SLSA verification summary</b><code>runward check --strict --vsa --resource-uri pkg:npm/request-triage@1.0.0</code></div>
+        <p t>Un résumé du verdict pour un moteur de politique. Il n’affirme aucun niveau SLSA. ||| A summary of the verdict for a policy engine. It asserts no SLSA level.</p>
+        <p t>Recette documentée : une politique Kyverno d’exemple. ||| Documented recipe: an example Kyverno policy.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b t>Rapport de livraison ||| Delivery report</b><code>runward report</code></div>
+        <p t>Une page HTML autonome : le verdict, pour un lecteur sans terminal ni compte. ||| A standalone HTML page: the verdict, for a reader with no terminal and no account.</p>
+        <p t>Un évaluateur, seul. ||| An assessor, alone.</p>
+      </div>
+      <div class="fmt">
+        <div class="fmt-n"><b t>Sceau des preuves ||| Evidence seal</b><code>runward check --freeze</code></div>
+        <p t>L’empreinte de chaque preuve citée. Une modification ultérieure fait refuser le contrôle. ||| The digest of each cited piece of evidence. A later change makes the check refuse.</p>
+        <p><span t>La commande ||| The command</span> <code>runward check --strict</code>.</p>
+      </div>
+    </div>
+
+    <ul class="notes rv-s">
+      <li><i class="f clean" aria-hidden="true"></i><span t>Aucune de ces sorties n’est signée par runward. La signature est votre geste, avec votre propre clé. ||| None of these outputs is signed by runward. Signing is your gesture, with your own key.</span></li>
+      <li><i class="f clean" aria-hidden="true"></i><span t>runward lit aussi vos rapports comme preuves : JUnit, SARIF, couverture, et un inventaire logiciel au format CycloneDX. Il les lit ; il ne les produit pas pour votre projet. ||| runward also reads your reports as evidence: JUnit, SARIF, coverage, and a software bill of materials in CycloneDX format. It reads them; it does not produce them for your project.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================================================= Les référentiels : trois lentilles, un même fond -->
+<section class="sec refs" id="referentiels">
+  <div class="wrap">
+    <div class="tete rv-s">
+      <div><p class="kick" t>Les référentiels ||| The frameworks</p>
+      <h2 t>Un référentiel est une étiquette et un brouillon. ||| A framework is a label and a draft.</h2></div>
+      <p class="lede" t>Le fichier OSCAL garde toujours les mêmes contrôles : les dix catégories de l’OWASP pour les applications agentiques. Le référentiel choisi change le brouillon qui l’accompagne, pas ces contrôles. ||| The OSCAL file always keeps the same controls: the ten OWASP categories for agentic applications. The chosen framework changes the draft that comes with it, not those controls.</p>
+    </div>
+    <ul class="trois rv-s">
+      <li><span class="no">iso-42001</span><b>ISO/IEC 42001:2023</b><span t>Des preuves d’ingénierie qu’un programme de management de l’IA peut utiliser comme intrants. ||| Engineering evidence that an AI management programme can use as inputs.</span></li>
+      <li><span class="no">nist-ai-rmf</span><b>NIST AI RMF 1.0</b><span t>Un cadre volontaire. Le brouillon rattache les décisions écrites, le verdict et les règles à ses fonctions. ||| A voluntary framework. The draft ties the written decisions, the verdict and the rules to its functions.</span></li>
+      <li><span class="no">eu-ai-act</span><b t>AI Act, règlement (UE) 2024/1689 ||| AI Act, Regulation (EU) 2024/1689</b><span t>Le brouillon alimente la documentation technique de l’annexe IV, en particulier son point 2 : les choix de conception et leur justification. Il nomme ce qui reste au fournisseur. ||| The draft feeds the technical documentation of Annex IV, in particular its point 2: the design choices and their justification. It names what remains with the provider.</span></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================================================= Usages concrets : neuf situations, chacune avec sa limite -->
+<section class="sec porte usages" id="usages">
+  <div class="trame" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="tete rv-s">
+      <div><p class="kick" t>Usages concrets ||| Concrete uses</p>
+      <h2 t>Neuf situations, chacune avec sa limite. ||| Nine situations, each with its limit.</h2></div>
+      <p class="lede" t>Ce que vous avez en main dans chaque cas, la commande qui le produit, et jusqu’où cela va. ||| What you hold in each case, the command that produces it, and how far it goes.</p>
+    </div>
+    <ul class="us rv-s">
+      <li><span class="no">01</span><b t>Comité de changement ||| Change advisory board</b>
+        <p t>Un changement produit par un agent arrive en comité. Vous avez un verdict rejouable sur le commit, avec les écarts par cause. ||| A change produced by an agent reaches the board. You have a replayable verdict on the commit, with the gaps by cause.</p>
+        <code>runward report --format md</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Ce n’est pas un contrôle d’approbation indépendant : runward ne lit pas les approbations de la forge. ||| It is not an independent approval control: runward does not read the forge’s approvals.</span></p></li>
+      <li><span class="no">02</span><b t>Revue d’architecture ||| Architecture review</b>
+        <p t>La revue veut les décisions structurantes et ce qui les ferait rouvrir. Vous avez le journal des décisions écrites, avec leurs dates. ||| The review wants the structuring decisions and what would reopen them. You have the journal of written decisions, with their dates.</p>
+        <code>runward status --json</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>La pièce vient de la commande. ||| The piece comes from the command.</span></p></li>
+      <li><span class="no">03</span><b t>Audit interne ||| Internal audit</b>
+        <p t>Des mois plus tard, l’audit demande si la preuve citée est encore celle qui a été contrôlée. Vous avez un sceau, et une attestation qui se rejoue hors ligne. ||| Months later, the audit asks whether the cited evidence is still the one that was checked. You have a seal, and an attestation that replays offline.</p>
+        <code>runward verify verdict.intoto.json</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Le sceau n’est pas signé : il détecte une dérive, pas une réécriture par qui peut modifier le fichier. La relecture compare le dossier à l’empreinte ; elle ne vérifie aucune signature. ||| The seal is not signed: it detects drift, not a rewrite by someone who can change the file. The replay compares the record to the digest; it verifies no signature.</span></p></li>
+      <li><span class="no">04</span><b t>Dossier AI Act ||| AI Act file</b>
+        <p t>Un fournisseur constitue la documentation technique de l’annexe IV. Vous avez un brouillon qui en alimente le point 2 depuis les décisions écrites. ||| A provider builds the technical documentation of Annex IV. You have a draft that feeds its point 2 from the written decisions.</p>
+        <code>runward compliance eu-ai-act</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Un brouillon de préparation, pas une évaluation. Les journaux d’exécution viennent du système déployé. ||| A readiness draft, not an assessment. Execution logs come from the deployed system.</span></p></li>
+      <li><span class="no">05</span><b t>Contrôle des changements, dans la finance ||| Change control, in finance</b>
+        <p t>Vous devez montrer comment chaque changement a été décidé et vérifié. Vous avez, par changement, la décision, des preuves qui se résolvent et un verdict rejouable. ||| You must show how each change was decided and verified. You have, per change, the decision, evidence that resolves and a replayable verdict.</p>
+        <code>runward check --strict --json</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Des pièces à verser à votre propre dossier. Aucune lecture propre au règlement DORA n’est livrée. ||| Pieces to add to your own file. No reading specific to the DORA regulation is delivered.</span></p></li>
+      <li><span class="no">06</span><b t>Évaluation d’un fournisseur ||| Supplier assessment</b>
+        <p t>Un intégrateur livre du code produit par des agents. Vous exigez le commit, la version et la commande exacte, et vous rejouez le contrôle vous-même. ||| An integrator delivers code produced by agents. You require the commit, the version and the exact command, and you replay the check yourself.</p>
+        <code>npx runward@0.46.0 check --strict --json</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Sur un dépôt privé, il faut un accès en lecture pour rejouer. ||| On a private repository, replaying needs read access.</span></p></li>
+      <li><span class="no">07</span><b t>Reprise par une autre équipe ||| Takeover by another team</b>
+        <p t>Une équipe hérite d’un système. Le contrôle exige la procédure de reprise et la note de passation avant de laisser passer. ||| A team inherits a system. The check requires the recovery runbook and the handover note before it lets anything through.</p>
+        <code>runward check</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Il vérifie que ces pièces existent et sont remplies. Leur qualité reste votre jugement. ||| It verifies that these documents exist and are filled. Their quality remains your judgement.</span></p></li>
+      <li><span class="no">08</span><b t>Outil de gouvernance et de risque ||| Governance and risk tool</b>
+        <p t>L’équipe conformité veut une pièce lisible par une machine, pas un PDF. Vous avez un fichier OSCAL 1.2.3. ||| The compliance team wants a machine-readable piece, not a PDF. You have an OSCAL 1.2.3 file.</p>
+        <code>runward compliance iso-42001 -o preuves</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Outil éprouvé : compliance-trestle. L’import dans votre propre outil reste votre étape de vérification. ||| Proven tool: compliance-trestle. The import into your own tool remains your verification step.</span></p></li>
+      <li><span class="no">09</span><b t>Admission d’un déploiement ||| Deployment admission</b>
+        <p t>La production ne doit accepter que ce dont le contrôle est passé. Vous avez un résumé de vérification que vous signez avec votre clé. ||| Production must accept only what passed the check. You have a verification summary that you sign with your key.</p>
+        <code>runward check --strict --vsa --resource-uri pkg:npm/request-triage@1.0.0</code>
+        <p class="lim"><span t>Limite ||| Limit</span><span t>Recette documentée, avec une politique Kyverno d’exemple. Elle n’est pas rejouée dans la chaîne de runward. ||| Documented recipe, with an example Kyverno policy. It is not replayed in runward’s own chain.</span></p></li>
+    </ul>
+  </div>
+</section>
+
+<!--inclure _appel.html-->

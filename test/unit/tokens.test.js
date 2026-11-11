@@ -9,7 +9,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
-import { fleetCss, FONTS, MODULES } from "../../src/http/assets.js";
+import { fleetCss, FONTS, MODULES, SITE_FILES } from "../../src/http/assets.js";
+import { renderSite, siteData } from "../../src/http/site.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const PIN = new URL("../../node_modules/runward-fleet/", import.meta.url).pathname;
@@ -32,6 +33,14 @@ const served = () => ({
   "web/famille.css": readFileSync(`${WEB}famille.css`, "utf8"),
   "fleet css as served": fleetCss(PIN),
 });
+/** The public site's files as served (ADR-0022): its stylesheet and scripts, and each page as the server renders it. */
+const siteServed = () => {
+  const links = { famille: "/assets/famille.x.css", couche: "/assets/couche-runward-app.x.css", css: "/assets/site.x.css", aiguillage: "/assets/aiguillage.x.js", js: "/assets/site.x.js" };
+  return {
+    ...Object.fromEntries(SITE_FILES.map(([f]) => [`web/site/${f}`, readFileSync(`${WEB}site/${f}`, "utf8")])),
+    ...Object.fromEntries(renderSite({ links, data: siteData() }).pages.map(([p, html]) => [`the page ${p}`, html])),
+  };
+};
 
 // ---- the audit of a layer, written once and run on the real layer and on planted ones
 
@@ -107,6 +116,25 @@ export function auditLayer(css) {
 test("no literal colour outside web/couche-runward-app.css", () => {
   const faults = Object.entries(served()).flatMap(([f, t]) => literalColours(t).map((c) => `${f}: ${c}`));
   assert.deepEqual(faults, []);
+});
+
+test("no literal colour in the public site either: its stylesheet, its scripts and its pages take every colour from the layer (ADR-0022)", () => {
+  const site = siteServed();
+  assert.equal(Object.keys(site).length, SITE_FILES.length + 9, "the guard must see the site's three files and its nine pages");
+  const faults = Object.entries(site).flatMap(([f, t]) => literalColours(t).map((c) => `${f}: ${c}`));
+  assert.deepEqual(faults, []);
+});
+
+test("every custom property the public site uses is defined by the family's structure, the layer, the site's stylesheet, or set by its pages and its script", () => {
+  const site = siteServed();
+  const css = site["web/site/site.css"];
+  const defs = new Set([layer(), readFileSync(`${WEB}famille.css`, "utf8"), css, ...Object.values(site)].flatMap((t) => [...t.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1])));
+  for (const t of Object.values(site)) for (const m of t.matchAll(/setProperty\("(--[a-z0-9-]+)"/g)) defs.add(m[1]);
+  const used = new Set(Object.values(site).flatMap((t) => [...t.matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1])));
+  assert.ok(used.size >= 40, "the guard must see the site's real uses");
+  assert.deepEqual([...used].filter((v) => !defs.has(v)), []);
+  // the site's stylesheet holds no theme of its own: every value that changes with the theme is the layer's
+  assert.equal(/:root\[data-theme="dark"\]\s*\{/.test(css.replace(/@media print\{[\s\S]*?\n\}/, "")), false, "no dark block in site.css outside its print rules");
 });
 
 test("planted control: a literal colour is seen", () => {

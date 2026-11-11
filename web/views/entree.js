@@ -1,13 +1,12 @@
 // Entry (signed out): the sign-in and its states. Kept plain on purpose: its layout is being redesigned by
-// the author (2026-11-06); its routes, data and states are complete.
+// the author (2026-11-06); its routes, data and states are complete. The public home is no longer a screen of
+// the shell: it is the public site at / (web/site/, ADR-0022), and #/entree alone opens the sign-in.
 import { S, esc } from "./base.js";
 import { act, FORGE, PK_PLAIN, mk, go, head } from "./marks.js";
-import { viewAccueil } from "./accueil.js";
 
 export function viewEntree(sub) {
   const intent = S.intent && sub === "connexion" ? `<p class="intent" role="note">Connectez-vous pour ouvrir cette page : <code>${esc(S.intent)}</code>. Vous y reviendrez juste après.</p>` : "";
   const signin = `<div class="actions">${act("signin", "Se connecter avec ma passkey", { k: "device" })}${act("signin", "Ma passkey est sur mon téléphone", { q: true, k: "phone" })}</div>`;
-  if (sub === "") return viewAccueil();
   const V = {
     connexion: ["Connexion", `<h1 class="v">Ce que vos missions prouvent, au même endroit.</h1>
       <p class="face">Chaque CI envoie ce que runward a écrit. Vous lisez la vue de runward-fleet, la même que chez vous, derrière votre passkey.</p>
@@ -40,7 +39,7 @@ export function viewEntree(sub) {
     fin: ["Session expirée", `<h1 class="v">Votre session a pris fin.</h1>
       <p class="face">Après 12 heures sans activité, ou 7 jours au plus, la session se ferme. Reconnectez-vous ; vous reviendrez où vous étiez.</p>${signin}`],
   };
-  const v = V[sub];
+  const v = V[sub || "connexion"];
   if (!v) return null;
   return { title: v[0], key: "entree", signed: "out", html: `${head("runward hébergé · connexion", "par passkey")}<section>${v[1]}</section>` };
 }

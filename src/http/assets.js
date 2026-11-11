@@ -7,9 +7,14 @@
 // token blocks removed, so web/couche-runward-app.css (the app's layer, ADR "app layer") is the only source
 // of values. The app's fonts (Geist, Geist Mono, SIL OFL 1.1) are served from web/fonts/, by a closed list:
 // nothing else in that folder, and nothing outside it, is ever served.
+//
+// The public site (ADR-0022): the landing at / and its pages are rendered here once, at start (src/http/site.js),
+// from web/site/; its three files (SITE_FILES) are served like the shell's, named by their digest, and its pages
+// link the very files the shell links for the family's structure and the app's layer, and the same fonts.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { renderSite, siteData } from "./site.js";
 
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const WEB = new URL("../../web/", import.meta.url).pathname;
@@ -47,7 +52,6 @@ export const MODULES = Object.freeze([
   "views/gestures.js",
   "views/events.js",
   // ---- the screens, one file each
-  "views/accueil.js",
   "views/entree.js",
   "views/lien.js",
   "views/reprise.js",
@@ -74,6 +78,18 @@ export const MODULES = Object.freeze([
   "views/acces/effacer.js",
 ]);
 const SCRIPT = "text/javascript; charset=utf-8";
+const CSS = "text/css; charset=utf-8";
+
+/**
+ * The files of web/site/ the public pages load, and only these: [file, its key in the pages' links, its media type].
+ * The template, the page fragments and the data are read to render the pages; they are never served as files.
+ * test/unit/site.test.js fails on a script or a stylesheet of web/site/ that is not listed.
+ */
+export const SITE_FILES = Object.freeze([
+  ["site.css", "css", CSS],
+  ["aiguillage.js", "aiguillage", SCRIPT],
+  ["site.js", "js", SCRIPT],
+]);
 
 /** The folder the modules are served under: one digest over every name and every byte, in the list's order. */
 export function modulesFolder(modules) {
@@ -123,10 +139,10 @@ export function buildAssets({ pin, commit }) {
   const add = (name, ext, bytes, type) => { const p = `/assets/${name}.${sha(bytes).slice(0, 16)}.${ext}`; files.set(p, { bytes, type, immutable: true }); return p; };
   const views = readFileSync(join(pin.dir, "ui", "views.js"));
   const viewsPath = add(`views-${pin.version}`, "js", views, SCRIPT);
-  const famille = add("famille", "css", readFileSync(join(WEB, "famille.css")), "text/css; charset=utf-8");
-  const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), "text/css; charset=utf-8");
-  const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), "text/css; charset=utf-8");
-  const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), "text/css; charset=utf-8");
+  const famille = add("famille", "css", readFileSync(join(WEB, "famille.css")), CSS);
+  const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), CSS);
+  const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), CSS);
+  const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), CSS);
   // the modules: the slot of the pinned views filled first, then one digest over every name and every byte
   const modules = MODULES.map((f) => [f, Buffer.from(readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(viewsPath)))]);
   const folder = modulesFolder(modules);
@@ -136,5 +152,10 @@ export function buildAssets({ pin, commit }) {
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
     .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
     .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
-  return { files, page, viewsSha256: sha(views), viewsPath, modulesPath: folder };
+  // the public site: its files by digest, then its pages, rendered once from web/site/ and its one data file
+  const links = { famille, couche };
+  for (const [f, key, type] of SITE_FILES) { const [name, ext] = f.split("."); links[key] = add(name, ext, readFileSync(join(WEB, "site", f)), type); }
+  const pages = new Map(renderSite({ links, data: siteData() }).pages.map(([p, html]) => [p, Buffer.from(html)]));
+  pages.set("/index.html", pages.get("/"));
+  return { files, page, pages, viewsSha256: sha(views), viewsPath, modulesPath: folder };
 }

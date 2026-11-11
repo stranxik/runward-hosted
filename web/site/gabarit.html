@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr" data-page="{{PAGE}}" data-titre-en="{{TITRE_EN}}">
+<head>
+<meta charset="utf-8">
+<!-- first, before anything loads: an address of the app (#/…) opens the app's shell (aiguillage.js, ADR-0022) -->
+<script src="{{AIGUILLAGE_JS}}"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>{{TITRE}}</title>
+<meta name="description" content="{{DESC}}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23171717' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='14' y='14' width='72' height='72' rx='16'/%3E%3Cpath d='M36 36 L50 50 L36 64'/%3E%3C/g%3E%3Crect x='54' y='43' width='14' height='14' rx='3' fill='%23171717'/%3E%3C/svg%3E">
+<!-- the family's structure, then the app's layer (which holds every colour, ADR-0019), then the site's rules -->
+<link rel="stylesheet" href="{{FAMILLE_CSS}}">
+<link rel="stylesheet" href="{{COUCHE_CSS}}">
+<link rel="stylesheet" href="{{SITE_CSS}}">
+</head>
+<body>
+<a class="evite" href="#contenu" t>Aller au contenu ||| Skip to content</a>
+
+<header class="top"><div class="wrap top-i">
+  <a class="marque" href="/" t-aria="runward, accueil ||| runward, home"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward</a>
+  <nav class="nav nav-h" t-aria="Pages du site ||| Site pages">
+    <a href="/pourquoi" data-nav t>Pourquoi ||| Why</a>
+    <a href="/comment" data-nav t>Comment ça marche ||| How it works</a>
+    <a href="/pour-qui" data-nav t>Pour qui ||| Who it is for</a>
+    <a href="/formats" data-nav t>Formats et référentiels ||| Formats and frameworks</a>
+    <a href="/donnees" data-nav t>Données et sécurité ||| Data and security</a>
+  </nav>
+  <div class="outils">
+    <span class="langue" role="group" t-aria="Langue ||| Language"><button type="button" data-lang="fr" aria-pressed="true">FR</button><button type="button" data-lang="en" aria-pressed="false">EN</button></span>
+    <button class="btn-t" type="button" data-theme-btn t-aria="Changer de thème, clair ou sombre ||| Switch theme, light or dark"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
+    <a class="btn b2" href="/#/entree" t>Se connecter ||| Sign in</a>
+    <a class="btn top-cta" href="mailto:thibaultsouris@runward.dev" data-contact t>Demander un essai sur une application ||| Ask for a trial on an application</a>
+  </div>
+</div></header>
+<nav class="nav nav-m" t-aria="Pages du site ||| Site pages"><div class="wrap nav-mi">
+  <a href="/pourquoi" data-nav t>Pourquoi ||| Why</a>
+  <a href="/comment" data-nav t>Comment ça marche ||| How it works</a>
+  <a href="/pour-qui" data-nav t>Pour qui ||| Who it is for</a>
+    <a href="/formats" data-nav t>Formats et référentiels ||| Formats and frameworks</a>
+  <a href="/donnees" data-nav t>Données et sécurité ||| Data and security</a>
+</div></nav>
+
+<main id="contenu">
+{{CORPS}}
+</main>
+
+<footer class="pied"><div class="wrap pied-i">
+  <a class="marque" href="/"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward</a>
+  <nav t-aria="Pied de page ||| Footer"><a href="/stand" t>Sur notre stand, les 18 et 19 novembre ||| At our stand, 18 and 19 November</a><a href="/mentions" t>Mentions légales ||| Legal notice</a><a href="mailto:thibaultsouris@runward.dev" data-contact t>Contact ||| Contact</a></nav>
+</div></footer>
+
+<!-- La boîte de contact : elle prépare un courriel dans la messagerie du visiteur. Rien n'est envoyé à un serveur. -->
+<dialog class="dlg" id="contact" aria-labelledby="dlg-t" aria-describedby="dlg-d">
+  <form class="dlg-f" novalidate>
+    <div class="dlg-h">
+      <h2 id="dlg-t" data-titre-defaut t>Demander un essai sur une application ||| Ask for a trial on an application</h2>
+      <button type="button" class="dlg-x" data-fermer t-aria="Fermer ||| Close"><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M3 3l8 8M11 3l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    </div>
+    <p id="dlg-d" t>Dites-nous qui vous êtes. Votre messagerie s’ouvre avec le courriel prêt à envoyer. ||| Tell us who you are. Your mail application opens with the message ready to send.</p>
+    <label class="ch"><span t>Nom (obligatoire) ||| Name (required)</span><input name="nom" type="text" autocomplete="name" required aria-required="true"></label>
+    <label class="ch"><span t>Organisation ||| Organisation</span><input name="org" type="text" autocomplete="organization"></label>
+    <label class="ch"><span t>Rôle ||| Role</span><input name="role" type="text" autocomplete="organization-title"></label>
+    <label class="ch"><span t>Message ||| Message</span><textarea name="msg" rows="4"></textarea></label>
+    <div class="dlg-a">
+      <button class="btn" type="submit" t>Préparer le courriel ||| Prepare the email</button>
+      <a class="lien" href="mailto:thibaultsouris@runward.dev" data-direct><span t>Écrire directement ||| Write directly</span></a>
+    </div>
+    <p class="dlg-n" t>Ce formulaire ouvre votre messagerie avec le courriel prêt : c’est vous qui l’envoyez. Le service ne stocke rien. ||| This form opens your mail application with the email ready: you send it. The service stores nothing.</p>
+    <p class="dlg-s" id="dlg-e" role="status" aria-live="polite"></p>
+  </form>
+</dialog>
+
+<!-- the English text of each element marked data-t, parsed with the page: the language switch moves nodes, never a string of HTML -->
+{{EN}}
+<script src="{{SITE_JS}}"></script>
+</body>
+</html>

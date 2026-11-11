@@ -69,7 +69,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 |---|---|
 | One Node.js monolith, no framework, one network exit | ADR-0001 |
 | runward-fleet pinned by a vendored tarball of a commit | ADR-0002 |
-| runward-fleet re-pinned on main at main@5a9cdf0, where PR #496 merged | decided: ADR-0018, accepted 2026-11-10; pending: ADR-0021 (re-pinned at main@d05b597, where PR #499 merged; the archive digest names the build), proposed |
+| runward-fleet re-pinned on main at main@d05b597, where PR #499 merged; the archive digest names the build | decided: ADR-0021, accepted 2026-11-11, refining ADR-0018 (accepted 2026-11-10, re-pinned at main@5a9cdf0) |
 | Upload by the OIDC token of the send workflow | ADR-0003 |
 | The index by runward-fleet, the view imported | ADR-0004 |
 | Passkeys and one link mechanism | ADR-0005 |
@@ -83,8 +83,9 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | Licence and hosting | ADR-0013 |
 | Design tokens in one file | ADR-0019 (the app's own layer), which supersedes ADR-0014 |
 | The in-memory store as reference adapter | ADR-0015 |
-| The operator's gateway to the private database | ADR-0016; pending: ADR-0023 (the grants compared by a gesture of their own, under rw_owner), proposed 2026-11-11 |
+| The operator's gateway to the private database | ADR-0016, refined by ADR-0023 (the grants compared by a gesture of their own, under rw_owner), accepted 2026-11-11 |
 | No load test before the preview; the bounds are tested | ADR-0017 |
+| The public site served by the app: the landing at `/` for everyone, the shell at `/app`, its `/#/` addresses kept | decided: ADR-0022, accepted 2026-11-11 |
 
 ### Ratification
 - 2026-11-10 · rows: contracts-governance, hexa-adapter-pattern, hexa-architecture, hexa-typescript-native, process-adr-and-journal, security-mcp-server-pinning · by: Claude Fable 5.2 (independent reviewer) (declared, agent) · for: Thibault Souris (declared, accountable) · bound: contracts-governance@3819c661f85728cf, hexa-adapter-pattern@b76e0f90c6a7b5b3, hexa-architecture@611e39392ab4085f, hexa-typescript-native@c33865aec11fb9dd, process-adr-and-journal@6d0c6b5a4da8f56b, security-mcp-server-pinning@2e6d819f82f30657 · mode: agent

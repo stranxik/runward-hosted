@@ -14,8 +14,12 @@ const ROOT = new URL("../..", import.meta.url).pathname;
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const SLOT = "__VIEWS__"; // the served path of the pinned runward-fleet views, written by the server
 
-/** The scripts under web/: app.js and every file of views/, by their path under web/. */
-const onDisk = () => readdirSync(WEB, { recursive: true }).filter((f) => f.endsWith(".js")).map((f) => f.split("\\").join("/")).sort();
+/**
+ * The scripts under web/: app.js and every file of views/, by their path under web/. The public site's scripts
+ * (web/site/, ADR-0022) are not modules of the shell: they are another closed list (SITE_FILES), held to the files on
+ * disk by test/unit/site.test.js.
+ */
+const onDisk = () => readdirSync(WEB, { recursive: true }).map((f) => f.split("\\").join("/")).filter((f) => f.endsWith(".js") && !f.startsWith("site/")).sort();
 
 /** What separates a list from the files: the files not listed, the names listed twice or missing. */
 export function listFaults(listed, files) {

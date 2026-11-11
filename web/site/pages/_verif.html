@@ -1,0 +1,40 @@
+<!-- ======================================================= 5. Vérifier par vous-même : la section contrastée -->
+<section class="sec contraste" id="verifier">
+  <div class="lueur" aria-hidden="true"></div>
+  <div class="points" aria-hidden="true"></div>
+  <div class="wrap verif-g">
+    <div class="verif-t rv-s">
+      <p class="kick" t>Sans nous croire sur parole ||| Without taking our word for it</p>
+      <h2 t>Vérifier par vous-même ||| Check it yourself</h2>
+      <p class="lede" t>Ce n’est pas notre écran qui le dit. Le même contrôle, relancé chez vous sur le même commit, rend la même application, la même version, le même état et les mêmes écarts. ||| It is not our screen saying so. The same check, run again on your side on the same commit, gives the same application, the same version, the same state and the same gaps.</p>
+      <ul class="faits">
+        <li><i class="f clean" aria-hidden="true"></i><span t>Le contrôle tourne dans la chaîne de livraison de l’équipe. ||| The check runs in the team’s delivery chain.</span></li>
+        <li><i class="f clean" aria-hidden="true"></i><span t>Le moteur est sous licence MIT&nbsp;: n’importe qui peut le lire et le relancer. ||| The engine is under the MIT licence: anyone can read it and run it again.</span></li>
+        <li><i class="f clean" aria-hidden="true"></i><span t>Votre audit refait le calcul sur sa propre machine, sans passer par l’équipe ni par nous. Il lui faut un accès en lecture au code. ||| Your audit redoes the calculation on its own machine, without going through the team or through us. It needs read access to the code.</span></li>
+      </ul>
+    </div>
+
+    <div class="rv-s"><div class="ab" data-seq="3200,1200,500,500,500,700" data-hold="5200">
+      <div class="term">
+        <div class="term-b"><span t>Chez vous ||| On your side</span><span t>Node.js 22.12 ou plus récent ||| Node.js 22.12 or newer</span></div>
+        <div class="term-c">
+          <div class="cmd"><span class="inv" aria-hidden="true">$</span><span class="tg"><span class="gh">git clone https://github.com/stranxik/runward-demo-renaming &amp;&amp; git -C runward-demo-renaming checkout 97fce96d901d0d07cad8a230950d391b223736af &amp;&amp; npx --yes runward@0.46.0 check --strict --path runward-demo-renaming</span><span><span class="ty" data-at="1" data-v="13">git clone https://github.com/stranxik/runward-demo-renaming &amp;&amp; git -C runward-demo-renaming checkout 97fce96d901d0d07cad8a230950d391b223736af &amp;&amp; npx --yes runward@0.46.0 check --strict --path runward-demo-renaming</span><span class="caret"></span></span></span></div>
+          <div class="sortie w2"><b>Why red</b>
+  ✗ Floor · frontier-deterministic-boundary — typed pointer file:code/src/core/domain/guard.ts#guardFields — symbol "guardFields" not found in the file (moved or renamed? update the pointer)
+  ✗ Govern · security-prompt-injection — typed pointer file:code/src/core/domain/guard.ts#guardFields — symbol "guardFields" not found in the file (moved or renamed? update the pointer)</div>
+        </div>
+      </div>
+      <ul class="memes">
+        <li class="w3"><i class="coche" aria-hidden="true"></i><div><b t>Même application ||| Same application</b><span>runward-demo-renaming</span></div></li>
+        <li class="w4"><i class="coche" aria-hidden="true"></i><div><b t>Même version ||| Same version</b><span>runward 0.46.0</span></div></li>
+        <li class="w5"><i class="coche" aria-hidden="true"></i><div><b t>Même état ||| Same state</b><span t>Refusée par le contrôle ||| Refused by the check</span></div></li>
+        <li class="w6"><i class="coche" aria-hidden="true"></i><div><b t>Mêmes écarts ||| Same gaps</b><span t>2 points à corriger ||| 2 points to fix</span></div></li>
+      </ul>
+      <dl class="ident">
+        <dt t>Dépôt ||| Repository</dt><dd class="mono"><a href="https://github.com/stranxik/runward-demo-renaming" rel="noopener">stranxik/runward-demo-renaming</a></dd>
+        <dt>Commit</dt><dd class="mono">97fce96d901d0d07cad8a230950d391b223736af</dd>
+        <dt t>Exécution publique ||| Public run</dt><dd><a href="https://github.com/stranxik/runward-demo-renaming/actions/runs/42836065477" rel="noopener" t>n° 15 ||| no. 15</a></dd>
+      </dl>
+    </div></div>
+  </div>
+</section>

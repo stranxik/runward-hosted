@@ -1,0 +1,17 @@
+<!-- ======================================================= 3. La vue publique : des exécutions réelles de runward sur des dépôts publics.
+     Les lignes viennent de donnees.json (build.py les écrit) : le 17, on change ce fichier, pas cette page. -->
+<section class="sec porte" id="portefeuille">
+  <div class="trame" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="tete rv-s">
+      <div><p class="kick" t>Le portefeuille public ||| The public portfolio</p>
+      <h2 t>Des applications publiques de runward, une phrase chacune. ||| runward’s own public applications, one sentence each.</h2></div>
+      <p class="lede" t>Chaque ligne vient d’une exécution de runward sur un dépôt public&nbsp;: son dépôt, son commit, sa date. <b>Ce que le contrôle refuse arrive en haut.</b> ||| Each line comes from a run of runward on a public repository: its repository, its commit, its date. <b>What the check refuses comes first.</b></p>
+    </div>
+
+    <div class="vue rv-s"><div class="ab" data-seq="900,1000" data-hold="6000">
+{{VUE_LIGNES}}
+    </div></div>
+    <p class="note rv-s" t>Calculé le {{calcule.fr}} sur le dépôt public, au dernier commit de la branche principale, avec runward {{version}}. ||| Computed on {{calcule.en}} on the public repository, at the latest commit of the main branch, with runward {{version}}.</p>
+  </div>
+</section>

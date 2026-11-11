@@ -1,0 +1,44 @@
+<!-- ======================================================= 1. Héros -->
+<section class="hero">
+  <div class="nue" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <div class="points" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+  <div class="wrap hero-g">
+    <div class="hero-t">
+      <p class="amorce" t>Vos équipes livrent avec des agents IA. Vous répondez de ce qui part en production. ||| Your teams ship with AI agents. You answer for what goes to production.</p>
+      <h1 t>Avant le go&nbsp;: ce qui bloque, et pourquoi. ||| Before the go: what blocks, and why.</h1>
+      <p class="sous" t>Une phrase par application. Et de quoi le vérifier vous-même. ||| One sentence per application. And what you need to check it yourself.</p>
+      <div class="actions">
+        <a class="btn" href="mailto:thibaultsouris@runward.dev" data-contact t>Demander un essai sur une application ||| Ask for a trial on an application</a>
+        <a class="lien" href="#scene"><span t>Voir la scène, rejouée ||| Watch the scene, replayed</span><svg viewBox="0 0 14 14" aria-hidden="true" focusable="false"><path d="M7 2v9M3 7.5 7 11.5l4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+      </div>
+      <p class="reel"><i class="f clean" aria-hidden="true"></i><span t>Les faits de cette page sont publics&nbsp;: un dépôt, une exécution, et la commande pour les relancer. ||| The facts on this page are public: a repository, a run, and the command to replay them.</span></p>
+    </div>
+
+    <div class="hero-e">
+      <div class="ab" data-seq="1300,1500,1100,1100" data-hold="5200">
+        <div class="puce w1"><i class="coche" aria-hidden="true"></i><span><b t>Tests&nbsp;: réussis ||| Tests: passed</b><small t>dans la chaîne de livraison de l’équipe ||| in the team’s delivery chain</small></span></div>
+        <div class="scr">
+          <div class="scr-bar" t>Lecture du contrôle ||| Reading of the check</div>
+          <div class="scr-body">
+            <div class="bandeau w2"><i class="f avis" aria-hidden="true"></i><p t><b>runward-demo-renaming</b>, sur la branche du changement&nbsp;: <span class="etq"><i class="f gaps"></i>Refusée par le contrôle</span>. Exécution publique n°&nbsp;{{scene.execution}}. ||| <b>runward-demo-renaming</b>, on the branch of the change: <span class="etq"><i class="f gaps"></i>Refused by the check</span>. Public run no.&nbsp;{{scene.execution}}.</p></div>
+            <p class="nom">runward-demo-renaming</p>
+            <div class="swap sw2 mot-e xl">
+              <div class="avant" aria-hidden="true"><i class="f clean lg"></i><b t>Rien ne bloque ||| Nothing is blocking</b></div>
+              <div class="apres"><i class="f gaps lg pouls p2"></i><b t>Refusée par le contrôle ||| Refused by the check</b></div>
+            </div>
+            <div class="swap sw2 date-e">
+              <div class="avant" aria-hidden="true" t>branche principale · commit {{scene.commit_principal7}} ||| main branch · commit {{scene.commit_principal7}}</div>
+              <div class="apres" t>branche du changement · commit {{scene.commit_changement7}} · contrôle du {{scene.controle_fr}} ||| branch of the change · commit {{scene.commit_changement7}} · check of {{scene.controle_en}}</div>
+            </div>
+            <p class="phrase w3" t>Le contrôle refuse cette version, pour les raisons qui suivent. ||| The check refuses this version, for the reasons that follow.</p>
+            <ul class="pq w4">
+              <li><b t>Mesures de la première version&nbsp;: une preuve citée est refusée par le contrôle. ||| First-version measurements: a cited piece of evidence is refused by the check.</b><span class="mono">runward/floor.md · <span t>ligne 22 ||| line 22</span></span></li>
+              <li><b t>Dossier de sécurité&nbsp;: une preuve citée est refusée par le contrôle. ||| Security assessment: a cited piece of evidence is refused by the check.</b><span class="mono">runward/governance/threat-model.md · <span t>ligne 50 ||| line 50</span></span></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,7 +1,7 @@
 # ADR-0023: The grants of the service's roles are compared by a gesture of their own, under rw_owner (refines ADR-0016)
 
 **Date**: 2026-11-11
-**Status**: proposed (written by an agent session; acceptance is the author's)
+**Status**: accepted 2026-11-11 by the author in chat ("j'accepte l'adr", in answer to a list that named this record); written by an agent session
 **Refines**: ADR-0016 (accepted 2026-11-08), which stays in force for everything this record does not change
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the gateway's log line of the failed deploy, the privileges declared in `infra/scaleway/main.tf`, the queries of the comparison read one by one, the shape replayed on a throwaway PostgreSQL), challenge, durable position

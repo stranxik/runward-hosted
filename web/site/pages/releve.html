@@ -1,0 +1,36 @@
+<!-- ======================================================= Le relevé d'une page : fait pour être imprimé.
+     Les lignes viennent de donnees.json (build.py les écrit). À régénérer le matin de chaque jour où il est remis. -->
+<section class="sec releve" id="releve">
+  <div class="wrap">
+    <div class="rel-o">
+      <p class="kick" t>À emporter ||| To take away</p>
+      <button class="btn" type="button" data-imprimer t>Imprimer ou enregistrer en PDF ||| Print or save as PDF</button>
+    </div>
+    <article class="feuille">
+      <header class="f-t">
+        <span class="marque"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward</span>
+        <span class="mono" t>Calculé le {{calcule.long_fr}} sur les dépôts publics ||| Computed on {{calcule.long_en}} on the public repositories</span>
+      </header>
+      <h1 t>Avant le go : ce qui bloque, et pourquoi. ||| Before the go: what blocks, and why.</h1>
+      <p class="f-s" t>Des applications publiques de runward, lues par le contrôle sur leur dépôt public, avec runward {{version}}. Une phrase par application, et de quoi le vérifier vous-même. ||| runward’s own public applications, read by the check on their public repository, with runward {{version}}. One sentence per application, and what you need to check it yourself.</p>
+
+{{RELEVE_LIGNES}}
+
+      <h2 t>La scène, en quatre lignes ||| The scene, in four lines</h2>
+      <ol class="f-4">
+        <li t>Un agent change un nom dans le code. ||| An agent changes a name in the code.</li>
+        <li t>Les 14 tests restent réussis. ||| All 14 tests still pass.</li>
+        <li t>Le contrôle refuse : deux preuves du dossier citent encore l’ancien nom, dont une dans le dossier de sécurité. ||| The check refuses: two pieces of evidence in the record still cite the old name, one of them in the security assessment.</li>
+        <li t>La réparation tient en deux lignes, et rien ne bloque. ||| The repair is two lines, and nothing is blocking.</li>
+      </ol>
+
+      <h2 t>Vérifier par vous-même ||| Check it yourself</h2>
+      <p class="f-p" t>Le même contrôle, relancé chez vous sur le même commit, rend la même application, la même version, le même état et les mêmes écarts. Node.js 22.12 ou plus récent. ||| The same check, run again on your side on the same commit, gives the same application, the same version, the same state and the same gaps. Node.js 22.12 or newer.</p>
+      <p class="f-c mono">git clone https://github.com/stranxik/runward-demo-renaming &amp;&amp; git -C runward-demo-renaming checkout 97fce96d901d0d07cad8a230950d391b223736af &amp;&amp; npx --yes runward@0.46.0 check --strict --path runward-demo-renaming</p>
+
+      <footer class="f-p2">
+        <span t>Un essai sur une de vos applications : ||| A trial on one of your applications:</span> <span class="mono">thibaultsouris@runward.dev</span>
+      </footer>
+    </article>
+  </div>
+</section>
