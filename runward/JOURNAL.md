@@ -254,4 +254,3 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 
 - Done: an adversarial review of `2177bf7` (`runward/governance/reviews/2026-11-11_code-review_2177bf7.md`): nothing blocks production; the archive was reproduced byte for byte from the runward commit. C61: ADR-0024 and this journal said an earlier index stays ungrouped per repository; the index is rebuilt for the whole tenant, so one accepted upload per tenant regroups it. C62: ADR-0021's trigger quoted exactly. C63: the rollback then roll-forward case in ADR-0024's negatives. C66: "three archives" in two comments.
 - Blocked / to dig: C64, the author's decision on ADR-0024; C65, a literal anchor for the oldest link of the lock chain in `test/unit/pin.test.js`.
-
