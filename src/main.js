@@ -7,6 +7,8 @@ import { postgresStore } from "./adapters/store/postgres.js";
 import { databaseTls, databaseTlsProblems } from "./adapters/store/tls.js";
 import { memoryObjects, s3Objects } from "./adapters/objects/objects.js";
 import { githubVerifier, GITHUB_ISSUER } from "./adapters/oidc/github.js";
+import { gitlabComVerifier, GITLAB_COM_KEYS } from "./adapters/oidc/gitlab.js";
+import { issuerRegistry } from "./adapters/oidc/registry.js";
 import { simpleWebAuthn } from "./adapters/webauthn/simplewebauthn.js";
 import { fleetAssembler, fleetPin } from "./adapters/fleet/assembler.js";
 import { tar } from "./adapters/archive/tar.js";
@@ -69,13 +71,19 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   const issuerHost = new URL(config.issuer).host;
   const s3Host = config.objects === "s3" ? new URL(config.s3.endpoint).host : null;
   // every call out has a deadline and each host a circuit breaker (egress.js, EGRESS_DEFAULTS)
-  const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
+  // the hosts outside the hoster: the keys of two public issuers, GitHub's and gitlab.com's, and the object
+  // store (ADR-0029 section 1, which refines ADR-0001). RW_OIDC_ISSUER moves the first for a local witness
+  // and never adds an issuer; a registered instance is never called: its keys are rows of its tenant.
+  const egress = boundFetch([issuerHost, new URL(GITLAB_COM_KEYS).host, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
   const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
   const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
+  // `verifier`, when given, is the GitHub adapter (a test's, a witness's): the registry of issuers is built
+  // around it, as around the real one
+  const github = givenVerifier ?? githubVerifier({ issuer: config.issuer, fetch: egress, clock });
   const ports = {
     store, objects, clock, log, ulid,
-    verifier: givenVerifier ?? githubVerifier({ issuer: config.issuer, fetch: egress, clock }),
+    verifier: issuerRegistry({ github, githubIssuer: config.issuer, gitlabCom: gitlabComVerifier({ fetch: egress, clock }), store, clock, origin: config.origin }),
     authn: givenAuthn ?? simpleWebAuthn({ rpID: config.rpID, origin: config.origin }),
     assembler: fleetAssembler({ pin }),
     archive: { pack: tar },

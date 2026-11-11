@@ -4,6 +4,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { nextEntry, entryBody } from "../domain/ledger.js";
 import { Refusal } from "../domain/refusals/index.js";
+import { GITLAB_COM_ISSUER } from "../domain/forge.js";
+import { indexNameOf } from "../domain/issuer.js";
 
 export const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 export const newToken = () => randomBytes(32).toString("base64url");
@@ -53,6 +55,16 @@ export function context(ports, config) {
     const repos = (await tx.list("repository")).filter((r) => !r.removedAt && r.confirmedAt);
     const missions = (await tx.list("mission")).filter((m) => !m.removedAt);
     const uploads = (await tx.list("upload", { rank: "current" })).filter((u) => !u.erasedAt);
+    // the host a repository is named under in the index: github.com as before the forge port, gitlab.com,
+    // or the host[:port] of the instance its tenant registered (ADR-0029 section 1)
+    const forges = (await tx.list("forge_repository")).filter((f) => f.forgeName !== "github");
+    const issuers = forges.some((f) => f.issuerKey !== GITLAB_COM_ISSUER) ? await tx.list("issuer") : [];
+    const forgeOf = (r) => {
+      const f = forges.find((x) => x.id === r.id);
+      if (!f) return {};
+      const reg = issuers.find((i) => i.id === f.issuerKey);
+      return { forge: f.forgeName, host: reg ? indexNameOf(reg.issuer, "").slice(0, -1) : "gitlab.com" };
+    };
     const out = [];
     for (const r of repos.sort((a, b) => a.declaredAt - b.declaredAt || a.name.localeCompare(b.name))) {
       for (const m of missions.filter((x) => x.repositoryRef === r.id).sort((a, b) => a.addedAt - b.addedAt || a.id.localeCompare(b.id))) {
@@ -65,7 +77,7 @@ export function context(ports, config) {
           received[override.kind] = receivedLabel(override.receivedAt);
           if (override.kind === "check") commit = override.commit;
         }
-        out.push({ id: m.id, name: r.name, repository: r.name, path: m.path, commit, uploads: byKind, received });
+        out.push({ id: m.id, name: r.name, repository: r.name, path: m.path, commit, uploads: byKind, received, ...forgeOf(r) });
       }
     }
     return out;

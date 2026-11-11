@@ -2,6 +2,7 @@
 // Rows are [method, pattern, who, handler] (who: public | session | workload | reader); src/http/server.js#routes
 // puts the files of this folder in the order of the API contract.
 import { REFUSALS, refusal as refusalBody } from "../../domain/refusals/index.js";
+import { forgeOfWorkload } from "../../domain/forge.js";
 
 /** GET /api/v0/journal. */
 export function journalRoutes(app) {
@@ -11,7 +12,8 @@ export function journalRoutes(app) {
       const page = await G.journal(q.session, q.url.searchParams.get("cursor"));
       for (const e of page.entries) {
         const code = e.body.detail?.refusal;
-        if (code && REFUSALS[code]) { const t = refusalBody(code, q.lang); e.text = { message: t.message, action: t.action }; }
+        // the words of a workload's refusal are its forge's (ADR-0029 section 1)
+        if (code && REFUSALS[code]) { const t = refusalBody(code, q.lang, e.body.who?.type === "workload" ? { forge: forgeOfWorkload(e.body.who.id) } : {}); e.text = { message: t.message, action: t.action }; }
       }
       return page;
     }],

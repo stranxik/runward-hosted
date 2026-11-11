@@ -20,7 +20,7 @@ const urlAs = (role) => { const u = new URL(ADMIN); u.username = role; u.passwor
 let admin, adminDb, store, h, A, B, firstRun;
 const MIGRATIONS = readdirSync(new URL("../../db/migrations/", import.meta.url)).filter((f) => f.endsWith(".sql")).sort();
 const SNAPSHOT = new URL("../../db/schema.snapshot.txt", import.meta.url).pathname;
-const TENANT_TABLES = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
+const TENANT_TABLES = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger", "issuer", "issuer_key"];
 
 before(async () => {
   if (!ADMIN) return;
@@ -109,7 +109,7 @@ test("S4: 0 row read or written outside its tenant, both ways, as rw_app", async
     // with no tenant set, nothing is visible at all
     for (const t of TENANT_TABLES) { const [{ n }] = await sql.unsafe(`select count(*)::int as n from rw.${t}`); assert.equal(n, 0, t); }
     // the service has no direct access to the tables without a tenant
-    for (const t of ["webauthn_challenge", "oidc_jti", "rate_counter", "refused_counter", "operator_journal", "service_state"]) await assert.rejects(sql.unsafe(`select * from rw.${t}`), /permission denied/, t);
+    for (const t of ["webauthn_challenge", "oidc_jti", "rate_counter", "refused_counter", "operator_journal", "service_state", "token_use", "send_rate", "send_refused"]) await assert.rejects(sql.unsafe(`select * from rw.${t}`), /permission denied/, t);
   } finally { await sql.end(); }
 });
 
@@ -143,7 +143,7 @@ test("catalog: forced RLS on every tenant table, rw_app without bypass, no USING
   const views = await adminDb`select viewname from pg_views where schemaname = 'rw'`;
   assert.deepEqual([...views], [], "no view (a view without security_invoker would bypass RLS)");
   const defs = (await adminDb`select p.proname, pg_get_userbyid(p.proowner) as owner from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'rw' and p.prosecdef order by 1`).map((r) => `${r.proname}:${r.owner}`);
-  assert.deepEqual(defs, ["count_refused", "daily_jobs", "maintenance", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "tenant_ids", "use_jti"].map((f) => `${f}:rw_resolve`));
+  assert.deepEqual(defs, ["count_refused", "count_send_refused", "daily_jobs", "maintenance", "name_key_taken", "name_taken", "operator_note", "put_challenge", "resolve_credential", "resolve_forge_repository", "resolve_issuer", "resolve_link", "resolve_repository", "resolve_session", "set_maintenance", "take_challenge", "take_rate", "take_send_rate", "tenant_ids", "use_jti", "use_token"].map((f) => `${f}:rw_resolve`));
   const owners = await adminDb`select distinct tableowner from pg_tables where schemaname = 'rw'`;
   assert.deepEqual(owners.map((r) => r.tableowner), ["rw_owner"], "the service owns nothing");
 });

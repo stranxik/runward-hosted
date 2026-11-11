@@ -7,12 +7,14 @@
 // one line to PARTS below. A code declared in two files is a programming error, refused when this module
 // loads. The API contract's digest reads the codes sorted: adding a file changes it only by its codes.
 import { FLOOR } from "./floor.js";
+import { FORGE } from "./forge.js";
 
 /** @typedef {import("./floor.js").RefusalDef} RefusalDef */
 
 /** The parts of the catalogue, one line per file of this folder: [name, codes]. */
 const PARTS = [
   ["floor", FLOOR],
+  ["forge", FORGE],
 ];
 
 /**
@@ -33,11 +35,13 @@ export function mergeRefusals(parts) {
 /** @type {Record<string, RefusalDef>} */
 export const REFUSALS = mergeRefusals(PARTS);
 
-/** A refusal object as the API returns it, in one language. Unknown codes are a programming error. */
+/** A refusal object as the API returns it, in one language. Unknown codes are a programming error. `extra.forge` chooses the words. */
 export function refusal(code, lang = "fr", extra = {}) {
   const def = REFUSALS[code];
   if (!def) throw new Error(`unknown refusal code: ${code}`);
-  const [message, action] = lang === "en" ? def.en : def.fr;
+  // the words are the forge's when the refusal has some for it (extra.forge, set by the forge's rules)
+  const words = extra.forge === "gitlab" && def.gitlab ? def.gitlab : def;
+  const [message, action] = lang === "en" ? words.en : words.fr;
   return { refusal: code, message, action, ...extra };
 }
 

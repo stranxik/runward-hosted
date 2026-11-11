@@ -16,7 +16,7 @@ import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MODULES } from "../../src/http/assets.js";
 import { journalRoutes } from "../../src/http/routes/journal.js";
-import { harness, founder, gesture, send, SEND_SHA } from "../helpers.js";
+import { harness, founder, gesture, send, SEND_SHA, confirmRepository } from "../helpers.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
 const VIEWS = new URL("../../node_modules/runward-fleet/ui/views.js", import.meta.url);
@@ -59,9 +59,7 @@ async function tenant() {
     return h.app.repositories.declare(await h.app.identity.sessionFrom(f.token), { name, consent: true, missions }, {});
   };
   const confirm = async (d) => {
-    const s = await h.app.identity.sessionFrom(f.token);
-    await gesture(h, s, "repository-confirm", d.id);
-    await h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), d.id, {});
+    await confirmRepository(h, f, d.id);
   };
   let d = await declare("stranxik/runward-hosted", [{ id: "runward-hosted", path: "." }]);
   await send(h, { repository: "stranxik/runward-hosted", repository_id: "7002", run_id: "42830000011", run_number: "11", sha: "a4ede1485323293609957a700aba13ddf99de27f" }, { mission: "runward-hosted", bytes: FIXTURE("hosted-proposed") });

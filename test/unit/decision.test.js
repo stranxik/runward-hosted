@@ -26,7 +26,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { MODULES } from "../../src/http/assets.js";
-import { harness, founder, gesture, send } from "../helpers.js";
+import { harness, founder, gesture, send, confirmRepository } from "../helpers.js";
 import { receivedLabel } from "../../src/application/context.js";
 
 const WEB = new URL("../../web/", import.meta.url).pathname;
@@ -60,8 +60,7 @@ async function declared(h, f, { name, id, missions, first = null }) {
   if (!first) return d;
   const r = await send(h, { repository: name, repository_id: id, run_id: `4283${id}`, run_number: "11", ...first.claims }, { mission: first.mission, bytes: first.bytes });
   assert.equal(r.status, 202, `${name}: the first upload is kept, to confirm`);
-  await gesture(h, s, "repository-confirm", d.id);
-  await h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), d.id, {});
+  await confirmRepository(h, f, d.id);
   return d;
 }
 async function portfolio() {

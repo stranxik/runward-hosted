@@ -7,8 +7,11 @@ import {
   linkState, sessionOpen, requireFresh, requireGesture, checkRemovable, checkRestorable, sameProvider,
   meaningfulAaguid, providerOf, deviceFromUserAgent, arrivalOpen, MAX_PASSKEYS, PASSKEY_RESTORE_WINDOW, FRESH_WINDOW,
 } from "../domain/identity.js";
+import { confirmation, githubPinValues } from "../domain/repository.js";
+import { GITLAB_COM_ISSUER, pinDigest, levelCode, sendAudience } from "../domain/forge.js";
 import { StoreConflict } from "../ports/errors.js";
 import { sha256, newToken, iso } from "./context.js";
+import { issuerView } from "./issuers.js";
 
 const human = (s) => ({ type: "human", id: s.memberId });
 
@@ -250,6 +253,33 @@ export function identityCases(ctx) {
       const forge = await tx.list("forge_repository");
       const missions = await tx.list("mission");
       const reader = await tx.get("reader", {});
+      const issuers = await tx.list("issuer");
+      const issuerKeys = issuers.length ? await tx.list("issuer_key") : [];
+      /**
+       * What a confirmation would pin, as the screen shows it, with the digest the gesture is bound to
+       * (ADR-0029 section 1). `confirmable` is false when a GitLab definition does not name the declared
+       * file and branch: the values are shown, and cannot be confirmed.
+       */
+      const pending = (r, f) => {
+        if (!r.pendingSend || !f) return null;
+        const pin = confirmation(r, f);
+        const values = f.forgeName === "gitlab" ? pin.values : githubPinValues(pin);
+        return { values, digest: pinDigest(values), confirmable: f.forgeName === "gitlab" ? pin.confirmable : true };
+      };
+      /** The forge of a repository, its issuer, the audience its pipeline writes, and the level its uploads reach. */
+      const forgeView = (r, f) => {
+        const forge = f?.forgeName ?? "github";
+        if (forge === "github") return { forge, level: levelCode({ forge }) };
+        const registered = f.issuerKey !== GITLAB_COM_ISSUER;
+        const reg = registered ? issuers.find((i) => i.id === f.issuerKey) ?? null : null;
+        const protectionRequired = !r.protectionLiftedAt;
+        return {
+          forge, issuer: registered ? { kind: "registered", id: f.issuerKey, issuer: reg?.issuer ?? null } : { kind: "public", issuer: GITLAB_COM_ISSUER },
+          audience: registered ? sendAudience(ctx.config.origin, f.issuerKey) : ctx.config.origin,
+          protectionRequired, definitionRef: f.definitionRef ?? null, definitionPinned: f.state !== "pinned" ? null : Boolean(f.definitionRef),
+          level: levelCode({ forge, issuerKind: registered ? "registered" : "public", protectionRequired }),
+        };
+      };
       const recovery = (await tx.list("link", { kind: "recovery" })).find((l) => !l.usedAt && !l.cancelledAt && now() < l.expiresAt) ?? null;
       const tenant = await tx.get("tenant", { id: s.tenantId });
       const label = (id) => { const p = pks.find((x) => x.id === id); return p ? providerOf(p.aaguid) ?? p.device ?? null : null; };
@@ -267,8 +297,11 @@ export function identityCases(ctx) {
             repositoryId: f?.repositoryId ?? null, ownerId: f?.ownerId ?? null,
             missions: missions.filter((m) => m.repositoryRef === r.id && !m.removedAt).map((m) => ({ id: m.id, path: m.path })),
             pendingSend: r.pendingSend ?? null,
+            ...forgeView(r, f), pending: pending(r, f),
           };
         }),
+        issuers: issuers.filter((i) => !i.removedAt).map((i) => issuerView(i, issuerKeys, ctx.config.origin, now())),
+        limits: { issuers: 5, liveKeys: 4 },
         reader: reader && reader.authorizedAt && !reader.withdrawnAt ? { authorizedAt: iso(reader.authorizedAt), workflow: "stranxik/runward-hosted/.github/workflows/temoin.yml" } : null,
         recovery: recovery ? { id: recovery.id, openedAt: iso(recovery.openedAt), usableFrom: iso(recovery.usableFrom), expiresAt: iso(recovery.expiresAt) } : null,
         lang: tenant.lang,

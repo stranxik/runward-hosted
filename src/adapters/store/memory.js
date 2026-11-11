@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { TABLES, DEFAULTS, NOW_ON_INSERT, checkColumns } from "./tables.js";
 import { StoreConflict } from "./errors.js";
 import { LINK_DURATIONS } from "../../domain/identity.js";
+import { scopedKey, GITHUB_ISSUER_KEY, GITLAB_COM_ISSUER } from "../../domain/forge.js";
 
 const UNIQUE = {
   passkey: [{ name: "passkey_credential_id_key", global: true, cols: ["credentialId"] }],
@@ -18,11 +19,28 @@ const UNIQUE = {
     { name: "forge_repository_pinned_id", global: true, cols: ["forge", "repositoryId"], where: (r) => r.repositoryId != null },
   ],
   member: [{ name: "member_one_founder", cols: [], where: (r) => r.founder }],
+  issuer: [{ name: "issuer_pkey", global: true, cols: ["id"] }],
+  issuer_key: [{ name: "issuer_key_issuer_ref_kid_key", cols: ["issuerRef", "kid"] }],
   upload: [{ name: "upload_idempotence", cols: ["runId", "runAttempt", "mission", "kind"] }],
 };
 
 export function memoryStore({ clock }) {
   const state = { rows: Object.fromEntries(Object.keys(TABLES).map((t) => [t, []])), ledger: [], challenges: new Map(), jti: new Map(), rate: new Map(), refused: new Map(), operator: [], maintenance: null };
+  // as the checks and triggers of db/migrations/0007: a row's keys are scoped by its forge and issuer key,
+  // a registered issuer key is a live registration of the row's own tenant, and what a registration and
+  // its keys are is written once (a removal and a retirement are final)
+  const forgeRow = (row, was) => {
+    const github = row.forgeName === "github";
+    if (github ? row.issuerKey !== GITHUB_ISSUER_KEY : !["gitlab"].includes(row.forgeName)) throw new Error("forge_repository_keys_scoped");
+    const prefix = github ? "" : `${row.forgeName}:${row.issuerKey}:`;
+    if (!github && (!String(row.nameKey).startsWith(prefix) || (row.repositoryId != null && !String(row.repositoryId).startsWith(prefix)))) throw new Error("forge_repository_keys_scoped");
+    if (!github && row.issuerKey !== GITLAB_COM_ISSUER && (!was || was.issuerKey !== row.issuerKey) && !state.rows.issuer.some((i) => i.tenantId === row.tenantId && i.id === row.issuerKey && !i.removedAt)) throw new Error("a repository's issuer key is a public issuer or a live registration of its own tenant");
+  };
+  const frozen = (table, was, next) => {
+    const cols = table === "issuer" ? ["id", "forge", "issuer", "addedAt"] : ["id", "issuerRef", "kid", "jwk", "thumbprint", "addedAt"];
+    const end = table === "issuer" ? "removedAt" : "retiredAt";
+    if (cols.some((c) => JSON.stringify(was[c]) !== JSON.stringify(next[c])) || (was[end] != null && was[end] !== next[end])) throw new Error(`${table}: written once; a removal or a retirement is final`);
+  };
   let queue = Promise.resolve();
 
   const keyOf = (table, row) => TABLES[table].key.map((k) => row[k]).join("\u0000");
@@ -57,6 +75,8 @@ export function memoryStore({ clock }) {
         for (const c of NOW_ON_INSERT[table] ?? []) if (full[c] == null) full[c] = now;
         if (table === "tenant") full.id = tenantId;
         if (table === "link") { const d = LINK_DURATIONS[full.kind]; full.openedAt = now; full.usableFrom = now + d.delay; full.expiresAt = full.usableFrom + d.life; }
+        if (table === "forge_repository") forgeRow(full, null);
+        if (table === "issuer_key" && !state.rows.issuer.some((i) => i.tenantId === tenantId && i.id === full.issuerRef)) throw new Error("issuer_key_issuer_fkey");
         conflict(table, full);
         state.rows[table] = [...state.rows[table], full];
         return pick(full);
@@ -75,6 +95,8 @@ export function memoryStore({ clock }) {
           if (was.erasedAt == null) patch = { ...patch, erasedAt: clock.now() };
         }
         const next = { ...state.rows[table][i], ...patch };
+        if (table === "forge_repository") forgeRow(next, state.rows[table][i]);
+        if (table === "issuer" || table === "issuer_key") frozen(table, state.rows[table][i], next);
         conflict(table, next, keyOf(table, state.rows[table][i]));
         state.rows[table] = state.rows[table].map((r, j) => (j === i ? next : r));
         return pick(next);
@@ -105,17 +127,28 @@ export function memoryStore({ clock }) {
       },
       ledgerAll() { need(); return state.ledger.filter(mine).map(pick); },
       // ---- resolution, by exact key (rw_resolve functions)
-      resolveRepository({ forge, repositoryId, nameKey }) {
-        const all = state.rows.forge_repository;
-        const pinned = all.find((r) => r.forge === forge && r.repositoryId === repositoryId);
+      // `repositoryId` and `nameKey` are the forge's own values; the issuer key enters both keys here
+      // (GitHub's stay bare). Within an issuer key only: a registration's rows are its tenant's alone.
+      resolveRepository({ forge, issuerKey = GITHUB_ISSUER_KEY, repositoryId, nameKey }) {
+        const idKey = scopedKey(forge, issuerKey, repositoryId), nKey = scopedKey(forge, issuerKey, nameKey);
+        const all = state.rows.forge_repository.filter((r) => r.issuerKey === issuerKey);
+        const pinned = all.find((r) => r.repositoryId === idKey);
         if (pinned) return { tenantId: pinned.tenantId, id: pinned.id, state: pinned.state, removed: Boolean(pinned.removedAt) };
-        const pending = all.find((r) => r.forge === forge && r.state === "pending" && !r.removedAt && r.nameKey === nameKey);
+        const pending = all.find((r) => r.state === "pending" && !r.removedAt && r.nameKey === nKey);
         return pending ? { tenantId: pending.tenantId, id: pending.id, state: "pending", removed: false } : null;
       },
-      nameTaken({ forge, nameKey }) {
-        const hits = state.rows.forge_repository.filter((r) => r.forge === forge && r.nameKey === nameKey && !r.removedAt);
+      nameTaken({ forge, issuerKey = GITHUB_ISSUER_KEY, nameKey }) {
+        const nKey = scopedKey(forge, issuerKey, nameKey);
+        const hits = state.rows.forge_repository.filter((r) => r.issuerKey === issuerKey && r.nameKey === nKey && !r.removedAt);
         if (hits.some((r) => r.tenantId === tenantId)) return "here";
         return hits.length ? "elsewhere" : "free";
+      },
+      // a registration and its keys, by its exact identifier, before the tenant is known (rw.resolve_issuer)
+      resolveIssuer(id) {
+        const i = state.rows.issuer.find((r) => r.id === id);
+        if (!i) return null;
+        const keys = state.rows.issuer_key.filter((k) => k.tenantId === i.tenantId && k.issuerRef === i.id).map((k) => ({ id: k.id, kid: k.kid, jwk: structuredClone(k.jwk), thumbprint: k.thumbprint, addedAt: k.addedAt, confirmedAt: k.confirmedAt, retiredAt: k.retiredAt }));
+        return { tenantId: i.tenantId, forge: i.forge, issuer: i.issuer, removed: Boolean(i.removedAt), keys };
       },
       resolveCredential(credentialId) {
         const p = state.rows.passkey.find((r) => r.credentialId === credentialId);
@@ -140,15 +173,17 @@ export function memoryStore({ clock }) {
         state.challenges.delete(id);
         return { ...c, live: c.expiresAt > clock.now() };
       },
-      useJti(jti, expiresAt) {
+      // a replay id is used once within its issuer key, and a counter is its issuer key's (ADR-0029 section 1)
+      useJti(jti, expiresAt, issuerKey = GITHUB_ISSUER_KEY) {
         const now = clock.now();
         for (const [k, v] of state.jti) if (v < now - 120_000) state.jti.delete(k);
-        if (state.jti.has(jti)) return false;
-        state.jti.set(jti, expiresAt);
+        const key = `${issuerKey}\u0000${jti}`;
+        if (state.jti.has(key)) return false;
+        state.jti.set(key, expiresAt);
         return true;
       },
-      takeRate(repositoryId, bucket, runId, limit) {
-        const k = `${repositoryId}\u0000${bucket}`;
+      takeRate(repositoryId, bucket, runId, limit, issuerKey = GITHUB_ISSUER_KEY) {
+        const k = `${issuerKey}\u0000${repositoryId}\u0000${bucket}`;
         const runs = state.rate.get(k) ?? new Set();
         if (runs.has(runId)) return true;
         if (runs.size >= limit) return false;
@@ -156,8 +191,8 @@ export function memoryStore({ clock }) {
         state.rate.set(k, runs);
         return true;
       },
-      countRefused(repositoryId, bucket) {
-        const k = `${repositoryId ?? "?"}\u0000${bucket}`;
+      countRefused(repositoryId, bucket, issuerKey = GITHUB_ISSUER_KEY) {
+        const k = `${issuerKey}\u0000${repositoryId ?? "?"}\u0000${bucket}`;
         state.refused.set(k, (state.refused.get(k) ?? 0) + 1);
         return state.refused.get(k);
       },

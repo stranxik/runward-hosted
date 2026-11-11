@@ -15,6 +15,7 @@ import { readerRoutes } from "./routes/reader.js";
 import { journalRoutes } from "./routes/journal.js";
 import { exportRoutes } from "./routes/export.js";
 import { systemRoutes } from "./routes/system.js";
+import { issuerRoutes, forgeRepositoryRoutes } from "./routes/forge.js";
 import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS, OVERFLOW_HISTORY_MINUTES } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
@@ -42,6 +43,8 @@ export function routes(app) {
     ...journalRoutes(app),
     ...exportRoutes(app),
     ...systemRoutes(app),
+    ...issuerRoutes(app),
+    ...forgeRepositoryRoutes(app),
   ];
 }
 
@@ -132,6 +135,9 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       if (!String(req.url).startsWith("//")) { try { url = new URL(req.url, origin); } catch { /* not a path */ } }
       if (!url || url.origin !== origin) { route = "unparsable"; return fail("not-found"); }
       const path = url.pathname;
+      // /send/ is the path of the audience a registered instance's tokens carry (ADR-0029 section 4): a
+      // reserved prefix of the origin, under which nothing is ever served, whatever the method
+      if (path === "/send" || path.startsWith("/send/")) { route = "reserved"; return fail("not-found"); }
 
       // ---- static files, the public site and the shell. The site's pages are public and read nothing (ADR-0022):
       //      / is the landing for everyone; an address of the app (/#/...) is sent by the landing's first script to

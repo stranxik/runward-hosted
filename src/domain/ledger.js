@@ -71,6 +71,9 @@ export const ENTRY_KINDS = [
   "recovery-opened", "recovery-cancelled", "access-reset", "bootstrap-opened",
   "export-prepared", "settings-changed", "reader-authorized", "reader-withdrawn", "reader-read",
   "restore-replayed", "invitation-created", "invitation-cancelled", "member-removed", "member-left",
+  // the forge port (ADR-0029)
+  "issuer-registered", "issuer-key-added", "issuer-key-confirmed", "issuer-key-retired", "issuer-removed",
+  "protection-lifted", "protection-restored", "order-epoch-opened",
 ];
 
 /** Build an entry body: who, role, what, object digest, request id, dates with their source (point 3, 4). */
