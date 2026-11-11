@@ -78,12 +78,17 @@ async function main([origin, commit], env) {
     const h = await j("/api/health"); must(h.r.status === 200 && h.b?.ok === true, `health ${h.r.status} ${JSON.stringify(h.b)}`);
     const v = await j("/api/version"); must(!commit || v.b?.commit === commit, `version serves ${v.b?.commit}, not ${commit}`);
     must(/^[0-9a-f]{64}$/.test(v.b?.apiContract ?? ""), "version has no API contract digest");
-    // the public site at / and the shell at /app (ADR-0022), each with the app's policy
-    const site = await fetch(`${origin}/`); const siteHtml = await site.text();
-    must(site.status === 200 && /<html lang="fr" data-page="index"/.test(siteHtml), "the public site at /");
-    const page = await fetch(`${origin}/app`); const html = await page.text();
-    must(page.status === 200 && /runward hébergé/.test(html), "the page of the app at /app");
-    for (const r of [site, page]) must(/frame-ancestors 'none'/.test(r.headers.get("content-security-policy") ?? ""), `CSP frame-ancestors on ${new URL(r.url).pathname}`);
+    // the app at / and at /app, each with the app's policy; a public page that left this origin answers 308 to the
+    // same page of runward.dev, the printed address /stand first (ADR-0028)
+    const pages = [];
+    for (const p of ["/", "/app"]) {
+      const page = await fetch(`${origin}${p}`); const html = await page.text();
+      must(page.status === 200 && /runward hébergé/.test(html) && /<script type="module" src="\/assets\/app\.[0-9a-f]{16}\/app\.js">/.test(html), `the page of the app at ${p}`);
+      pages.push(page);
+    }
+    for (const r of pages) must(/frame-ancestors 'none'/.test(r.headers.get("content-security-policy") ?? ""), `CSP frame-ancestors on ${new URL(r.url).pathname}`);
+    const stand = await fetch(`${origin}/stand`, { redirect: "manual" });
+    must(stand.status === 308 && stand.headers.get("location") === "https://runward.dev/stand", `/stand answers ${stand.status} to ${stand.headers.get("location")}, not 308 to https://runward.dev/stand`);
     const o = await j("/api/v0/auth/options", { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{}" });
     must(o.r.status === 200 && o.b?.options?.challenge, "sign-in options");
     const x = await j("/api/v0/exports", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });

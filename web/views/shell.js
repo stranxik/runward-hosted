@@ -13,10 +13,12 @@
 import { S, esc, setHTML, latEl, mobNavEl, menuBtnEl, colonneEl, bandEl, barTelEl, stampEl, filEls, langueEls, piedEl, parts, main, annonceEl } from "./base.js";
 import { when } from "./time.js";
 import { MARK, go, act } from "./marks.js";
-import { lang, mots, titreFlotte, appareil, studioUrl } from "./lexique.js";
+import { lang, mots, titreFlotte, appareil, studioUrl, siteUrl } from "./lexique.js";
 import { comptes, triees, verdictOf, nomCourt } from "./lignes.js";
 import { ask, confirmBox } from "./confirm.js";
 
+// The foot's first link is the public site, runward.dev, in the reader's language (ADR-0028): this origin has no
+// public page of its own, and the sign-in is where a visitor of app.runward.dev arrives.
 /** The house's signature in the foot: its name links to the studio's page, whose address is kept beside the lexicon (ADR-0026). */
 const studio = () => `<a href="${esc(studioUrl())}" translate="no">Another Framework</a>`;
 
@@ -79,7 +81,7 @@ export function frame(signedIn, route, sub, v) {
     stamp: signedIn ? "" : esc(location.host),
     fil: signedIn ? fil(v) : "",
     langue: langue(),
-    pied: `<a href="#/legal">${esc(F.legal)}</a><a href="#/legal">${esc(F.privacy)}</a><a href="#/legal">${esc(F.security)}</a><span>${esc(F.times)}</span><span class="signe">${F.signature(studio())}</span>`,
+    pied: `<a href="${esc(siteUrl())}" translate="no">runward.dev</a><a href="#/legal">${esc(F.legal)}</a><a href="#/legal">${esc(F.privacy)}</a><a href="#/legal">${esc(F.security)}</a><span>${esc(F.times)}</span><span class="signe">${F.signature(studio())}</span>`,
     bandeaux: bandeaux(),
   };
 }
