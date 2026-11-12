@@ -576,7 +576,7 @@ export const MOTS = {
     parcours: {
       flux: {
         title: "Brancher une application", nouveau: "Brancher un nouveau dépôt", nouveauSub: "Un dépôt et sa chaîne de livraison suffisent.",
-        enCours: "En cours", faits: "Branchées ces 7 derniers jours", reread: "Relire une étape", stepOf: (i) => `Étape ${i} sur 5`, list: "Les dépôts en cours de branchement",
+        enCours: "En cours", faits: "Branchées ces 7 derniers jours", stepOf: (i) => `Étape ${i} sur 5`, list: "Les dépôts en cours de branchement",
         choose: "Choisissez un dépôt dans la liste, ou branchez-en un nouveau.",
         status: { rien: "rien n'est encore arrivé", attend: "en attente du premier envoi", recu: (at) => `premier envoi reçu le ${at}`, refuse: "envoi non accepté", fait: "branchée", expire: "déclaration expirée", owner: "nouveau propriétaire à confirmer", definition: "définition à confirmer" },
         s1: { h: "Déclarez un dépôt.", more: "Mission, chemin, branche et workflow", moreNote: (m) => `Par défaut : la mission porte le nom du dépôt${m ? ` (${m})` : ""}, le chemin est la racine, la branche est main.` },
@@ -1136,7 +1136,7 @@ export const MOTS = {
     parcours: {
       flux: {
         title: "Connect an application", nouveau: "Connect a new repository", nouveauSub: "A repository and its delivery chain are enough.",
-        enCours: "In progress", faits: "Connected in the last 7 days", reread: "Read a step again", stepOf: (i) => `Step ${i} of 5`, list: "The repositories being connected",
+        enCours: "In progress", faits: "Connected in the last 7 days", stepOf: (i) => `Step ${i} of 5`, list: "The repositories being connected",
         choose: "Choose a repository in the list, or connect a new one.",
         status: { rien: "nothing has arrived yet", attend: "waiting for the first upload", recu: (at) => `first upload received on ${at}`, refuse: "upload not accepted", fait: "connected", expire: "declaration expired", owner: "new owner to confirm", definition: "definition to confirm" },
         s1: { h: "Declare a repository.", more: "Mission, path, branch and workflow", moreNote: (m) => `By default: the mission takes the repository's name${m ? ` (${m})` : ""}, the path is the root, the branch is main.` },

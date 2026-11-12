@@ -42,13 +42,21 @@ function filtres(f) {
     <noscript><button class="btn" type="submit">${esc(P.apply)}</button></noscript></form>`;
 }
 
+/** An entry's mark alone (its shape), its word said to assistive technologies: the rows of the list. */
+function marqueEntree(b) {
+  const J = mots().envois;
+  const known = Object.hasOwn(J.state, b.what);
+  const shape = !known ? "void" : b.what === "send-accepted" ? "full" : b.what === "send-not-accepted" || b.what === "send-quarantined" ? "inv" : "half";
+  const word = known ? J.state[b.what] : b.who?.type === "operator" ? J.operatorGesture : J.act;
+  return `<span class="mk mk-${shape === "inv" ? "full jm-inv" : shape}" aria-hidden="true"></span><span class="vh">${esc(word)}</span>`;
+}
 /** One row of the list: its number, its mark, what happened, when, and who or where. */
 function ligneEntree(e, f, cursor, choisie) {
   const b = e.body, r = depotDeLEntree(b);
   const where = r ? `<span translate="no">${esc(r.mission ?? r.name)}</span>` : esc(qui(b));
   return rangee({
     href: versJournal({ ...f, entree: e.seq }, cursor), cle: `j:${e.seq}`, courant: f.entree === e.seq, choisie, cls: "jrow",
-    html: `<span class="no">${esc(mots().envois.no)} ${e.seq}</span><span class="jm">${etatEntree(b)}</span><span class="q">${esc(quoi(b))}</span><span class="t">${hm(b.dates?.received?.at)}</span><span class="w">${where}</span>`,
+    html: `<span class="no">${esc(mots().envois.no)} ${e.seq}</span><span class="jm">${marqueEntree(b)}</span><span class="q">${esc(quoi(b))}</span><span class="t">${hm(b.dates?.received?.at)}</span><span class="w">${where}</span>`,
   });
 }
 
@@ -106,9 +114,9 @@ export function viewEnvois(sub = "", query = "") {
   const recents = sub ? `<a class="btn btn-q" href="${esc(versJournal(f))}">${esc(C.wholeJournal)}</a>` : "";
   // the service's note on its journal is in French (src/application/reading.js): said in the lexicon's words in English
   const note = lang() === "fr" && j.note ? j.note : J.note;
-  const vide = etat({ titre: P.noResult, texte: P.noResultText, actions: `<a class="btn" href="${esc(versJournal({}))}">${esc(P.clear)}</a>` });
-  const list = `${tete(esc(J.title), esc(counted))}${j.entries.length ? liste(rows, P.list) : vide}<div class="l-pied"><div class="actions">${recents}${plus}</div><p class="fx-n">${esc(note)} ${J.noteMore}</p></div>`;
-  const detail = shown ? detailEntree(shown, f)
+  const list = `${tete(esc(J.title), esc(counted))}${j.entries.length ? liste(rows, P.list) : `<div class="etat"><p>${esc(P.noResult)}</p></div>`}<div class="l-pied"><div class="actions">${recents}${plus}</div><p class="fx-n">${esc(note)} ${J.noteMore}</p></div>`;
+  const detail = !j.entries.length ? etat({ h1: true, titre: P.noResult, texte: P.noResultText, actions: `<a class="btn" href="${esc(versJournal({}))}">${esc(P.clear)}</a>` })
+    : shown ? detailEntree(shown, f)
     : f.entree !== null ? etat({ titre: P.notHere, texte: P.notHereText, actions: `<a class="btn btn-q" href="${esc(versJournal(f, String(f.entree + 1)))}">${esc(P.openPage)}</a>` })
       : choisie !== null ? detailEntree(j.entries[0], f) : etat({ texte: P.choose });
   const crumb = f.entree !== null ? [[J.title, versJournal({ ...f, entree: null }, sub)], [P.entry(f.entree)]] : null;

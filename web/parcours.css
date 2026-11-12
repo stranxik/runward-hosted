@@ -13,10 +13,8 @@
 
 .row.jrow{ display:grid; grid-template-columns:52px 14px minmax(0,1fr) auto; column-gap:10px; row-gap:2px; align-items:baseline; padding:10px 16px; }
 .row.jrow .no{ font-family:var(--mono); font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
-.row.jrow .jm{ align-self:center; }
-.row.jrow .jm .st{ font-size:0; gap:0; }
-.row.jrow .jm .st .mk{ font-size:var(--fs-small); }
-.row.jrow .jm .chip-inv{ padding:0; background:none; border:0; }
+.row.jrow .jm{ align-self:center; display:inline-flex; }
+.row.jrow .jm .jm-inv{ width:9px; height:9px; margin:1px; border:0; border-radius:var(--r-mark); background:var(--refus); transform:rotate(45deg); }
 .row.jrow .q{ font-size:var(--fs-small); font-weight:var(--fw-strong); min-width:0; overflow-wrap:anywhere; }
 .row.jrow .w{ grid-column:3 / -1; font-size:var(--fs-releve); color:var(--text-2); overflow-wrap:anywhere; }
 .row.jrow .t{ grid-row:1; grid-column:4; font-family:var(--mono); font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
@@ -46,9 +44,20 @@
 .compte-tache{ max-width:880px; }
 
 /* ============================================================== the connect flow: its rail, its steps */
+/* a narrow detail: the head's five bars and « Étape n sur 5 » say where the flow stands, the rail is left out */
+@container detail (max-width:619px){ .sheet-rail{ display:none; } }
+/* the step's one action at the bottom of the screen: a phone's only (web/coque.css lays the panes) */
+.d-bas{ display:none; }
+/* a gesture done, read again: its station of the rail is a button (the large rail's own, web/app.css) */
+.pi-piste.grand.mer .pi-st:has(> button){ padding:0; border:0; background:none; }
+.pi-piste.grand.mer .pi-st > button{ color:inherit; }
+/* the level said before the declaration and before the extract (ADR-0029 section 2), compact */
+.fx .niveau-d{ display:grid; gap:4px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-panel); background:var(--bg-2); }
+.fx .niveau-d p{ margin:0; font-size:var(--fs-small); }
+.fx .niveau-d .niveau{ display:grid; gap:2px; margin:0; padding:0; border:0; background:none; }
+.fx .niveau-d .niveau p{ font-size:var(--fs-small); }
 .sheet-rail{ padding:10px 14px 12px; }
 .sheet-rail .pi-piste{ margin:0; }
-.fx-revoir{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
 .prog{ display:inline-grid; grid-template-columns:repeat(5, 18px); gap:3px; }
 .prog i{ height:4px; border-radius:2px; background:var(--beat); }
 .prog i.ok{ background:var(--text); }
@@ -93,15 +102,22 @@
 
 /* ============================================================== the phone: list then detail, actions at the bottom */
 @media (max-width:1023px){
+  /* the page scrolls on a phone: the action stays above the tab bar (64 px, web/coque.css) */
+  .d-bas{ display:flex; position:sticky; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:3; gap:8px; padding:10px 14px; background:color-mix(in srgb, var(--bg-2) 92%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); }
+  .d-bas .btn{ flex:1; min-height:44px; white-space:normal; }
   .row.frow, .row.crow, .row.jrow{ min-height:44px; }
-  #journal-filtres{ flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; padding:2px 0; }
+  /* the journal's filters stay on a phone, on their own line under the title, scrolling in it (web/coque.css hides
+     Applications' chips there; the journal has no other way to filter) */
+  .win-bar #journal-filtres{ display:flex; grid-column:1 / -1; grid-row:2; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; padding:2px 0; }
+  #journal-filtres .jf, #journal-filtres .jf-x{ flex:none; }
+  .win-bar:has(#journal-filtres) .direct{ display:none; }
   #journal-filtres::-webkit-scrollbar{ display:none; }
   #journal-filtres select, #journal-filtres .jf-x{ min-height:44px; font-size:16px; max-width:70vw; }
   .champ input{ min-height:44px; font-size:16px; }
   .seg label{ min-height:44px; }
   .coche{ grid-template-columns:22px minmax(0,1fr); }
   .coche input{ width:20px; height:20px; }
-  .fx-revoir .chip, .fx-act .btn{ min-height:44px; }
+  .fx-act .btn, .pi-piste.grand.mer .pi-st > button{ min-height:44px; }
   .extrait .term{ max-height:200px; }
   .row.jrow{ grid-template-columns:44px 14px minmax(0,1fr) auto; }
 }

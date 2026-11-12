@@ -82,7 +82,8 @@ function statut(repo, e) {
   if (e.variant === "owner") return [mk("inv", F.owner), "inv"];
   if (e.variant === "definition") return [mk("inv", F.definition), "inv"];
   if (e.step === 5) return [mk("full", F.fait), "full"];
-  if (e.step === 4) return [`${mk("half", F.recu(when(repo.pendingSend?.receivedAt, { sec: false })))}`, "half"];
+  // the date is HTML (a <time>): the mark is written here, its word around it
+  if (e.step === 4) return [`<span class="st"><span class="mk mk-half" aria-hidden="true"></span>${F.recu(when(repo.pendingSend?.receivedAt, { sec: false }))}</span>`, "half"];
   if (e.variant === "refused") return [mk("inv", F.refuse), "inv"];
   return [mk("half", e.step === 3 ? F.attend : F.rien), "half"];
 }
@@ -189,13 +190,18 @@ function revoir(repo, n) {
   return `<div class="fx"><dl class="champs">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl></div>`;
 }
 
-/** The rail of the five gestures: those done can be read again, the current one is where the page stands. */
+/**
+ * The rail of the five gestures: a gesture done is a button that reads it again (step 3, deliver, has nothing to read
+ * again: its trace is the journal's entry), and the current one a button back to it while another is read.
+ */
 function railFlux(cur, repo, vue) {
-  const F = piste().first;
-  // step 3 (deliver) has nothing to read again once it is passed: its trace is the journal's entry
-  const chips = repo ? F.steps.map((p, i) => i + 1).filter((n) => (n < cur && n !== 3) || n === cur) : [];
-  const done = chips.length > 1 ? `<div class="fx-revoir" role="group" aria-label="${esc(mots().parcours.flux.reread)}">${chips.map((n) => `<button class="chip" type="button" data-do="flux-vue" data-k="${esc(repo.id)}:${n === cur ? 0 : n}" aria-pressed="${vue === n}">${esc(F.steps[n - 1])}</button>`).join("")}</div>` : "";
-  return `${firstRail(cur - 1)}${done}`;
+  let n = 0;
+  return firstRail(cur - 1).replace(/<li class="pi-st s-(ok|ici|attente)"([^>]*)>([\s\S]*?)<\/li>/g, (m, st, attrs, inner) => {
+    n += 1;
+    const can = repo && ((st === "ok" && n !== 3) || (st === "ici" && vue !== cur));
+    if (!can) return m;
+    return `<li class="pi-st s-${st}${vue === n ? " sel" : ""}"${attrs}><button type="button" data-do="flux-vue" data-k="${esc(repo.id)}:${st === "ici" ? 0 : n}" data-focus-key="flux-vue:${esc(repo.id)}:${n}" aria-pressed="${vue === n}">${inner}</button></li>`;
+  });
 }
 
 /** The connect flow, in its panes: the list of what is in progress, and the step of the one shown. */
