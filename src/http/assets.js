@@ -46,6 +46,12 @@ export const MODULES = Object.freeze([
   "views/claims.js",
   "views/liens.js",
   "views/afaire.js",
+  // ---- the panes of the fixed shell (ADR-0036), and what lot 2 reads with them (ADR-0037): where a repository stands
+  // in the five gestures, the flow's live re-read, the journal's filters in the address
+  "views/volets.js",
+  "views/flux.js",
+  "views/flux-vif.js",
+  "views/journal-filtres.js",
   // ---- the shell, its theme selector, the router, the gestures
   "views/shell.js",
   "views/theme.js",
@@ -154,6 +160,8 @@ export function buildAssets({ pin, commit }) {
   const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), CSS);
   const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), CSS);
   const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), CSS);
+  // lot 2 of the fixed shell (ADR-0037): the connect flow, the journal and Compte in their panes
+  const parcoursCss = add("parcours", "css", readFileSync(join(WEB, "parcours.css")), CSS);
   // the modules: the slot of the pinned views filled first, then one digest over every name and every byte
   const modules = MODULES.map((f) => [f, Buffer.from(readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(viewsPath)))]);
   const folder = modulesFolder(modules);
@@ -162,6 +170,6 @@ export function buildAssets({ pin, commit }) {
   for (const [f, type] of FONTS) files.set(`/assets/fonts/${f}`, { bytes: readFileSync(join(WEB, "fonts", f)), type, immutable: false });
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
     .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
-    .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
+    .replace("__APP_CSS__", appCss).replace("__PARCOURS_CSS__", parcoursCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
   return { files, page, viewsSha256: sha(views), viewsPath, modulesPath: folder };
 }

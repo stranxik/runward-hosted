@@ -428,7 +428,8 @@ test("Access lists the registrations: issuer, audience, each key's thumbprint, s
   const soon = key({ id: "22222222-2222-4333-8444-555555555555", kid: "soon", expiresSoon: true });
   const retired = key({ id: "33333333-2222-4333-8444-555555555555", kid: "old", state: "retired", retiredAt: "2026-11-05T10:00:00.000Z" });
   state({ lang: "en", access: access({ issuers: [{ ...ISSUER, issuer: "https://gitlab.example.test/<i>", keys: [key(), soon, retired] }, { ...ISSUER, id: "f".repeat(32), receiving: false, keys: [retired] }] }) });
-  const html = viewAcces("").html, I = Lx.MOTS.en.forge.instances;
+  // Compte as sections and detail (ADR-0037): the registered instances' section
+  const html = viewAcces("instances").html, I = Lx.MOTS.en.forge.instances;
   assert.ok(html.includes("https://gitlab.example.test/&lt;i&gt;") && !html.includes("<i>"), "the issuer, escaped");
   assert.ok(html.includes(`id="aud-i-${REG}">https://app.runward.dev/send/${REG}</code>`) && html.includes(`data-copy-target="aud-i-${REG}" data-copy-plain data-copy-audience`), "the audience, with its copy button");
   assert.ok(html.includes(`<code translate="no">${THUMB}</code>`) && html.includes('datetime="2027-11-01T10:00:00.000Z"'), "a key's thumbprint and its expiry");
@@ -451,7 +452,8 @@ test("Access lists the registrations: issuer, audience, each key's thumbprint, s
 
 test("a GitLab repository in Access: its issuer, its audience, the protection lifted and restored with the consequence said first, a definition no longer pinned with its remedy", async () => {
   state({ lang: "en", access: access({ repositories: [COM, { ...SELF, definitionPinned: false }, { ...COM, id: "r-b", level: "P3b", protectionRequired: false }] }) });
-  const html = viewAcces("").html, G = Lx.MOTS.en.forge;
+  // Compte as sections and detail (ADR-0037): the declared repositories' section
+  const html = viewAcces("depots").html, G = Lx.MOTS.en.forge;
   assert.ok(html.includes('id="aud-r-r-com">https://app.runward.dev</code>') && html.includes(`id="aud-r-r-self">https://app.runward.dev/send/${REG}</code>`), "the audience each pipeline writes");
   assert.ok(html.includes('data-k="liftprot:r-com"') && html.includes('data-k="restoreprot:r-b"') && !html.includes('data-k="liftprot:r-self"'), "the protection is gitlab.com's requirement");
   assert.ok(html.includes("data-unpinned") && text(html).includes(G.depots.unpinned), "a definition no longer pinned, with its remedy");
@@ -511,8 +513,8 @@ test("the forge port's screens painted in English carry no French word, and in F
   const screens = (lang) => {
     const out = [];
     const paint = (name, over, view) => { state({ lang, ...over }); out.push([name, view()]); };
-    paint("access", { access: access({ repositories: [COM, { ...SELF, definitionPinned: false }, { ...COM, id: "r-b", protectionRequired: false }], issuers: [{ ...ISSUER, receiving: false, keys: [key({ expiresSoon: true }), key({ id: "k2", state: "retired", retiredAt: "2026-11-05T10:00:00.000Z" }), key({ id: "k3", state: "expired" })] }] }) }, () => viewAcces("").html);
-    paint("access, no instance", { access: access({ issuers: [], repositories: [] }) }, () => viewAcces("").html);
+    paint("access", { access: access({ repositories: [COM, { ...SELF, definitionPinned: false }, { ...COM, id: "r-b", protectionRequired: false }], issuers: [{ ...ISSUER, receiving: false, keys: [key({ expiresSoon: true }), key({ id: "k2", state: "retired", retiredAt: "2026-11-05T10:00:00.000Z" }), key({ id: "k3", state: "expired" })] }] }) }, () => `${viewAcces("depots").html}${viewAcces("instances").html}`);
+    paint("access, no instance", { access: access({ issuers: [], repositories: [] }) }, () => `${viewAcces("depots").html}${viewAcces("instances").html}`);
     paint("instance", {}, () => viewAcces("instance").html);
     paint("instance, previewed", { issuer: { id: "", values: { issuer: "i", keys: "{}", kid: "k" }, preview: { issuer: "i", kid: "k", thumbprint: "t", bits: 2048, digest: DIGEST }, error: { field: null, message: "Refused.", action: "Do this.", why: "detail" } } }, () => viewAcces("instance").html);
     paint("instance key", { issuer: { id: REG, values: { issuer: "", keys: "x", kid: "k" }, preview: null, error: { field: "keys", message: "Refused.", action: "Do this.", why: "detail" } } }, () => viewAcces(`instance/${REG}`).html);
@@ -535,5 +537,5 @@ test("the forge port's screens painted in English carry no French word, and in F
   // planted control: a sentence left in French is found
   const was = Lx.MOTS.en.forge.instances.lede;
   Lx.MOTS.en.forge.instances.lede = Lx.MOTS.fr.forge.instances.lede;
-  try { state({ lang: "en" }); assert.ok(frenchIn(viewAcces("").html).length > 0); } finally { Lx.MOTS.en.forge.instances.lede = was; }
+  try { state({ lang: "en" }); assert.ok(frenchIn(viewAcces("instances").html).length > 0); } finally { Lx.MOTS.en.forge.instances.lede = was; }
 });

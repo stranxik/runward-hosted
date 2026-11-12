@@ -14,6 +14,9 @@ export function viewArrivee(sub) {
   const live = a.passkeys.filter((p) => !p.removedAt);
   const open = s.arrivalOpen;
   const pinned = a.repositories.filter((r) => r.state === "pinned");
+  // every repository declared and not removed: confirmed, or waiting for its first check (the count of the head said
+  // « 2 dépôts déclarés » for an account of 3, one of them waiting: seen in production on 2026-11-12)
+  const declares = a.repositories.filter((r) => r.state !== "removed").length;
   const tenant = esc(titreFlotte(s.tenant.title));
   const pkLine = (p) => `${mk("full", [appareil(p.provider ?? p.device) ?? "passkey", p.phone ? C.phoneQr : p.synced === false ? C.boundHere : p.synced ? C.synced : null].filter(Boolean).join(" · "))} <span class="soft">${A.registered}</span>`;
   const msg = sub === "seconde-annulee" ? `<p class="erreur" role="alert">${mk("void", C.nothingAdded)} ${A.cancelled}</p>`
@@ -34,7 +37,7 @@ export function viewArrivee(sub) {
       <p class="note">${pinned.length ? A.opensFleet : A.opensSteps}${A.comeBack}</p>`;
   const ferme = `<p class="note ferme-note">${A.closed}</p>`;
   if (pinned.length) {
-    return { title: A.welcome, key: "arrivee", signed: "in", html: `${head(A.headBack(tenant), A.countBack(live.length, pinned.length))}
+    return { title: A.welcome, key: "arrivee", signed: "in", html: `${head(A.headBack(tenant), A.countBack(live.length, declares))}
       <h1 class="v">${A.h1Back}</h1><p class="face lede">${A.ledeBack}</p>
       <ol class="steps"><li><div class="body"><h3>${A.stepSecond}</h3>${step1}</div></li>
         <li class="${open ? "" : "ferme"}"><div class="body"><h3>${A.stepOpen}</h3>${open ? `<div class="actions">${go("#/", C.openFleet)}</div>` : ferme}</div></li></ol>` };
@@ -47,7 +50,7 @@ export function viewArrivee(sub) {
   const step4 = !open ? ferme : declared?.pendingSend
     ? `<p>${mk("half", A.toConfirm)} ${A.arrived(`<span data-verbatim translate="no">${esc(declared.name)}</span>`)}</p><div class="actions">${go(`#/declarer/confirmer/${declared.id}`, A.confirmFirst)}</div>`
     : `<p class="note">${A.appears}</p><div class="actions">${act("reload-screen", A.checkArrival, { q: true })}</div>`;
-  return { title: A.title, key: "arrivee", signed: "in", html: `${head(A.head(tenant), A.count(live.length, declared ? 1 : 0))}
+  return { title: A.title, key: "arrivee", signed: "in", html: `${head(A.head(tenant), A.count(live.length, declares))}
     <h1 class="v">${A.h1}</h1>
     <p class="face lede">${A.lede}</p>
     <ol class="steps">

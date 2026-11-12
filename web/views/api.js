@@ -2,6 +2,7 @@
 // per screen) is held here and in the router: a screen reads through one of these loaders, once per opening.
 import { S, COMMIT } from "./base.js";
 import { lang } from "./lexique.js";
+import { journalApiQuery } from "./journal-filtres.js";
 
 export async function api(method, path, body) {
   let res;
@@ -40,4 +41,15 @@ export async function loadFleet() {
   S.fleetError = !i.ok && i.status !== 404 ? i : null;
 }
 export async function loadAccess() { const r = await api("GET", "/api/v0/access"); S.access = r.ok ? r.data : null; S.accessError = r.ok ? null : r; }
-export async function loadJournal(cursor) { const r = await api("GET", `/api/v0/journal${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`); S.journal = r.ok ? r.data : null; S.journalError = r.ok ? null : r; }
+/** The journal: a page (its cursor) and its filters (the address's query, web/views/journal-filtres.js, ADR-0037). */
+export async function loadJournal(cursor, query = "") {
+  const q = new URLSearchParams(journalApiQuery(query));
+  if (cursor) q.set("cursor", cursor);
+  const qs = q.toString();
+  const r = await api("GET", `/api/v0/journal${qs ? `?${qs}` : ""}`);
+  S.journal = r.ok ? r.data : null; S.journalError = r.ok ? null : r;
+}
+/** The status lines alone (the journal names its applications by them). */
+export async function loadStatus() { const r = await api("GET", "/api/v0/fleet/status"); if (r.ok) S.status = r.data; }
+/** The connect flow's reads (ADR-0037): the access view, then the index and the status lines, made together. */
+export async function loadFlux() { await Promise.all([loadAccess(), loadFleet()]); }

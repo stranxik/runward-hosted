@@ -130,7 +130,7 @@ test("planted controls: an import off the list, a name not exported, a bare spec
 
 // What the shell touches of the browser, and nothing else: a name outside this list and outside the
 // module's own imports is undefined at run time.
-const BROWSER = ["document", "window", "location", "history", "navigator", "fetch", "localStorage", "matchMedia", "getSelection", "setTimeout", "clearTimeout", "atob", "btoa", "PublicKeyCredential", "NodeFilter", "CSS"];
+const BROWSER = ["document", "window", "location", "history", "navigator", "fetch", "localStorage", "matchMedia", "getSelection", "setTimeout", "clearTimeout", "atob", "btoa", "PublicKeyCredential", "NodeFilter", "CSS", "URLSearchParams"];
 // Inherited, kept as it was by lot L0, which changes no behaviour: api() calls render(), a name nothing
 // declares (web/app.js line 53 before the cut), inside the timer of a request slower than 20 s. The timer
 // throws after setting S.slow, and nothing is redrawn. This entry goes away with the fix of that defect.
