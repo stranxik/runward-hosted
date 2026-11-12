@@ -335,7 +335,7 @@ test("one language for the reading and its frame: the switch of the decision rea
   assert.equal(kept.get("rw-accueil-lang"), "en", "the key of the public site's switch");
   assert.equal(D.readingLang(), "en");
   assert.ok(frame(true, "decision", "", {}).lat.includes("Portfolio"), "the frame follows the reading's switch");
-  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="port">'));
+  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="piste-port">'));
   kept.delete("rw-accueil-lang");
   S.index = { ...T.index, lang: "en" };
   assert.equal(Lx.lang(), "en", "no choice kept: the index's own language");

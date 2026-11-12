@@ -8,6 +8,7 @@ import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write, confirmRepository, issuerPreview, issuerWrite } from "./gestures.js";
 import { retour, versDepot } from "./liens.js";
+import { etat } from "./piste/vif.js";
 
 document.addEventListener("click", async (e) => {
   const g = e.target.closest("[data-go]");
@@ -47,8 +48,16 @@ document.addEventListener("click", async (e) => {
   }
   // a repository confirmed: bound to the values the screen showed (web/views/gestures.js)
   if (what === "gesture" && k.startsWith("confirm:")) {
-    if (!(await confirmRepository(k.slice(8)))) return;
-    await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
+    const repo = S.access?.repositories.find((r) => r.id === k.slice(8));
+    const done = await confirmRepository(k.slice(8));
+    if (!done) return;
+    await loadSession(); forgetReads();
+    // the first verdict (« la piste », ADR-0035): a first check confirmed and published opens its application's reading,
+    // which says it is the first; a new owner confirmed, nothing published, a check set aside or several applications go
+    // back as before
+    const mission = repo?.state === "pending" && repo.missions?.length === 1 ? repo.missions[0].id : null;
+    if (S.session.arrivalDone && mission && done.published && !done.quarantine) { etat().premier = mission; location.hash = `#/decision/${encodeURIComponent(mission)}`; return; }
+    location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
   }
   // a GitLab instance registered, or a key added to one: the gesture on what the preview showed
   if (what === "gesture" && k === "issuer") return issuerWrite();

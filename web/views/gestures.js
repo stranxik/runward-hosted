@@ -136,7 +136,7 @@ export async function confirmRepository(id) {
     return false;
   }
   say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
-  return true;
+  return r.data && typeof r.data === "object" ? r.data : {};
 }
 
 /** Where a refusal of a registration or of a key is shown: under its field, else above the form. */
