@@ -10,6 +10,10 @@
 	<testcase name="C21: a restore in flight at the end of its window commits first; the retention pass, as rw_maint, then erases nothing of a repository that is back" classname="test"/>
 	<testcase name="C23: the erasure's read of the versions returns their number and their fleet.json, for the tenant's versions not yet erased, as rw_app and as rw_maint" classname="test"/>
 	<testcase name="C24: the database dates an erasure itself: as rw_app and as rw_maint, a date in the past or at infinity is replaced by the transaction's" classname="test"/>
+	<testcase name="0007 is an expansion: a row written as the image of before writes it is GitHub's, resolved by the functions of before and of now; the functions of before still answer" classname="test"/>
+	<testcase name="point 6, planted control on PostgreSQL: two tenants register the same issuer string and declare the same project_id: both pin, no upload crosses, no counter and no replay id is shared" classname="test"/>
+	<testcase name="points 6 and 7: what the database refuses, whatever the application does: another tenant's registration, a key changed, a retirement undone, a read outside the tenant" classname="test"/>
+	<testcase name="point 8 on PostgreSQL: a retired key is told key-retired after its signature holds, in its tenant's journal; a bad signature under its kid writes nothing" classname="test"/>
 	<testcase name="the migration is idempotent: a second run applies nothing" classname="test"/>
 	<testcase name="two real tenants, made through the application under rw_app" classname="test"/>
 	<testcase name="S4: 0 row read or written outside its tenant, both ways, as rw_app" classname="test"/>
@@ -106,6 +110,39 @@
 	<testcase name="the erasure reads the versions not yet erased, their number and their fleet.json only: the daily pass never reads a version's bytes (C23)" classname="test"/>
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
+	<testcase name="point 15: /send/ is a reserved prefix of the origin: nothing is served under it, whatever the method" classname="test"/>
+	<testcase name="the egress list holds the two public issuers' key hosts (gitlab.com's once opened) and nothing of a registered instance (section 1)" classname="test"/>
+	<testcase name="a registered instance over HTTP: registered by a gesture, its token travels the machine route, shown P4; the routes are the session's, same origin" classname="test"/>
+	<testcase name="T24: a key retired, a registration removed and a protection required again after the backup are replayed by a restore" classname="test"/>
+	<testcase name="the claims a real GitLab instance signed are read as the rules expect: typed, with the definition absent when it lives in another project" classname="test"/>
+	<testcase name="point 4: every claim is typed before it is compared, and an absent claim refuses, never passes" classname="test"/>
+	<testcase name="point 5: ci_config_ref_uri is compared whole at each upload; the declaration is compared by string suffixes at the confirmation" classname="test"/>
+	<testcase name="section 2: the level is computed from the forge, the issuer and the protection requirement, never raised by a claim" classname="test"/>
+	<testcase name="gitlab.com: an upload is bound by its token, shown P3, journaled with what it rests on; protection lifted lowers it to P3b" classname="test"/>
+	<testcase name="a registered instance: an upload is shown P4 whatever its claims say, and its entry names the key that signed it (point 8)" classname="test"/>
+	<testcase name="points 1 and 9: a key set is chosen by exact equality; every other token is token-unreadable after one signature check, nothing journaled" classname="test"/>
+	<testcase name="point 15: a gitlab.com token carries exactly the service's audience; with a registration's it is refused token-audience, and the answer gives the value" classname="test"/>
+	<testcase name="point 2: RS256 only, for every issuer: none and HMAC are refused; a key's type, size and exponent are checked when it is read" classname="test"/>
+	<testcase name="point 2 and section 4: what a key must be, or the whole input is refused" classname="test"/>
+	<testcase name="point 3: no value of a token becomes an address: the only reads are the two fixed key addresses" classname="test"/>
+	<testcase name="point 13: a GitLab token more than 10 minutes old is refused whatever its exp, and its replay id is kept until exp; GitHub's has no bound" classname="test"/>
+	<testcase name="point 8: key-retired is answered and journaled only after the signature holds under the retired key; a retired kid with a bad signature is token-unreadable" classname="test"/>
+	<testcase name="a key expires 365 days after it was added unless confirmed again; an expired key is told key-retired, and the app warns 30 days before" classname="test"/>
+	<testcase name="section 4 and point 16: registering is a gesture bound to the digest of the issuer and the key shown; look-alike issuers are refused" classname="test"/>
+	<testcase name="section 4: at most 5 registrations a tenant and 4 live keys a registration; a registration is removed only when no repository is declared on it" classname="test"/>
+	<testcase name="point 6, planted control: two tenants register the same issuer string and declare the same project_id: both pin, no upload crosses, no counter and no replay id is shared" classname="test"/>
+	<testcase name="point 14: the confirmation is bound to the values shown; values that changed refuse confirmation-stale; a new push with the same values changes nothing" classname="test"/>
+	<testcase name="rule 3: a definition that does not name the declared file and branch is shown and cannot be confirmed; a changed declaration unpins it" classname="test"/>
+	<testcase name="a name the pinned runward-fleet cannot carry is refused at declaration with its reason, never truncated: a long path, a host with a port" classname="test"/>
+	<testcase name="rule 7: pipeline_id then job_id order the uploads; an upload issued later and ranked historical is signalled; a member opens a new epoch" classname="test"/>
+	<testcase name="point 11: none of GitHub's rule codes is answered to a GitLab token, none of GitLab's to a GitHub one; refusals after the repository are journaled in its tenant" classname="test"/>
+	<testcase name="point 12: the API contract changes by addition, with two exceptions: two remedies that name no forge, and the object of repository-confirm" classname="test"/>
+	<testcase name="T18 for GitLab: a verified token of a project nobody declared is answered repository-not-declared, and nothing is written in any journal" classname="test"/>
+	<testcase name="review 1: a registration under a public forge's host cannot be made, so the index never names a tenant's key github.com/&lt;owner>/&lt;repo>" classname="test"/>
+	<testcase name="review 2: a retired key's token is held to its own times first, written once, and never breaks the service" classname="test"/>
+	<testcase name="review 3: gitlab.com is closed unless the service opens it: its tokens are unreadable, it cannot be declared, and registered instances stay" classname="test"/>
+	<testcase name="review 4: after a new order epoch, a send whose pipeline and job numbers were already received is accepted, not a duplicate for ever" classname="test"/>
+	<testcase name="review 6, 8, 9, 10, 11, 12: a GitHub key holds no colon; the refusal counter is purged; Access shows the forge's identifier; a GitHub upload of before the levels is reached; the consent gesture is bound to the forge and the issuer; a pinned GitLab repository without an owner is refused" classname="test"/>
 	<testcase name="the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot" classname="test"/>
 	<testcase name="the shell's links to the public site follow the reader's language: runward.dev in French, runward.dev/en in English, in the same tab" classname="test"/>
 	<testcase name="the foot carries the house's signature in the reader's language, signed in and signed out: « runward, par Another Framework », the name linking to the studio's page" classname="test"/>
@@ -319,6 +356,23 @@
 	<testcase name="send.yml: a 429 is retried like an unavailable service, and a later success is sent" classname="test"/>
 	<testcase name="send.yml: a token endpoint that does not answer is cut at its own deadline (10 s) and retried like an unavailable service" classname="test"/>
 	<testcase name="C15, send.yml: on a runner without Node.js 22 the send job says &amp;quot;not sent: this runner has no Node.js 22&amp;quot; and keeps runward's verdict; it fails only with send-strict" classname="test"/>
+	<testcase name="the gesture and the body the shell makes are the ones the service accepts: a real pending upload, confirmed with them" classname="test"/>
+	<testcase name="the confirmation shows the values it pins, sends their digest, and binds the gesture to &lt;repository>:&lt;digest>" classname="test"/>
+	<testcase name="confirmation-stale: the access view is read again and the screen shows the new values, with the reason" classname="test"/>
+	<testcase name="a definition that is not the declared file on the declared branch: the values are shown with the reason, and no confirm button" classname="test"/>
+	<testcase name="the four levels are said in both languages; the English sentences are the decision's table, word for word" classname="test"/>
+	<testcase name="the sentence first, what it does not prove next, the code after them, in both languages; a code the page does not know is shown as written" classname="test"/>
+	<testcase name="every mission line shows its level on the fleet's views and on its reading: reached or to come, a key since retired, the order signal with its gesture" classname="test"/>
+	<testcase name="GitLab's jobs: the exact audience, no clone, the push rule on the declared branch, the service's address, the token never printed" classname="test"/>
+	<testcase name="a declared value that could end a quoted string is never written into the jobs (planted values)" classname="test"/>
+	<testcase name="GitLab's jobs are offered, never presented as pinned, in both languages; GitHub's extract is unchanged" classname="test"/>
+	<testcase name="the declaration names its forge: GitHub's body is the one it was, gitlab.com and a registered instance say theirs; the level is said before" classname="test"/>
+	<testcase name="registering an instance: the key set is sent as JSON, the service's answer is shown, the gesture is bound to its digest" classname="test"/>
+	<testcase name="Access lists the registrations: issuer, audience, each key's thumbprint, state and expiry; a key retired and a registration removed are gestures bound to their identifier" classname="test"/>
+	<testcase name="a GitLab repository in Access: its issuer, its audience, the protection lifted and restored with the consequence said first, a definition no longer pinned with its remedy" classname="test"/>
+	<testcase name="the claims of a GitLab upload are GitLab's, escaped, with no GitHub address; GitHub's are unchanged" classname="test"/>
+	<testcase name="every journal kind and every refusal of the forge port has its words in both languages; every gesture the shell binds is one the service knows" classname="test"/>
+	<testcase name="the forge port's screens painted in English carry no French word, and in French are French" classname="test"/>
 	<testcase name="the served list of the shell's modules is the scripts under web/: none off the list, none missing, none twice" classname="test"/>
 	<testcase name="planted controls: a file off the list, a listed file that is missing, a name listed twice" classname="test"/>
 	<testcase name="every import of every module names a module of the list and a name it exports; only one module names the pinned views" classname="test"/>
@@ -375,9 +429,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 374 -->
+	<!-- tests 428 -->
 	<!-- suites 0 -->
-	<!-- pass 374 -->
+	<!-- pass 428 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

@@ -12,7 +12,7 @@ import { S } from "./base.js";
 import { mots } from "./lexique.js";
 
 /** The sections of Accès an address can name, and the id of each one's element. */
-export const SECTIONS_ACCES = { cles: "acces-cles", sessions: "acces-sessions", depots: "acces-depots", reglages: "acces-reglages", membres: "acces-membres", donnees: "acces-donnees", limites: "acces-limites" };
+export const SECTIONS_ACCES = { cles: "acces-cles", sessions: "acces-sessions", depots: "acces-depots", instances: "acces-instances", reglages: "acces-reglages", membres: "acces-membres", donnees: "acces-donnees", limites: "acces-limites" };
 const enc = (k) => encodeURIComponent(String(k ?? ""));
 /** A section of Accès. */
 export const versSection = (s) => `#/acces/${s}`;

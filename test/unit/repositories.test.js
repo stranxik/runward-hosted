@@ -1,7 +1,7 @@
 // Declarations, consent, erasure, the export and its replay (architecture §3.4, PADR-0011 6 bis, PADR-0017).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { harness, founder, pinnedRepository, send, gesture, FIXTURE_CHECK } from "../helpers.js";
+import { harness, founder, pinnedRepository, send, gesture, FIXTURE_CHECK, confirmRepository } from "../helpers.js";
 import { replay, replayPin } from "../../scripts/replay-export.mjs";
 import { untar } from "../../src/adapters/archive/tar.js";
 import { readFileSync } from "node:fs";
@@ -202,8 +202,7 @@ test("a repository confirmed without consented content enters the index, declare
   await gesture(h, f.session, null, null);
   const d = await h.app.repositories.declare(await h.app.identity.sessionFrom(f.token), { name: "stranxik/radar", missions: [{ id: "radar" }] }, {});
   assert.equal((await send(h, { repository: "stranxik/radar", repository_id: "4004" }, { mission: "radar" })).refusal, "content-not-consented");
-  await gesture(h, f.session, "repository-confirm", d.id);
-  const c = await h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), d.id, {});
+  const c = await confirmRepository(h, f, d.id);
   assert.ok(c.published);
   const idx = JSON.parse((await h.app.reading.index(f.tenant)).bytes.toString("utf8"));
   assert.equal(idx.missions.find((m) => m.id === "radar").latest, "not-observed");

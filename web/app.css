@@ -187,6 +187,25 @@ input.in:focus-visible{ outline:2px solid var(--hit); outline-offset:1px; }
 .check{ display:flex; gap:10px; align-items:flex-start; font-size:var(--fs-ui); margin:0 0 14px; }
 .check input{ margin-top:3px; width:16px; height:16px; accent-color:currentColor; }
 fieldset.choix{ border:0; padding:0; margin:0 0 10px; }
+/* the forge port (ADR-0029): a level of evidence, said by its sentence then its code; the values a confirmation pins;
+   a registered instance's keys; the key set a member pastes */
+.niveau{ display:grid; gap:8px; max-width:70ch; font-size:var(--fs-ui); line-height:1.55; }
+.niveau > *{ margin:0; min-width:0; }
+.niveau ul{ padding-left:20px; }
+.niveau-d{ display:grid; gap:8px; margin:0 0 14px; padding:12px 14px; border:1px solid var(--line-2); border-radius:var(--r-notice); background:var(--bg); }
+.niveau-d > p{ margin:0; }
+.niveaux{ display:grid; gap:14px; margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.niveaux > *{ margin:0; }
+.ordre{ display:grid; gap:10px; }
+.ordre > *{ margin:0; }
+.pins{ display:grid; gap:8px; margin:0 0 14px; }
+.pins > *{ margin:0; }
+.pins h2{ font-size:16px; font-weight:var(--fw-strong); }
+.arow > :is(.avert, .prov, .cles){ grid-column:1 / -1; }
+.cles{ display:grid; gap:10px; }
+.cle{ display:grid; gap:4px; padding-top:10px; border-top:1px solid var(--line); min-width:0; overflow-wrap:anywhere; }
+textarea.in{ display:block; width:100%; padding:8px 12px; font-family:var(--mono); font-size:var(--fs-small); line-height:1.5; color:var(--text); background:var(--bg); border:1px solid var(--line-2); border-radius:var(--r-panel); resize:vertical; }
+textarea.in:focus-visible{ outline:2px solid var(--hit); outline-offset:1px; }
 .mis{ display:grid; gap:0 16px; grid-template-columns:minmax(0,1fr); }
 @media (min-width:600px){ .mis{ grid-template-columns:minmax(0,1fr) minmax(0,1fr); } }
 form#declare{ max-width:46em; }

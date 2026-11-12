@@ -75,6 +75,31 @@ const REPLAY = new Map([
     if (r) { await tx.update("repository", { id: r.id }, { removedAt: null }); await tx.update("forge_repository", { id: r.id }, { removedAt: null }); }
     return Boolean(r);
   }],
+  // The forge port (ADR-0029 section 4): a key retired and a registration removed withdraw an access, and
+  // so does the protection of a branch required again. The restore brought the key back live, the
+  // registration back, the requirement back lifted: each is recorded again, at the date of the gesture. A
+  // key or a registration added after the backup is gone with the restore: its retirement applies to nothing.
+  ["issuer-key-retired", async (tx, e) => {
+    const k = e.key ? await tx.get("issuer_key", { id: e.key }) : null;
+    if (k && !k.retiredAt) await tx.update("issuer_key", { id: k.id }, { retiredAt: when(e) });
+    return Boolean(k && !k.retiredAt);
+  }],
+  ["issuer-removed", async (tx, e) => {
+    const i = e.issuer ? await tx.get("issuer", { id: e.issuer }) : null;
+    if (i && !i.removedAt) await tx.update("issuer", { id: i.id }, { removedAt: when(e) });
+    return Boolean(i && !i.removedAt);
+  }],
+  // The requirement of a protected branch is where the log, read to its end, says it was, as a consent is.
+  ["protection-lifted", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) await tx.update("repository", { id: r.id }, { protectionLiftedAt: when(e) });
+    return Boolean(r);
+  }],
+  ["protection-restored", async (tx, e) => {
+    const r = await tx.get("repository", { id: e.repository });
+    if (r) await tx.update("repository", { id: r.id }, { protectionLiftedAt: null });
+    return Boolean(r);
+  }],
   ["recovery-cancelled", async (tx, e) => {
     const l = e.link ? await tx.get("link", { id: e.link }) : null;
     if (l) await tx.update("link", { id: l.id }, { cancelledAt: when(e) });
@@ -144,6 +169,9 @@ export const SECURITY_NOT_REPLAYED = {
   "recovery-opened": "a recovery opened after the backup is gone with the restore: nothing is given back",
   "session-closed": "the replay closes every session",
   "sessions-closed-others": "the replay closes every session",
+  "issuer-registered": "a registration made after the backup is gone with the restore: nothing is given back, and it receives nothing",
+  "issuer-key-added": "a key added after the backup is gone with the restore: nothing is given back",
+  "issuer-key-confirmed": "a confirmation made after the backup is gone with the restore: the key expires at its earlier date, which withdraws and never grants",
   "journal-anchored": "not a gesture: the head of the tenant's journal, written before a loss and read for the note (headBefore)",
 };
 
@@ -502,7 +530,8 @@ export function operatorCases(ctx) {
 export function readerCases(ctx, ingest, reading) {
   const { store, append } = ctx;
   async function authorize({ authorization, fleet, requestId }) {
-    const c = await ingest.verifyToken(authorization, `${ctx.config.origin}/read`);
+    // GitHub alone: the registry reads no other issuer for the reader's audience (ADR-0029 section 1)
+    const { c } = await ingest.verifyToken(authorization, { purpose: "read", audience: `${ctx.config.origin}/read`, requestId });
     const ok = c.repository === "stranxik/runward-hosted"
       && (!ctx.config.readerRepositoryId || c.repositoryId === ctx.config.readerRepositoryId)
       && c.jobWorkflowRef === "stranxik/runward-hosted/.github/workflows/temoin.yml@refs/heads/main"

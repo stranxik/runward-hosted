@@ -10,7 +10,7 @@ export function repositoryRoutes(app) {
   return [
     ["POST", "/api/v0/repositories", "session", async (q) => ({ status: 201, body: await R.declare(q.session, q.body, { requestId: q.requestId }) })],
     ["PATCH", `/api/v0/repositories/${id}`, "session", (q, [r]) => R.patch(q.session, r, q.body, { requestId: q.requestId })],
-    ["POST", `/api/v0/repositories/${id}/confirm`, "session", (q, [r]) => R.confirm(q.session, r, { requestId: q.requestId })],
+    ["POST", `/api/v0/repositories/${id}/confirm`, "session", (q, [r]) => R.confirm(q.session, r, q.body, { requestId: q.requestId })],
     ["DELETE", `/api/v0/repositories/${id}`, "session", (q, [r]) => R.remove(q.session, r, { requestId: q.requestId })],
     ["POST", `/api/v0/repositories/${id}/restore`, "session", (q, [r]) => R.restore(q.session, r, { requestId: q.requestId })],
     ["POST", `/api/v0/repositories/${id}/consent`, "session", (q, [r]) => R.consent(q.session, r, { requestId: q.requestId })],

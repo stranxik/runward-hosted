@@ -20,7 +20,10 @@ import { silentLog } from "../../src/adapters/system/log.js";
 import { VerifierUnavailable } from "../../src/ports/errors.js";
 import { probeVerdict } from "../../scripts/probe-verdict.mjs";
 
-const SOURCE = new URL("../../src/adapters/oidc/github.js", import.meta.url);
+// the key cache and its refresh live in the module every public issuer's adapter shares since the forge
+// port (ADR-0029 section 1): the planted control moved there with refresh()
+const SOURCE = new URL("../../src/adapters/oidc/jws.js", import.meta.url);
+const GITHUB = "https://token.actions.githubusercontent.com";
 const keySet = () => new Response(JSON.stringify({ keys: [testJwk()] }));
 
 /** The scenario of the finding, on a verifier made by `make`: the first read of the keys fails, the second
@@ -53,7 +56,9 @@ test("planted control: with the refresh time stamped before the read (the defect
     const port = '"../../ports/errors.js"';
     assert.equal(src.split(port).length, 2, "the adapter imports the port's errors once");
     writeFileSync(file, src.replace(port, JSON.stringify(new URL("../../src/ports/errors.js", import.meta.url).href)).replace(anchor, `${anchor}    fetchedAt = now; // planted: stamped before the read\n`));
-    const { githubVerifier: planted } = await import(pathToFileURL(file).href);
+    const { publicIssuerVerifier } = await import(pathToFileURL(file).href);
+    // GitHub's adapter (src/adapters/oidc/github.js) is this verifier at GitHub's issuer and key address
+    const planted = (o) => publicIssuerVerifier({ issuer: GITHUB, jwksUrl: `${GITHUB}/.well-known/jwks`, ...o });
     assert.deepEqual(await failThenSucceed(planted), { first: "no refusal code", second: "token-unreadable", reads: 1 }, "the scenario sees the defect");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

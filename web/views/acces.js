@@ -7,7 +7,7 @@ import { head, mk, reqNote, act, loadingView } from "./marks.js";
 import { mots, titreFlotte } from "./lexique.js";
 import { sectionPasskeys } from "./acces/passkeys.js";
 import { sectionSessions } from "./acces/sessions.js";
-import { sectionDepots } from "./acces/depots.js";
+import { sectionDepots, sectionInstances, viewInstance } from "./acces/depots.js";
 import { sectionReglages } from "./acces/reglages.js";
 import { sectionMembres } from "./acces/membres.js";
 import { sectionDonnees } from "./acces/donnees.js";
@@ -19,14 +19,16 @@ import { viewDepot } from "./acces/depot.js";
 import { SECTIONS_ACCES, versSection, decode } from "./liens.js";
 
 /** The sections of the screen, in the order they are shown; each takes the access view and gives its HTML. */
-const SECTIONS = [sectionPasskeys, sectionSessions, sectionDepots, sectionReglages, sectionMembres, sectionDonnees, sectionLimites];
+const SECTIONS = [sectionPasskeys, sectionSessions, sectionDepots, sectionInstances, sectionReglages, sectionMembres, sectionDonnees, sectionLimites];
 /** The page's index, in the same order: the section an address names, and its title. */
-const INDEX = [["cles", (A) => A.passkeys.h2], ["sessions", (A) => A.sessions.h2], ["depots", (A) => A.depots.h2], ["reglages", (A) => A.reglages.h2], ["membres", (A) => A.membres.h2], ["donnees", (A) => A.donnees.h2], ["limites", (A) => A.limites.h2]];
+const INDEX = [["cles", (A) => A.passkeys.h2], ["sessions", (A) => A.sessions.h2], ["depots", (A) => A.depots.h2], ["instances", () => mots().forge.instances.h2], ["reglages", (A) => A.reglages.h2], ["membres", (A) => A.membres.h2], ["donnees", (A) => A.donnees.h2], ["limites", (A) => A.limites.h2]];
 
 export function viewAcces(sub) {
   if (sub === "export") return viewExport();
   if (sub === "effacer") return viewEffacer();
   if (sub === "ajout") return viewAjout();
+  // a GitLab instance registered (#/acces/instance), or a key added to one (#/acces/instance/<id>): ADR-0029 section 4
+  if (sub === "instance" || sub.startsWith("instance/")) return viewInstance(sub.slice(9));
   const [first, key, quoi, ...rest] = sub.split("/");
   const section = sub && Object.hasOwn(SECTIONS_ACCES, sub) ? sub : null;
   if (sub && !section && !(first === "depot" && key && !rest.length)) return null;

@@ -4,6 +4,7 @@
 import { Refusal } from "../domain/refusals/index.js";
 import { verifyChain } from "../domain/ledger.js";
 import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE } from "../domain/repository.js";
+import { GITLAB_COM_ISSUER, levelCode, forgeOfWorkload } from "../domain/forge.js";
 import { iso, sha256, manifestExports } from "./context.js";
 
 const PAGE = 50;
@@ -25,7 +26,7 @@ export function readingCases(ctx, identity) {
   const brief = (e) => {
     const d = e.body.detail ?? {};
     return {
-      seq: e.seq, what: e.body.what, who: e.body.who.type, at: e.body.dates?.received?.at ?? null,
+      seq: e.seq, what: e.body.what, who: e.body.who.type, forge: e.body.who.type === "workload" ? forgeOfWorkload(e.body.who.id) : null, at: e.body.dates?.received?.at ?? null,
       mission: d.mission ?? null, kind: d.kind ?? null, repository: d.claims?.repository ?? d.name ?? null,
       runNumber: d.runNumber ?? null, refusal: d.refusal ?? null, commit: d.commit ?? null,
     };
@@ -45,20 +46,48 @@ export function readingCases(ctx, identity) {
       const uploads = await tx.list("upload");
       const entries = await tx.ledgerAll();
       const idx = await latestIndex(tx);
+      const issuerKeys = forge.some((f) => f.forgeName !== "github" && f.issuerKey !== GITLAB_COM_ISSUER) ? await tx.list("issuer_key") : [];
+      /**
+       * The level of evidence of a mission (ADR-0029 section 2): the one its current upload reached, with
+       * what it rests on; before any upload, the one its repository's uploads will reach. Never absent.
+       * `keyRetiredAt`: the key that signed the current upload was retired since, on that date.
+       */
+      const levelOfLine = (r, f, cur) => {
+        const forgeName = f?.forgeName ?? "github";
+        const registered = forgeName !== "github" && f.issuerKey !== GITLAB_COM_ISSUER;
+        const kept = cur?.claims?.level ?? null;
+        const expected = levelCode({ forge: forgeName, issuerKind: registered ? "registered" : "public", protectionRequired: !r.protectionLiftedAt });
+        const key = kept?.kid && registered ? issuerKeys.find((k) => k.issuerRef === f.issuerKey && k.kid === kept.kid) ?? null : null;
+        // GitHub has one level: an upload of before the levels were journaled reached it too
+        return { code: kept?.code ?? expected, reached: Boolean(kept) || (forgeName === "github" && Boolean(cur)), issuer: registered ? "registered" : "public", kid: kept?.kid ?? null, thumbprint: kept?.thumbprint ?? null, protectionRequired: forgeName === "github" ? null : kept ? kept.protectionRequired : !r.protectionLiftedAt, ...(key?.retiredAt ? { keyRetiredAt: iso(key.retiredAt) } : {}) };
+      };
+      /**
+       * GitLab's signal (section 3 rule 7): the last upload ranked historical although its token was issued
+       * after the current one's, in the current epoch, with both orders. A member then opens a new epoch.
+       */
+      const orderSignal = (r, m, cur) => {
+        if (!cur) return null;
+        const late = uploads.filter((u) => u.mission === m.id && u.kind === cur.kind && u.rank === "historical" && u.epoch === cur.epoch && u.claims?.issuedLater === true && u.seq > cur.seq).pop();
+        if (!late) return null;
+        const order = (u) => ({ pipelineId: u.runNumber, jobId: u.runAttempt, issuedAt: u.claims?.issuedAt ? iso(u.claims.issuedAt * 1000) : null });
+        return { repository: r.id, epoch: cur.epoch, current: order(cur), later: order(late) };
+      };
       const lines = [];
       for (const m of missions) {
         const r = repos.find((x) => x.id === m.repositoryRef);
         if (!r || r.removedAt) continue;
+        const f = forge.find((x) => x.id === r.id);
         const cur = uploads.filter((u) => u.mission === m.id && u.rank === "current" && u.kind === "check")[0] ?? null;
         const since = entries.filter((e) => ["send-not-accepted", "send-quarantined"].includes(e.body.what) && e.body.detail?.mission === m.id && e.seq > (cur?.seq ?? 0));
         const last = since[since.length - 1];
         const mine = entries.filter((e) => e.body.detail?.mission === m.id || (e.body.object === r.id && e.body.who.type === "human"));
         lines.push({
-          mission: m.id, repository: r.name, path: m.path, state: forge.find((f) => f.id === r.id)?.state ?? "pending", consent: r.consent,
+          mission: m.id, repository: r.name, path: m.path, state: f?.state ?? "pending", consent: r.consent,
+          forge: f?.forgeName ?? "github", level: levelOfLine(r, f, cur), orderSignal: orderSignal(r, m, cur),
           accepted: cur ? {
             entry: cur.id, seq: cur.seq, runId: cur.runId, runNumber: cur.runNumber, runAttempt: cur.runAttempt, commit: cur.commit,
             receivedAt: iso(cur.receivedAt), source: "service clock (declared)", kind: cur.kind,
-            workflow: String(cur.claims?.workflowRef ?? "").replace(`${cur.claims?.repository}/`, "").replace(/@refs\/heads\/main$/, ""),
+            workflow: f?.forgeName === "gitlab" ? r.workflow : String(cur.claims?.workflowRef ?? "").replace(`${cur.claims?.repository}/`, "").replace(/@refs\/heads\/main$/, ""),
           } : null,
           notAcceptedSince: since.length,
           lastRefusal: last ? last.body.detail.refusal : null,

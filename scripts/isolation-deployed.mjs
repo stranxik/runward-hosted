@@ -7,7 +7,7 @@
 // (two witnesses with no row at all would prove nothing: the positive control).
 import postgres from "postgres";
 import { migrationTls } from "./migrate.mjs";
-const T = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger"];
+const T = ["member", "passkey", "session", "link", "forge_repository", "repository", "mission", "upload", "blob", "fleet_index", "reader", "archive", "ledger", "issuer", "issuer_key"];
 const [a, b] = (process.env.RW_WITNESS_TENANTS ?? "").split(",");
 if (!a || !b) { console.error("RW_WITNESS_TENANTS must name two tenants"); process.exit(2); }
 const sql = postgres(process.env.DATABASE_URL, { max: 1, onnotice: () => {}, ssl: migrationTls(process.env.DATABASE_URL) });

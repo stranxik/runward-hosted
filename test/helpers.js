@@ -7,6 +7,9 @@ import { createApp } from "../src/application/app.js";
 import { memoryStore } from "../src/adapters/store/memory.js";
 import { memoryObjects } from "../src/adapters/objects/objects.js";
 import { githubVerifier, GITHUB_ISSUER } from "../src/adapters/oidc/github.js";
+import { gitlabComVerifier } from "../src/adapters/oidc/gitlab.js";
+import { issuerRegistry, decoyCheck } from "../src/adapters/oidc/registry.js";
+import { pinDigest, confirmObject } from "../src/domain/forge.js";
 import { fleetAssembler, fleetPin } from "../src/adapters/fleet/assembler.js";
 import { tar, untar } from "../src/adapters/archive/tar.js";
 import { manualClock } from "../src/adapters/system/clock.js";
@@ -61,6 +64,71 @@ export function fakeAuthn() {
 }
 
 export const sha = (b) => createHash("sha256").update(b).digest("hex");
+
+// ---------------------------------------------------------------- GitLab (ADR-0029)
+export const GITLAB_FIXTURES = JSON.parse(readFileSync(new URL("./fixtures/gitlab/claims_runs.json", import.meta.url), "utf8"));
+export const GITLAB_JWKS = JSON.parse(readFileSync(new URL("./fixtures/gitlab/jwks.json", import.meta.url), "utf8"));
+/** An issuer as a GitLab instance's tokens name it, without a port: a name the pinned runward-fleet carries. */
+export const INSTANCE = "https://gitlab.example.test";
+
+/** An RSA key as GitLab publishes one: its `kid` is its RFC 7638 thumbprint. `sign(claims, header)` signs a token. */
+export function gitlabKey(bits = 2048) {
+  const pair = generateKeyPairSync("rsa", { modulusLength: bits });
+  const pub = pair.publicKey.export({ format: "jwk" });
+  const kid = createHash("sha256").update(JSON.stringify({ e: pub.e, kty: pub.kty, n: pub.n })).digest("base64url");
+  const key = { jwk: { ...pub, kid, alg: "RS256", use: "sig" }, kid, privateKey: pair.privateKey };
+  key.sign = (claims, over = {}) => token(claims, { key: pair.privateKey, kid, ...over });
+  return key;
+}
+/** The key gitlab.com's fixed address answers with in the harness. */
+export const GITLAB_COM_KEY = gitlabKey();
+
+/**
+ * Claims as GitLab signs them, from the real ones of the witness instance (run C: a push on a protected
+ * `main`), for a project and at the clock's time. `issuer`: the instance, or "https://gitlab.com".
+ */
+export function gitlabClaims(clock, { issuer = INSTANCE, audience = ORIGIN, path = "temoin/demo", projectId = "1", branch = "main", file = ".gitlab-ci.yml", sha: commit = "1445c1bb17ed487793419fe073f1afd1c5308c41", pipeline = "30", job = "300" } = {}, over = {}) {
+  const now = Math.floor(clock.now() / 1000);
+  const real = GITLAB_FIXTURES["C main push include-local"].claims;
+  const host = issuer.replace(/^https?:\/\//, "");
+  return {
+    ...real, project_id: projectId, project_path: path, namespace_path: path.split("/").slice(0, -1).join("/"), pipeline_id: pipeline, job_id: job,
+    ref: branch, ref_path: `refs/heads/${branch}`, sha: commit, ci_config_sha: commit, ci_config_ref_uri: `${host}/${path}//${file}@refs/heads/${branch}`,
+    jti: randomUUID(), iat: now, nbf: now - 5, exp: now + 3600, iss: issuer, sub: `project_path:${path}:ref_type:branch:ref:${branch}`, aud: audience,
+    ...over,
+  };
+}
+
+/** Register a GitLab instance as the shell does: preview, the gesture bound to the digest shown, register. */
+export async function registerIssuer(h, f, { issuer = INSTANCE, key = gitlabKey(), keys = null } = {}) {
+  const input = { issuer, keys: keys ?? { keys: [key.jwk] }, kid: key.kid };
+  const s = await h.app.identity.sessionFrom(f.token);
+  const shown = await h.app.issuers.preview(s, input);
+  await gesture(h, s, "issuer-register", shown.digest);
+  const r = await h.app.issuers.register(await h.app.identity.sessionFrom(f.token), { ...input, digest: shown.digest }, {});
+  return { ...r, key, shown };
+}
+
+/** Upload with a given bearer token. Returns { status, body } or { refusal, extra }. */
+export async function sendToken(h, bearer, { mission = "demo", kind = "check", bytes = FIXTURE_CHECK } = {}) {
+  const headers = { authorization: `Bearer ${bearer}`, "runward-mission": mission, "runward-export-kind": kind, "content-length": String(bytes.length), "content-digest": digestHeader(bytes) };
+  try { return await h.app.ingest.upload({ headers, readBody: async () => bytes, requestId: `req-${randomBytes(4).toString("hex")}` }); } catch (e) {
+    if (e.code && e.constructor.name === "Refusal") return { refusal: e.code, extra: e.extra };
+    throw e;
+  }
+}
+
+/**
+ * Declare a GitLab project with consent, upload once (kept, pending), confirm: pinned. `issuer`: "gitlab.com"
+ * or a registration's id; `sign(claims)` signs its tokens; `claims`: what gitlabClaims takes.
+ */
+export async function pinnedGitlab(h, f, { issuer = "gitlab.com", sign, claims = {}, name = "temoin/demo", mission = "demo", branch = "main" }) {
+  await gesture(h, f.session, "declare-with-consent", `gitlab:${issuer}:${name.toLowerCase()}`);
+  const d = await h.app.repositories.declare(await h.app.identity.sessionFrom(f.token), { forge: "gitlab", issuer, name, defaultBranch: branch, consent: true, missions: [{ id: mission, path: "." }] }, {});
+  const first = await sendToken(h, sign(gitlabClaims(h.clock, { path: name, branch, pipeline: "10", job: "100", ...claims })), { mission });
+  const confirm = first.status === 202 ? await confirmRepository(h, f, d.id) : null;
+  return { id: d.id, first, confirm };
+}
 export const digestHeader = (b) => `sha-256=:${createHash("sha256").update(b).digest("base64")}:`;
 
 export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] }, store: given = null, realTime = false, config = {}, keysFetch = null, wrapStore = (s) => s } = {}) {
@@ -69,12 +137,17 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] },
   const objects = memoryObjects();
   const fetches = [];
   // `keysFetch`: how the issuer answers for its keys (default: the test key set, every time)
-  const fetch = async (url, init) => { fetches.push(url); return keysFetch ? keysFetch(url, init) : new Response(JSON.stringify({ keys: [jwk] }), { status: 200 }); };
-  const verifier = githubVerifier({ fetch, clock });
+  // gitlab.com's fixed key address answers the test's gitlab.com key set; every other address, GitHub's
+  const fetch = async (url, init) => { fetches.push(url); return keysFetch ? keysFetch(url, init) : new Response(JSON.stringify({ keys: [String(url).startsWith("https://gitlab.com/") ? GITLAB_COM_KEY.jwk : jwk] }), { status: 200 }); };
+  // the registry of issuers around the real GitHub adapter, as src/main.js#compose builds it (ADR-0029)
+  // `decoys.n`: how many times the decoy signature check ran (one per failing case of a registration's path)
+  const decoys = { n: 0 };
+  const verifier = issuerRegistry({ github: githubVerifier({ fetch, clock }), gitlabCom: config.gitlabCom === false ? null : gitlabComVerifier({ fetch, clock }), store, clock, origin: config.origin ?? ORIGIN, checks: { decoy: () => { decoys.n++; return decoyCheck(); } } });
   const assembler = fleetAssembler({ pin: fleetPin({ lockFile: LOCK }) });
-  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, ...config });
+  // gitlab.com is open in the harness (the service's default is closed: RW_GITLAB_COM), unless a test closes it
+  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, gitlabCom: true, ...config });
   // `assembler` is the one the app holds: a test that plays an earlier pin changes its `pin.archiveSha256`
-  return { app, clock, store, objects, fetches, assembler };
+  return { app, clock, store, objects, fetches, assembler, decoys };
 }
 
 /** Open a tenant with a founder and two passkeys, signed in. Returns the session and credential ids. */
@@ -108,10 +181,22 @@ export async function pinnedRepository(h, f, { name = "stranxik/dropyour", missi
   const s = await h.app.identity.sessionFrom(f.token);
   const d = await h.app.repositories.declare(s, { name, consent: true, missions: [{ id: mission, path: "." }] }, {});
   const first = await send(h, { repository: name, run_number: "1", run_id: "39000000001", ...claims }, { mission });
-  await gesture(h, s, "repository-confirm", d.id);
-  const c = await h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), d.id, {});
+  const c = await confirmRepository(h, f, d.id);
   return { id: d.id, first, confirm: c };
 }
+
+/**
+ * Confirm a repository as the shell does: read the values to pin and their digest on the access view, verify
+ * the gesture bound to the repository and that digest, then confirm with the digest shown (ADR-0029 section 1).
+ */
+export async function confirmRepository(h, f, id) {
+  const s = await h.app.identity.sessionFrom(f.token);
+  const shown = (await h.app.identity.accessView(s)).repositories.find((r) => r.id === id).pending;
+  await gesture(h, s, "repository-confirm", confirmObject(id, shown.digest));
+  return h.app.repositories.confirm(await h.app.identity.sessionFrom(f.token), id, { digest: shown.digest }, {});
+}
+/** The digest a GitHub confirmation is bound to, for the given identifiers. */
+export const githubPinDigest = (repositoryId, ownerId) => pinDigest({ forge: "github", repositoryId, ownerId });
 
 /** Upload bytes as the send workflow would. Returns { status, body } or { refusal }. */
 export async function send(h, over = {}, { mission = "dropyour", kind = "check", bytes = FIXTURE_CHECK, digest = null, length = null, auth = null } = {}) {

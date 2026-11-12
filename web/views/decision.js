@@ -18,6 +18,7 @@ import { go, act, reqNote, loadingView, fenetre } from "./marks.js";
 import { renderView } from "./fleet-views.js";
 import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
+import { niveauLigne, ordre } from "./claims.js";
 import { prochainPas, versAccord, versSection } from "./liens.js";
 
 // ------------------------------------------------------------- the language of the reading
@@ -213,8 +214,9 @@ function verifyPanel(w, m) {
       <dt>${esc(V.commit)}</dt><dd><code translate="no">${esc(commit ?? "")}</code></dd>
       <dt>${esc(V.version)}</dt><dd><code translate="no">runward ${esc(L.runward ?? "")}</code></dd>${run}</dl>`;
   // the command is copied as it is written, without the prompt and without a line end (a pasted line end would run it)
+  // the command is built for a repository of github.com only: a GitLab repository is told so, in the app's words
   const cmd = c.refused
-    ? `<p class="lecture-refus">${esc(V.refused(V.field[c.refused]))}</p>`
+    ? `<p class="lecture-refus">${esc(st?.forge === "gitlab" && c.refused === "repository" ? mots().forge.verifyNote : V.refused(V.field[c.refused]))}</p>`
     : `<p class="vh" id="cmd-${esc(m.id)}">${esc(V.command)}</p><pre class="term lecture-cmd" tabindex="0" aria-labelledby="cmd-${esc(m.id)}"><span class="inv" aria-hidden="true">$ </span><code translate="no" id="cmd-texte">${esc(c.command)}</code></pre>
       <div class="actions"><button class="btn btn-q" type="button" data-do="copy" data-copy-target="cmd-texte" data-copy-plain data-label="${esc(mots().workflow.copyCommand)}">${esc(mots().workflow.copyCommand)}</button></div>
       <p class="note">${esc(V.note)}</p>`;
@@ -229,13 +231,24 @@ function reasonOf(w, lang, code) {
   return known ? `${sep}<code translate="no">${esc(code)}</code>, ${esc(known)}` : `${sep}<span class="soft">${esc(w.reasonAsWritten)}</span> <code translate="no">${esc(code)}</code>`;
 }
 
+/**
+ * The level of evidence of the path the file took (ADR-0029 section 2), in a window beside runward-fleet's reading,
+ * never inside it: the sentence first, what it does not prove, then the code; GitLab's order signal with its gesture.
+ * Its words are the app's lexicon (web/views/lexique.js), in the reading's language.
+ */
+function levelPanel(m) {
+  const st = ligne(m.id), L = mots().forge.level;
+  if (!st?.level) return "";
+  return fenetre(esc(L.h2), `<p class="note">${L.lead}</p>${niveauLigne(st)}${ordre(st)}`, { plat: true, cls: "c-bar lecture-niveau", attrs: ` aria-label="${esc(L.h2)}"` });
+}
+
 function receivedPanel(w, lang, m) {
   const R = w.received, st = ligne(m.id);
   // the uploads of this mission and the confirmation of its first one; the other acts are in the journal
   const sends = (st?.activity ?? []).filter((e) => typeof e.what === "string" && (e.what.startsWith("send-") || e.what === "repository-confirmed"));
   const items = sends.map((e) => {
     const word = Object.hasOwn(R.what, e.what) ? R.what[e.what] : e.what;
-    const meta = [e.commit ? `${esc(R.commit)} <code translate="no">${esc(String(e.commit).slice(0, 12))}</code>` : "", e.runNumber ? R.run(e.runNumber) : ""].filter(Boolean).join(" · ");
+    const meta = [e.commit ? `${esc(R.commit)} <code translate="no">${esc(String(e.commit).slice(0, 12))}</code>` : "", e.runNumber ? (e.forge === "gitlab" ? `pipeline ${esc(e.runNumber)}` : R.run(e.runNumber)) : ""].filter(Boolean).join(" · ");
     return `<li>${when(e.at, { sec: false })} · ${esc(word)}${e.refusal ? reasonOf(w, lang, e.refusal) : ""}${meta ? `<span class="sub">${meta}</span>` : ""}</li>`;
   }).join("");
   const consent = st && st.consent === false ? `<p>${esc(R.consent)}</p><div class="actions">${go(versAccord(st), R.consentAct, { q: true })}</div>` : "";
@@ -300,5 +313,5 @@ export function viewDecision(sub) {
   const crumb = (name) => [[w.portfolio, "#/"], [name, null, true]];
   if (!m) return { ...base, title: w.portfolio, crumb: crumb(id), html: frame(lang, `<div class="tete"><h1 class="t1">${esc(w.unknownTitle)}</h1><p class="sous">${esc(w.unknownText)} <code translate="no">${esc(id)}</code></p><div class="actions">${go("#/", w.all)}</div></div>`) };
   return { ...base, title: m.name, crumb: crumb(m.name), html: frame(lang, `${setAside}<div class="lecture-fiche"><div class="lecture-g">${renderView(idx, "decision", m.id)}</div>
-    <aside class="lecture-d">${verifyPanel(w, m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`, "app") };
+    <aside class="lecture-d">${verifyPanel(w, m)}${levelPanel(m)}${receivedPanel(w, lang, m)}</aside></div>${source(w)}`, "app") };
 }

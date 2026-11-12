@@ -57,7 +57,12 @@ async function tenant() {
     await gesture(h, await s0(), consent ? "declare-with-consent" : null, name.toLowerCase());
     return h.app.repositories.declare(await s0(), { name, consent, missions }, {});
   };
-  const confirm = async (d) => { await gesture(h, await s0(), "repository-confirm", d.id); await h.app.repositories.confirm(await s0(), d.id, {}); };
+  // the confirmation is bound to the digest of the values the screen shows (ADR-0029 section 1)
+  const confirm = async (d) => {
+    const shown = (await h.app.identity.accessView(await s0())).repositories.find((r) => r.id === d.id).pending;
+    await gesture(h, await s0(), "repository-confirm", `${d.id}:${shown.digest}`);
+    await h.app.repositories.confirm(await s0(), d.id, { digest: shown.digest }, {});
+  };
   // published: one application, read by the portfolio
   let d = await declare("stranxik/runward-hosted", [{ id: "runward-hosted", path: "." }]);
   await send(h, { repository: "stranxik/runward-hosted", repository_id: "7002", run_id: "42830000011", run_number: "11", sha: "a4ede1485323293609957a700aba13ddf99de27f" }, { mission: "runward-hosted", bytes: FIXTURE("hosted-proposed") });

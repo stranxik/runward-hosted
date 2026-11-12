@@ -13,7 +13,7 @@ function jrow(e) {
   const what = `<span class="k">${J.what}</span>${esc(W.acts[b.what] ?? b.what)}${d.kind ? ` · ${esc(d.kind)}` : ""}${d.sha256 ? `<div><code>sha256 ${esc(short(d.sha256))}</code></div>` : ""}${d.indexSha256 ? `<div class="small soft">index <code>${esc(short(d.indexSha256))}</code></div>` : ""}`;
   const dates = `<span class="k">${J.received}</span>${when(b.dates?.received?.at)}${b.dates?.issued ? `<span class="k">${J.issued}</span>${when(b.dates.issued.at)}` : ""}${b.who.type === "workload" ? `<span class="k">${J.commit}</span>${d.commit ? `<code>${esc(String(d.commit).slice(0, 12))}</code>` : when(null)}` : ""}${b.requestId ? `<span class="k">${J.request}</span><code>${esc(b.requestId)}</code>` : ""}`;
   const refusal = d.refusal ? `<div class="jref small"><code>${esc(d.refusal)}</code> ${esc(e.text?.message ?? "")} <span class="soft">${esc(e.text?.action ?? "")}</span></div>` : "";
-  const note = b.what === "send-historical" ? `<div class="jref small">${J.historical(esc(d.currentRunNumber))}</div>` : "";
+  const note = b.what === "send-historical" ? `<div class="jref small">${String(b.who.id).startsWith("gitlab:") ? J.historicalPipeline(esc(d.currentRunNumber)) : J.historical(esc(d.currentRunNumber))}</div>` : "";
   const prov = d.claims ? `<details class="prov"><summary>${J.provenance}</summary>${claimsTable(d.claims)}</details>` : "";
   return `<li class="jrow"><div class="rv">${J.no} <b>${e.seq}</b></div><div><span class="k">${J.state0}</span>${state}</div><div>${who}</div><div>${what}</div><div class="small">${dates}</div>${refusal}${note}${prov}</li>`;
 }
