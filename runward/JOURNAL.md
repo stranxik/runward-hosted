@@ -368,6 +368,13 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session.
 - Next: the committed reports regenerated in the reference environment (the new test's cases).
 
+## 2026-11-12 - a refusal at several steps is said in words, without English or "conformité"
+
+- Done: when runward writes the gate as « deliverables filled, gate red at Floor, Govern », the app now says it with the phases' names (« étapes Plancher et Gouverner »), as it already did for « 3 · Floor ». The refusal's sentence reads « Refusée par le contrôle (…) : des exigences de l'équipe ne sont pas encore prouvées. » instead of « Refusée à la deliverables filled, gate red at Floor, Govern : des lignes de conformité restent ouvertes. », found on the dashboard and the technical detail on 2026-11-12 by an audit of the app's wording. « porte » becomes « étape » and « livrable absent » « pièce exigée manquante » in the same lines.
+- Evidence: `test/unit/porte.test.js`, 3 cases (both forms in French and English on the real fixture `demo-renamed`; the sentence carries no English and no banned word; planted: a gate in neither form is returned as written).
+- Decided: nothing by the session.
+- Next: the wording pass of the app's simplification, if the author chooses it.
+
 ## 2026-11-11 - the service at half a processor, its minimum scale a variable
 
 - Done: `infra/scaleway/main.tf` gives the service's container 500 mvCPU (250 before) and reads its minimum scale from `service_min_scale` (0 or 1, validated, default 0); the gateway is unchanged (250 mvCPU, scale 0 to 1). The runbook says the setting and its cost (§11: about 0.52 EUR a day when one instance stays on, nothing asleep) and the two applies of the event (§12: `-var service_min_scale=1` on 2026-11-16, back to 0 on 2026-11-20).
