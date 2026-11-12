@@ -112,7 +112,7 @@ function frames() {
 test("the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot", () => {
   state({ lang: "en" });
   const en = frames();
-  assert.ok(en.includes("Portfolio") && en.includes("Uploads") && en.includes("Technical views") && en.includes("Legal notice") && en.includes("Sign out"), "the frame is painted, in English");
+  assert.ok(en.includes("Applications") && en.includes("Connect an application") && en.includes("Journal") && en.includes("Account") && en.includes("Technical views") && en.includes("Legal notice") && en.includes("Sign out"), "the frame is painted, in English");
   assert.ok(en.includes("An access recovery is under way") && en.includes("Chrome on macOS") && en.includes("runward hosted"), "the banners, a device's label and the default title, in English");
   assert.ok(en.includes("“iCloud Keychain”"), "a provider the service names in French, in English");
   assert.ok(en.includes("runward<span> hosted</span>"), "the brand's word, in the sidebar's mark (translate=\"no\", so read here)");
@@ -120,7 +120,7 @@ test("the frame follows the reader's language: in English, no French word in the
   // the control the other way: the same frame in French is seen as French, word for word as before
   state({ lang: "fr" });
   const fr = frames();
-  assert.ok(fr.includes("Portefeuille") && fr.includes("Vues techniques") && fr.includes("Mentions légales") && fr.includes("Se déconnecter") && fr.includes("runward hébergé"));
+  assert.ok(fr.includes("Brancher une application") && fr.includes("Compte") && fr.includes("Vues techniques") && fr.includes("Mentions légales") && fr.includes("Se déconnecter") && fr.includes("runward hébergé"));
   assert.ok(frenchIn(fr).length > 20, "the detector sees French");
 });
 
@@ -297,7 +297,7 @@ test("every word of web/index.html is written by the shell in the reader's langu
 // ---- the lexicon: closed, the same keys in both languages, none of the words never said, no em dash
 const sample = (v) => v("1", "1", "1", "1");
 const flatten = (o, p = "") => Object.entries(o).flatMap(([k, v]) => (typeof v === "string" ? [[`${p}${k}`, v]] : typeof v === "function" ? [[`${p}${k}`, sample(v)], [`${p}${k}:n`, v("2", "2", "2", "2")], [`${p}${k}/${v.length}`, ""]] : Array.isArray(v) ? v.map((x, i) => [`${p}${k}.${i}`, String(x)]) : flatten(v, `${p}${k}.`)));
-const NEVER = /\b(compliant|compliance|certified|certifi\w*|guarantee\w*|garanti\w*|platforms?|plateformes?|sovereign\w*|souverain\w*|conformes?|infalsifiable|tamper-?proof)\b|—/i;
+const NEVER = /\b(compliant|compliance|certified|certifi\w*|guarantee\w*|garanti\w*|platforms?|plateformes?|sovereign\w*|souverain\w*|conformes?|conformit\w*|infalsifiable|tamper-?proof)\b|—/i;
 export function lexiconProblems(words) {
   const fr = new Map(flatten(words.fr)), en = new Map(flatten(words.en));
   const out = [];
@@ -334,7 +334,7 @@ test("one language for the reading and its frame: the switch of the decision rea
   D.setReadingLang("en");
   assert.equal(kept.get("rw-accueil-lang"), "en", "the key of the public site's switch");
   assert.equal(D.readingLang(), "en");
-  assert.ok(frame(true, "decision", "", {}).lat.includes("Portfolio"), "the frame follows the reading's switch");
+  assert.ok(frame(true, "decision", "", {}).lat.includes("Connect an application"), "the frame follows the reading's switch");
   assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="port">'));
   kept.delete("rw-accueil-lang");
   S.index = { ...T.index, lang: "en" };
