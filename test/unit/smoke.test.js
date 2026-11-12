@@ -160,13 +160,17 @@ async function settle(script, options = {}) {
   return { r, asked, sleeps, t };
 }
 
-test("health that settles is asked again, with a pause that doubles up to its cap; a health that is sound is asked once", async () => {
+test("health that settles is asked again, with a pause that doubles up to its cap, then confirmed by two more ok in a row; a health that is sound is asked once", async () => {
   const once = await settle([SOUND]);
   assert.deepEqual([once.asked, once.sleeps, once.r.refused], [1, [], 0]);
   const settled = await settle([DOWN, DOWN, DOWN, DOWN, DOWN, SOUND]);
-  assert.equal(settled.r.r.status, 200); assert.equal(settled.r.refused, 5); assert.equal(settled.asked, 6);
-  assert.deepEqual(settled.sleeps, [1000, 2000, 4000, 8000, 8000]);
-  assert.equal(settled.r.ms, 23_000);
+  assert.equal(settled.r.r.status, 200); assert.equal(settled.r.refused, 5); assert.equal(settled.r.unconfirmed, undefined);
+  assert.equal(settled.asked, 8, "five down, the ok, two more ok");
+  assert.deepEqual(settled.sleeps, [1000, 2000, 4000, 8000, 8000, 1000, 1000]);
+  assert.equal(settled.r.ms, 25_000);
+  // a relapse during the confirmation starts the count again; three ok in a row then pass
+  const relapse = await settle([DOWN, SOUND, SOUND, DOWN, SOUND, SOUND, SOUND]);
+  assert.deepEqual([relapse.asked, relapse.r.r.status, relapse.r.refused, relapse.r.unconfirmed], [7, 200, 2, undefined]);
 });
 
 test("planted: a dependency down for the whole window is still the fault, and the asking ends with the window", async () => {
@@ -180,6 +184,39 @@ test("planted: a dependency down for the whole window is still the fault, and th
   let t = 0, asked = 0;
   const slow = await settledHealth(async () => { asked++; t += 30_000; return DOWN; }, { now: () => t, sleep: async (ms) => { t += ms; } });
   assert.deepEqual([asked, slow.r.status], [2, 503]);
+});
+
+test("planted: an ok then a relapse never passes: a dependency that comes and goes is not sound on the one ask that found it up", async () => {
+  // 503, 200, 503, 200, ... for ever
+  let t = 0, asked = 0;
+  const flap = await settledHealth(async () => (asked++ % 2 === 0 ? DOWN : SOUND), { now: () => t, sleep: async (ms) => { t += ms; } });
+  assert.ok(flap.r.status === 503 || flap.unconfirmed === true, "the window ends on a 503 or on an ok it could not confirm");
+  assert.ok(t <= HEALTH_SETTLE.windowMs, `ended with the window: ${t}`);
+  // 503, 503, 503, 200, then down again: what passed on its first ok before this rule
+  const once = await settle([DOWN, DOWN, DOWN, SOUND, DOWN]);
+  assert.equal(once.r.r.status, 503);
+  // an ok that comes as the window ends is not confirmed, and says so
+  const late = await settle([DOWN, SOUND], { windowMs: 1000 });
+  assert.deepEqual([late.r.r.status, late.r.unconfirmed, late.asked], [200, true, 2]);
+});
+
+test("planted: every health answer is held to the expected commit: another revision's ok never settles the question", async () => {
+  const at = (a, commit) => ({ r: a.r, b: { ...a.b, ...(commit ? { commit } : {}) } });
+  const same = await settle([at(DOWN, "new"), at(SOUND, "new")], { commit: "new" });
+  assert.deepEqual([same.asked, same.r.r.status, same.r.otherCommit], [4, 200, undefined]);
+  // the revision served before answers ok while the new one is down: a fault at once
+  const overlap = await settle([at(DOWN, "new"), at(SOUND, "old"), at(SOUND, "new")], { commit: "new" });
+  assert.deepEqual([overlap.asked, overlap.r.otherCommit, overlap.r.b.commit], [2, true, "old"]);
+  // during the confirmation too
+  const during = await settle([at(DOWN, "new"), at(SOUND, "new"), at(SOUND, "old")], { commit: "new" });
+  assert.deepEqual([during.asked, during.r.otherCommit], [3, true]);
+  // at the first ask, ok or down, and a health that names no commit
+  for (const first of [at(SOUND, "old"), at(DOWN, "old"), at(SOUND, null), at(DOWN, null)]) {
+    const r = await settle([first, at(SOUND, "new")], { commit: "new" });
+    assert.deepEqual([r.asked, r.sleeps.length, r.r.otherCommit], [1, 0, true], JSON.stringify(first));
+  }
+  // without an expected commit (a run by hand without one), nothing is compared
+  assert.equal((await settle([at(SOUND, "any")])).r.otherCommit, undefined);
 });
 
 test("planted: only the app's 503 with ok false is asked again; any other answer, and a window of 0, are asked once", async () => {
@@ -220,27 +257,35 @@ test("the script on a real application whose database is down at first: it passe
   const c = compose(config, { clock, log: silentLog, store, objects: memoryObjects(), authn: fakeAuthn() });
   await new Promise((r) => c.http.server.listen(port, "127.0.0.1", r));
   try {
-    // down twice, then sound: the smoke passes and says that health settled
+    // down twice, then sound: the smoke passes once two more answers confirmed it, and says that health settled
     failures = 2; pings = 0;
     const settled = await smoke([base, "c0ffee"]);
     assert.equal(settled.status, 0, settled.err);
-    assert.match(settled.out, /^smoke: health answered 503 2 time\(s\) over \d+ s before it answered ok[^\n]*\nsmoke: http:\/\/127\.0\.0\.1:\d+ sound at c0ffee\n$/);
-    assert.equal(pings, 3);
+    assert.match(settled.out, /^smoke: health answered 503 2 time\(s\), then ok 3 times in a row, over \d+ s[^\n]*\nsmoke: http:\/\/127\.0\.0\.1:\d+ sound at c0ffee\n$/);
+    assert.equal(pings, 5, "two down, the ok, two more ok");
     // planted: down for the whole window (shortened here, never lengthened): the fault of before, exit 1
     failures = Infinity; pings = 0;
     const started = Date.now();
     const down = await smoke([base, "c0ffee"], { RW_SMOKE_SETTLE_MS: "1500" });
     assert.equal(down.status, 1, down.out);
-    assert.match(down.err, /smoke: 1 fault\(s\):\n {2}- health 503 \{"ok":false,[^\n]*"db":"down"[^\n]*down for the whole settling window\)/);
+    assert.match(down.err, /smoke: 1 fault\(s\):\n {2}- health 503 \{"ok":false,[^\n]*"db":"down"[^\n]*not settled within the window\)/);
     assert.ok(pings >= 2, `asked again: ${pings}`);
     assert.ok(Date.now() - started < 15_000, "ended with its window");
+    // planted: an ok then a relapse: down, ok, then down for ever
+    failures = 1; pings = 0;
+    const relapse = smoke([base, "c0ffee"], { RW_SMOKE_SETTLE_MS: "4000" });
+    for (let i = 0; i < 200 && pings < 2; i++) await new Promise((r) => setTimeout(r, 25));
+    failures = Infinity;
+    const relapsed = await relapse;
+    assert.equal(relapsed.status, 1, relapsed.out);
+    assert.match(relapsed.err, /health 503 [^\n]*not settled within the window|health answered ok after 503 and the settling window ended/);
     // planted: another commit is a fault at once: health is asked once, nothing is waited for
     failures = Infinity; pings = 0;
     const wrong = await smoke([base, "deadbeef"]);
     assert.equal(wrong.status, 1);
     assert.match(wrong.err, /version serves c0ffee, not deadbeef/);
-    assert.match(wrong.err, /health 503/);
-    assert.doesNotMatch(wrong.err, /settling window/);
+    assert.match(wrong.err, /health is answered by commit c0ffee, not deadbeef/);
+    assert.doesNotMatch(wrong.err, /window/);
     assert.equal(pings, 1, "health was asked once");
   } finally { await new Promise((r) => { c.http.server.close(r); c.http.server.closeAllConnections?.(); }); }
 });

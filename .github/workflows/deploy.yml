@@ -11,8 +11,9 @@
 #      and the container's environment was merged, not replaced (scripts/container-deploy.sh);
 #   4. /api/version says the same commit and image;
 #   5. smoke: version, health, sign-in options, the page, 421, the request budget; health answered 503 by the
-#      app is asked again for at most 45 s (a new instance's dependencies settling, runward/runbook.md §7),
-#      never on another answer nor at another commit; the 421 is the app's own
+#      app is asked again for 45 s from the first ask, plus one ask in flight (30 s) (a new instance's
+#      dependencies settling, runward/runbook.md §7), never on another answer nor at another commit, and
+#      an ok that follows a 503 is confirmed by two more in a row and the version read again; the 421 is the app's own
 #      (host-not-allowed), asked under the container's default hostname at the hoster, which the hoster
 #      routes to the service and the app does not serve (vars.RW_SERVICE_HOST; without it nothing is built,
 #      nor when it is not the hostname the hoster reports for the service's container);

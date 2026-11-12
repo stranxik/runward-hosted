@@ -47,7 +47,9 @@ export function boundFetch(allowedHosts, fetchImpl = globalThis.fetch, { timeout
       clearTimeout(timer);
       // the caller gave up: not the host's failure, the circuit is left as it was
       if (init.signal?.aborted && !deadline.signal.aborted) { if (half) c.trial = false; throw e; }
-      throw failed(deadline.signal.aborted ? `no answer within ${timeoutMs} ms` : String(e?.message ?? e).slice(0, 120));
+      // the fault by its code (fetch keeps the socket's error as the cause: ECONNREFUSED, EHOSTUNREACH,
+      // UND_ERR_CONNECT_TIMEOUT), else by its class: never a message, which can carry an address
+      throw failed(deadline.signal.aborted ? `no answer within ${timeoutMs} ms` : String(e?.cause?.code ?? e?.code ?? e?.name ?? "error").slice(0, 120));
     }
     timer.unref?.();
     if (r.status >= 500) { clearTimeout(timer); failed(`status ${r.status}`); return r; }

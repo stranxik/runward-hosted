@@ -52,7 +52,7 @@ function api(raw) {
     putArchive: (tenant, id, bytes) => raw.put(keys.archive(tenant, id), bytes, "application/x-tar"),
     getArchive: (tenant, id) => raw.get(keys.archive(tenant, id)),
     removeArchive: (tenant, id) => raw.del(keys.archive(tenant, id)),
-    ping: () => raw.ping(),
+    ping: (options) => raw.ping(options),
   };
 }
 
@@ -74,6 +74,7 @@ export function memoryObjects() {
 // "written before the commit" was accepted and lost while /api/health said objectStore ok). One fixed key,
 // a constant body without data; /api/health is public, so the verdict is kept PING_TTL_MS (a failure
 // PING_RETRY_MS) and one check runs at a time: at most two calls to the store per period, whatever the traffic.
+// The warm-up alone asks past the kept verdict (`fresh`), a bounded number of times, before any traffic.
 export const WITNESS_KEY = "health/witness";
 const WITNESS = Buffer.from("runward-hosted: the health witness, written then read back; it holds no data\n");
 export const PING_TTL_MS = 30_000;
@@ -107,8 +108,10 @@ export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessK
       } while (token);
       return out;
     },
-    async ping() {
-      if (last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
+    // `fresh`: the store is asked now, whatever verdict is kept (the warm-up before the port is bound,
+    // src/main.js#warm, which counts its own calls); a check already in flight is joined, never doubled.
+    async ping({ fresh = false } = {}) {
+      if (!fresh && last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
       checking ??= (async () => {
         const put = await call("PUT", WITNESS_KEY, WITNESS, "text/plain");
         if (!put.ok) { onPingFault(`witness PUT ${put.status}`); return false; }

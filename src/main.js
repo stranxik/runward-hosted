@@ -37,39 +37,53 @@ export const faultName = (e) => String(typeof e === "string" ? e : (e?.why ?? e?
 // request, the deploy's own health check, met the failure. Both are now asked BEFORE the port is bound,
 // and asked again until each answers or the budget is spent.
 //   - Bounded: WARM_DEFAULTS.budgetMs in all, the two dependencies in parallel, a call still in flight
-//     at the end of the budget is not waited for. The pause between two tries doubles up to pauseMaxMs.
+//     at the end of the budget is not waited for. The hoster documents no limit for the time a container
+//     takes to bind its port (its concepts, limitations and FAQ pages, read 2026-11-12), so the budget is
+//     kept short: 15 s, a first call that runs to its own deadline of 10 s and one more try.
+//     RW_WARM_BUDGET_MS may shorten it (a test), never lengthen it. What lasts longer is health's 503.
+//   - The database is asked again after a pause that doubles from pauseMs up to pauseMaxMs.
+//   - The object store is asked objectTries times at the most, objectPauseMs apart then doubling, each a
+//     real call past the kept verdict (objects.js, `fresh`). Four, because the egress circuit of its host
+//     opens at 5 consecutive failures (egress.js) and then refuses every call for 30 s: a warm-up that
+//     opened it would leave the store refused after the port is bound, even once it answers again.
 //   - The port is bound whatever the outcome: a dependency still down is /api/health's 503 and each
 //     route's own refusal (runbook §2: degrade reading, never acting), never a container that does not
 //     start, which the hoster would restart in a loop while nothing says why.
 //   - One line says the outcome, `warm`: for each dependency ok, tries, ms and, when it failed, the last
-//     fault by its code.
-// The object store's ping keeps a failed verdict PING_RETRY_MS (objects.js): a try inside that period
-// reads the kept verdict, so the store itself is asked about once every 5 s, below the egress circuit's
-// 5 consecutive failures.
-export const WARM_DEFAULTS = { budgetMs: 30_000, pauseMs: 500, pauseMaxMs: 2_000 };
+//     fault by its code (the object store's as its adapter reported it, `objectFault`).
+export const WARM_DEFAULTS = { budgetMs: 15_000, pauseMs: 500, pauseMaxMs: 2_000, objectTries: 4, objectPauseMs: 1_000, objectPauseMaxMs: 4_000 };
 
-export async function warm({ store, objects, log, clock }, { budgetMs = WARM_DEFAULTS.budgetMs, pauseMs = WARM_DEFAULTS.pauseMs, pauseMaxMs = WARM_DEFAULTS.pauseMaxMs } = {}) {
+/** The warm-up's budget: the default, or a shorter one named by RW_WARM_BUDGET_MS; never a longer one. */
+export function warmBudget(given) {
+  const n = /^\d+$/.test(String(given ?? "").trim()) ? Number(given) : WARM_DEFAULTS.budgetMs;
+  return Math.min(n, WARM_DEFAULTS.budgetMs);
+}
+
+export async function warm({ store, objects, log, clock, objectFault = () => null }, { budgetMs = WARM_DEFAULTS.budgetMs, pauseMs = WARM_DEFAULTS.pauseMs, pauseMaxMs = WARM_DEFAULTS.pauseMaxMs, objectTries = WARM_DEFAULTS.objectTries, objectPauseMs = WARM_DEFAULTS.objectPauseMs, objectPauseMaxMs = WARM_DEFAULTS.objectPauseMaxMs } = {}) {
   const started = clock.now();
   const left = () => budgetMs - (clock.now() - started);
   const OVER = Symbol("over");
   const timers = new Set();
   // a timer of our own, cleared when the warm-up ends: nothing of it outlives it
   const wait = (ms, value) => new Promise((r) => { const t = setTimeout(() => { timers.delete(t); r(value); }, Math.max(0, ms)); timers.add(t); });
-  const one = async (ask) => {
-    let tries = 0, why = null, pause = pauseMs;
-    while (left() > 0) {
+  const one = async (ask, { first, max, most = Infinity, whyDown = () => null }) => {
+    let tries = 0, why = null, pause = first;
+    while (left() > 0 && tries < most) {
       tries++;
-      const fault = await Promise.race([Promise.resolve().then(ask).then((ok) => (ok ? null : "answered down"), faultName), wait(left(), OVER)]);
+      const fault = await Promise.race([Promise.resolve().then(ask).then((ok) => (ok ? null : (whyDown() ?? "answered down")), faultName), wait(left(), OVER)]);
       if (fault === null) return { ok: true, tries, ms: clock.now() - started };
       if (fault === OVER) { why = "no answer within the budget"; break; }
       why = fault;
-      if (left() <= 0) break;
+      if (left() <= 0 || tries >= most) break;
       await wait(Math.min(pause, left()));
-      pause = Math.min(pause * 2, pauseMaxMs);
+      pause = Math.min(pause * 2, max);
     }
     return { ok: false, tries, ms: clock.now() - started, why: why ?? "no budget" };
   };
-  const [db, objectStore] = await Promise.all([one(() => store.ping()), one(() => objects.ping())]);
+  const [db, objectStore] = await Promise.all([
+    one(() => store.ping(), { first: pauseMs, max: pauseMaxMs }),
+    one(() => objects.ping({ fresh: true }), { first: objectPauseMs, max: objectPauseMaxMs, most: objectTries, whyDown: objectFault }),
+  ]);
   for (const t of timers) clearTimeout(t);
   const ok = db.ok && objectStore.ok;
   log[ok ? "info" : "warn"]("warm", { ms: clock.now() - started, detail: { db, objectStore, budgetMs } });
@@ -114,6 +128,7 @@ export function readConfig(env) {
     securityTxt: `Contact: ${env.RW_SECURITY_CONTACT ?? "https://github.com/stranxik/runward-hosted/security/advisories/new"}\nExpires: ${env.RW_SECURITY_EXPIRES ?? "2027-11-06T00:00:00Z"}\nPreferred-Languages: fr, en\nCanonical: ${origin}/.well-known/security.txt\n`,
     s3: { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, bucket: env.S3_BUCKET, accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
     databaseUrl: env.DATABASE_URL, databaseTls: { mode: tlsMode, ca },
+    warmBudgetMs: warmBudget(env.RW_WARM_BUDGET_MS),
     trustProxy,
   };
 }
@@ -171,11 +186,12 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
         objects.ping().then((x) => (x ? "ok" : "down"), (e) => { objectFault = faultName(e); return "down"; }),
       ]);
       say("db", db, dbFault); say("objectStore", obj, objectFault);
-      return { status: db === "ok" && obj === "ok" ? 200 : 503, body: { ok: db === "ok" && obj === "ok", store: store.kind, objects: objects.kind, db, objectStore: obj, maintenance: db === "ok" ? await this.maintenance() : null, dailyJobs: db === "ok" ? await this.dailyJobs() : null } };
+      // `commit`: which revision answers (the deploy's smoke holds every health answer to the expected one)
+      return { status: db === "ok" && obj === "ok" ? 200 : 503, body: { ok: db === "ok" && obj === "ok", commit: config.commit, store: store.kind, objects: objects.kind, db, objectStore: obj, maintenance: db === "ok" ? await this.maintenance() : null, dailyJobs: db === "ok" ? await this.dailyJobs() : null } };
     },
   };
   const http = createHttp({ app, config, assets, version, health, log, clock });
-  return { app, http, version, store, objects, ports, egress };
+  return { app, http, version, store, objects, ports, egress, objectFault: () => objectFault };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -185,9 +201,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const log = c.ports.log;
   log.info("start", { detail: { store: c.store.kind, objects: c.objects.kind, origin: config.origin, commit: config.commit, runwardFleet: c.version.views.runwardFleet, egress: c.egress.allowed, sendWorkflow: config.sendWorkflow.published.length } });
   if (c.store.kind === "memory") log.warn("store.memory", { detail: "in-memory store: nothing survives a restart (local witness only)" });
-  const stop = () => { c.http.server.close(() => c.store.close().finally(() => process.exit(0))); setTimeout(() => process.exit(0), 5000).unref(); };
+  // A stop asked during the warm-up: the port is never bound, the pool is closed, the process exits.
+  let stopping = false;
+  const stop = () => {
+    stopping = true;
+    setTimeout(() => process.exit(0), 5000).unref();
+    const end = () => c.store.close().finally(() => process.exit(0));
+    if (c.http.server.listening) c.http.server.close(end); else end();
+  };
   process.on("SIGTERM", stop); process.on("SIGINT", stop);
   // the dependencies are asked before the port is bound: the hoster sends requests as soon as it is (warm, above)
-  await warm({ store: c.store, objects: c.objects, log, clock: c.ports.clock });
-  c.http.server.listen(config.port, process.env.RW_BIND ?? "0.0.0.0");
+  await warm({ store: c.store, objects: c.objects, log, clock: c.ports.clock, objectFault: c.objectFault }, { budgetMs: config.warmBudgetMs });
+  if (!stopping) c.http.server.listen(config.port, process.env.RW_BIND ?? "0.0.0.0");
 }
