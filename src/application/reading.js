@@ -6,6 +6,7 @@ import { verifyChain } from "../domain/ledger.js";
 import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE, PENDING_LIFE } from "../domain/repository.js";
 import { GITLAB_COM_ISSUER, levelCode, forgeOfWorkload } from "../domain/forge.js";
 import { iso, sha256, manifestExports } from "./context.js";
+import { entryMatches, sinceOf } from "../domain/journal-filter.js";
 
 const PAGE = 50;
 
@@ -114,7 +115,13 @@ export function readingCases(ctx, identity) {
     });
   }
 
-  async function journal(s, cursor) {
+  /**
+   * The journal, page by page, newest first. `filter` (src/domain/journal-filter.js#readJournalFilter, ADR-0037): an
+   * application, a kind, a period; null keeps the answer it always was. A filtered page reads the tenant's whole
+   * journal (the status line already does, every 30 s) and keeps the entries the filter selects, paged by the same
+   * cursor; its answer adds `filter` (what was asked) and `total` (how many entries it selects), nothing else.
+   */
+  async function journal(s, cursor, filter = null) {
     let before = null;
     if (cursor !== undefined && cursor !== null && cursor !== "") {
       if (!/^[0-9]{1,15}$/.test(String(cursor))) throw new Refusal("cursor-invalid");
@@ -123,6 +130,25 @@ export function readingCases(ctx, identity) {
     return store.tx(s.tenantId, async (tx) => {
       const head = await tx.ledgerHead();
       if (before !== null && (before < 1 || before > (head?.seq ?? 0) + 1)) throw new Refusal("cursor-invalid");
+      if (filter) {
+        let app = null;
+        if (filter.mission) {
+          const m = (await tx.list("mission")).find((x) => x.id === filter.mission);
+          const r = m ? await tx.get("repository", { id: m.repositoryRef }) : null;
+          if (r) app = { id: r.id, name: r.name, missions: (await tx.list("mission", { repositoryRef: r.id })).map((x) => x.id) };
+        }
+        const since = sinceOf(filter, now());
+        const kept = (await tx.ledgerAll()).filter((e) => entryMatches(e, filter, { app, since })).reverse();
+        const page = kept.filter((e) => before === null || e.seq < before).slice(0, PAGE);
+        const lowest = page.length ? page[page.length - 1].seq : null;
+        const more = lowest !== null && kept.some((e) => e.seq < lowest);
+        return {
+          head, entries: page.map((e) => ({ seq: e.seq, prev: e.prev, hash: e.hash, body: e.body })),
+          next: more ? String(lowest) : null, end: !more,
+          note: "Ce journal est chaîné ; sa tête est recopiée dans le résumé de chaque job qui envoie, pas encore publiée ailleurs.",
+          filter: { mission: filter.mission, kind: filter.kind, days: filter.days }, total: kept.length,
+        };
+      }
       const page = await tx.ledgerPage({ before, limit: PAGE });
       const lowest = page.length ? page[page.length - 1].seq : null;
       return {

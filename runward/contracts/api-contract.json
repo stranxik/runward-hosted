@@ -1,6 +1,6 @@
 {
   "what": "The HTTP contract of runward hosted: routes and refusals. The digest is the one /api/version serves as apiContract.",
-  "digest": "588ce24a74574031aade435edd6a90cf629e57629a0ecfad45c98635c160b19e",
+  "digest": "dba8c261c8fab949aa7696893f07577d8ea92cab96b6e9cba1121911c640cd36",
   "routes": [
     "POST /api/v0/exports workload",
     "GET /f/([0-9a-f-]{36})/index.json session",
@@ -81,6 +81,7 @@
     "issuer-malformed 400",
     "issuer-not-allowed 400",
     "issuer-unknown 404",
+    "journal-filter-invalid 400",
     "key-exists 409",
     "key-limit 409",
     "key-malformed 400",
