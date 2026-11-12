@@ -134,6 +134,8 @@
 	<testcase name="point 14: the confirmation is bound to the values shown; values that changed refuse confirmation-stale; a new push with the same values changes nothing" classname="test"/>
 	<testcase name="rule 3: a definition that does not name the declared file and branch is shown and cannot be confirmed; a changed declaration unpins it" classname="test"/>
 	<testcase name="a name the pinned runward-fleet cannot carry is refused at declaration with its reason, never truncated: nested groups and a port are carried, nine segments and an address are not" classname="test"/>
+	<testcase name="an instance the pinned runward-fleet cannot name is refused at registration (issuer-malformed), asked of the library; a nameable one is registered" classname="test"/>
+	<testcase name="an instance registered with :443 is named without it, in fleet.json and in the index alike; its issuer string is kept as given" classname="test"/>
 	<testcase name="step b: a GitLab project of nested groups on an instance with a port is named host:port/full/path in the index, and its export replays the same" classname="test"/>
 	<testcase name="rule 7: pipeline_id then job_id order the uploads; an upload issued later and ranked historical is signalled; a member opens a new epoch" classname="test"/>
 	<testcase name="point 11: none of GitHub's rule codes is answered to a GitLab token, none of GitLab's to a GitHub one; refusals after the repository are journaled in its tenant" classname="test"/>
@@ -447,9 +449,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 446 -->
+	<!-- tests 448 -->
 	<!-- suites 0 -->
-	<!-- pass 446 -->
+	<!-- pass 448 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
