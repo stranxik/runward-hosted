@@ -77,6 +77,13 @@ test("0007 is an expansion: a row written as the image of before writes it is Gi
     // a GitHub row cannot carry another issuer key, and a key of another forge must carry its scope
     await assert.rejects(as(sql, A.tenant, (q) => q`insert into rw.forge_repository (id, forge_name, issuer_key, name_key, name, state) values (${randomUUID()}, 'github', 'https://gitlab.com', 'x/y', 'x/y', 'pending')`), /forge_repository_keys_scoped/);
     await assert.rejects(as(sql, A.tenant, (q) => q`insert into rw.forge_repository (id, forge_name, issuer_key, name_key, name, state) values (${randomUUID()}, 'gitlab', 'https://gitlab.com', 'x/y', 'x/y', 'pending')`), /forge_repository_keys_scoped/);
+    // a GitHub key holds no colon: it never reads as another forge's scoped key (the review of the pull request, 6)
+    await assert.rejects(as(sql, A.tenant, (q) => q`insert into rw.forge_repository (id, name_key, name, state) values (${randomUUID()}, 'gitlab:https://gitlab.com:x/y', 'x/y', 'pending')`), /forge_repository_keys_scoped/);
+    await assert.rejects(as(sql, A.tenant, (q) => q`update rw.forge_repository set repository_id = 'gitlab:x:1' where id = ${id}`), /forge_repository_keys_scoped/);
+    // the refusal counter keeps three hours, as the rate counter does (8)
+    await store.tx(null, (tx) => tx.countRefused("77", 100, "https://gitlab.com"));
+    await store.tx(null, (tx) => tx.countRefused("78", 103, "https://gitlab.com"));
+    assert.deepEqual((await adminDb`select repository_id from rw.send_refused order by 1`).map((r) => r.repository_id), ["78"]);
     await assert.rejects(as(sql, A.tenant, (q) => q`insert into rw.forge_repository (id, forge_name, issuer_key, name_key, name, state) values (${randomUUID()}, 'bitbucket', 'https://gitlab.com', 'bitbucket:https://gitlab.com:x/y', 'x/y', 'pending')`), /forge_name_check/);
     // the replay ids: a GitHub token used on the image of before is refused by this one, and the reverse
     const exp = new Date(Date.now() + 300_000).toISOString();

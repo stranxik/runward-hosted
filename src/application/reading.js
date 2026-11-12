@@ -4,7 +4,7 @@
 import { Refusal } from "../domain/refusals/index.js";
 import { verifyChain } from "../domain/ledger.js";
 import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE } from "../domain/repository.js";
-import { GITLAB_COM_ISSUER, levelCode } from "../domain/forge.js";
+import { GITLAB_COM_ISSUER, levelCode, forgeOfWorkload } from "../domain/forge.js";
 import { iso, sha256, manifestExports } from "./context.js";
 
 const PAGE = 50;
@@ -26,7 +26,7 @@ export function readingCases(ctx, identity) {
   const brief = (e) => {
     const d = e.body.detail ?? {};
     return {
-      seq: e.seq, what: e.body.what, who: e.body.who.type, at: e.body.dates?.received?.at ?? null,
+      seq: e.seq, what: e.body.what, who: e.body.who.type, forge: e.body.who.type === "workload" ? forgeOfWorkload(e.body.who.id) : null, at: e.body.dates?.received?.at ?? null,
       mission: d.mission ?? null, kind: d.kind ?? null, repository: d.claims?.repository ?? d.name ?? null,
       runNumber: d.runNumber ?? null, refusal: d.refusal ?? null, commit: d.commit ?? null,
     };
@@ -58,7 +58,8 @@ export function readingCases(ctx, identity) {
         const kept = cur?.claims?.level ?? null;
         const expected = levelCode({ forge: forgeName, issuerKind: registered ? "registered" : "public", protectionRequired: !r.protectionLiftedAt });
         const key = kept?.kid && registered ? issuerKeys.find((k) => k.issuerRef === f.issuerKey && k.kid === kept.kid) ?? null : null;
-        return { code: kept?.code ?? expected, reached: Boolean(kept), issuer: registered ? "registered" : "public", kid: kept?.kid ?? null, thumbprint: kept?.thumbprint ?? null, protectionRequired: forgeName === "github" ? null : kept ? kept.protectionRequired : !r.protectionLiftedAt, ...(key?.retiredAt ? { keyRetiredAt: iso(key.retiredAt) } : {}) };
+        // GitHub has one level: an upload of before the levels were journaled reached it too
+        return { code: kept?.code ?? expected, reached: Boolean(kept) || (forgeName === "github" && Boolean(cur)), issuer: registered ? "registered" : "public", kid: kept?.kid ?? null, thumbprint: kept?.thumbprint ?? null, protectionRequired: forgeName === "github" ? null : kept ? kept.protectionRequired : !r.protectionLiftedAt, ...(key?.retiredAt ? { keyRetiredAt: iso(key.retiredAt) } : {}) };
       };
       /**
        * GitLab's signal (section 3 rule 7): the last upload ranked historical although its token was issued

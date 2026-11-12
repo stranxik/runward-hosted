@@ -62,8 +62,11 @@ export function context(ports, config) {
     const forgeOf = (r) => {
       const f = forges.find((x) => x.id === r.id);
       if (!f) return {};
+      if (f.issuerKey === GITLAB_COM_ISSUER) return { forge: f.forgeName, host: "gitlab.com" };
       const reg = issuers.find((i) => i.id === f.issuerKey);
-      return { forge: f.forgeName, host: reg ? indexNameOf(reg.issuer, "").slice(0, -1) : "gitlab.com" };
+      // no registration, no name: a repository is never named under a host it was not declared on
+      if (!reg) throw new Error("a repository's issuer key names no registration of its tenant");
+      return { forge: f.forgeName, host: indexNameOf(reg.issuer, "").slice(0, -1) };
     };
     const out = [];
     for (const r of repos.sort((a, b) => a.declaredAt - b.declaredAt || a.name.localeCompare(b.name))) {

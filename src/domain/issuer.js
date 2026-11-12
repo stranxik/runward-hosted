@@ -108,9 +108,11 @@ export function readIssuer(input, { serviceHosts = [] } = {}) {
   let parsed;
   try { parsed = new URL(s); } catch { throw malformed("not an address"); }
   if (parsed.username || parsed.password || parsed.search || parsed.hash) throw malformed("no user info, query or fragment");
-  const host = m.host.toLowerCase().replace(/\.$/, "");
-  if (!host || host.startsWith(".") || host.includes("..") || host.split(".").some((l) => l.startsWith("xn--") || l.startsWith("-") || l.endsWith("-"))) throw malformed("the host is not a plain ASCII name");
-  if (parsed.hostname.replace(/\.$/, "") !== host) throw malformed("the host reads two ways");
+  // no label is empty: a trailing dot, a leading one and two dots in a row are refused, never taken off
+  // (`gitlab.com..` would otherwise read `gitlab.com.` once one dot is removed)
+  const host = m.host.toLowerCase();
+  if (host.split(".").some((l) => !l || l.startsWith("xn--") || l.startsWith("-") || l.endsWith("-"))) throw malformed("the host is not a plain ASCII name: no empty label, no trailing dot");
+  if (parsed.hostname !== host) throw malformed("the host reads two ways");
   const reserved = [...RESERVED_ISSUER_HOSTS, ...serviceHosts.map((h) => String(h).toLowerCase().replace(/:\d+$/, ""))];
   if (reserved.some((r) => host === r || host.endsWith(`.${r}`))) throw new Refusal("issuer-not-allowed");
   return { issuer: s, host, port: m.port, authority: m.port ? `${host}:${m.port}` : host };
@@ -141,6 +143,6 @@ export function checkRegistrable(issuers) {
 export function indexNameOf(issuerString, path) {
   const m = splitIssuer(issuerString);
   if (!m) throw new TypeError("indexNameOf: not a registered issuer's string");
-  const host = m.host.toLowerCase().replace(/\.$/, "");
+  const host = m.host.toLowerCase();
   return `${m.port ? `${host}:${m.port}` : host}/${path}`;
 }

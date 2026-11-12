@@ -64,9 +64,12 @@ export function issuerRegistry({ github, githubIssuer = GITHUB_ISSUER_KEY, gitla
     if (!signatureHolds(key, parsed)) throw unreadable("signature");
     // ---- the signature holds under a key of this registration: its tenant may now be named
     const issuer = { key: id, kind: "registered", tenantId: reg.tenantId, issuer: reg.issuer };
+    // the token's own times first, for a retired key as for a live one: an expired or old token signed
+    // when the key lived is `token-expired` or `token-too-old`, and writes nothing (the review of the pull
+    // request: one old token replayed wrote into the tenant's journal for ever)
+    try { checkClaims(claims, { issuer: reg.issuer, audience: sendAudience(origin, id), nowMs: clock.now(), maxAgeS: MAX_TOKEN_AGE_S }); } catch (e) { throw named(e, reg.forge); }
     const state = keyState(row, clock.now());
     if (state !== "live") throw new TokenRefused("key-retired", state, { issuer, forge: reg.forge, kid: row.kid, thumbprint: row.thumbprint, state, since: row.retiredAt ?? null, claims });
-    try { checkClaims(claims, { issuer: reg.issuer, audience: sendAudience(origin, id), nowMs: clock.now(), maxAgeS: MAX_TOKEN_AGE_S }); } catch (e) { throw named(e, reg.forge); }
     return { claims, forge: reg.forge, issuer, kid: row.kid, thumbprint: row.thumbprint };
   }
 

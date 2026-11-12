@@ -98,7 +98,8 @@ export function definitionMatches(definitionRef, { projectPath, file, branch }) 
 export function check(c, repo, { mission }) {
   const pinned = repo.state === "pinned";
   // 2. the repository: project_id resolved it; namespace_id is its owner
-  if (pinned && repo.ownerId && c.namespaceId !== repo.ownerId) throw refuse("owner-changed", FORGE);
+  // a pinned repository always holds its owner: one without it is refused, never passed (fail closed)
+  if (pinned && (!repo.ownerId || c.namespaceId !== repo.ownerId)) throw refuse("owner-changed", FORGE);
   // 3. the definition
   if (!c.definitionRef || !c.definitionSha) throw refuse("definition-absent", FORGE);
   if (pinned && (!repo.definitionRef || c.definitionRef !== repo.definitionRef)) throw refuse("definition-not-pinned", FORGE);

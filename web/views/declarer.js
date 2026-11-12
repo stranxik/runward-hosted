@@ -25,9 +25,11 @@ export function declareForm() {
   const v = S.formValues ?? { forge: "github", repo: "", wf: DEFAULT_FILE.github, mission: "", path: ".", branch: "main" };
   const issuers = S.access?.issuers ?? [];
   // the forge: GitHub, gitlab.com, or one of the instances this fleet registered (by its identifier)
-  const choice = v.forge === "gitlab.com" || issuers.some((i) => i.id === v.forge) ? v.forge : "github", gitlab = choice !== "github";
+  // gitlab.com is offered only once the service opened it (the access view says so)
+  const com = S.access?.gitlabCom === true;
+  const choice = (com && v.forge === "gitlab.com") || issuers.some((i) => i.id === v.forge) ? v.forge : "github", gitlab = choice !== "github";
   const opt = (value, label) => `<label class="check"><input type="radio" name="forge" value="${esc(value)}"${value === choice ? " checked" : ""} data-focus-key="forge:${esc(value)}"><span>${label}</span></label>`;
-  const forges = `<fieldset class="choix"><legend class="k">${esc(G.forge)}</legend>${opt("github", esc(G.github))}${opt("gitlab.com", esc(G.gitlabCom))}${issuers.map((i) => opt(i.id, G.instance(`<span translate="no">${esc(i.issuer)}</span>`))).join("")}${em("forge")}</fieldset>
+  const forges = `<fieldset class="choix"><legend class="k">${esc(G.forge)}</legend>${opt("github", esc(G.github))}${com ? opt("gitlab.com", esc(G.gitlabCom)) : ""}${issuers.map((i) => opt(i.id, G.instance(`<span translate="no">${esc(i.issuer)}</span>`))).join("")}${em("forge")}</fieldset>
       ${issuers.length ? "" : `<p class="small soft">${G.noInstance}</p>`}`;
   return `<form id="declare" novalidate>${top}
       ${forges}

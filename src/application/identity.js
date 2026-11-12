@@ -8,7 +8,7 @@ import {
   meaningfulAaguid, providerOf, deviceFromUserAgent, arrivalOpen, MAX_PASSKEYS, PASSKEY_RESTORE_WINDOW, FRESH_WINDOW,
 } from "../domain/identity.js";
 import { confirmation, githubPinValues } from "../domain/repository.js";
-import { GITLAB_COM_ISSUER, pinDigest, levelCode, sendAudience } from "../domain/forge.js";
+import { GITLAB_COM_ISSUER, pinDigest, levelCode, sendAudience, unscopedKey } from "../domain/forge.js";
 import { StoreConflict } from "../ports/errors.js";
 import { sha256, newToken, iso } from "./context.js";
 import { issuerView } from "./issuers.js";
@@ -294,7 +294,8 @@ export function identityCases(ctx) {
             id: r.id, name: r.name, workflow: r.workflow, defaultBranch: r.defaultBranch ?? "main", state: r.removedAt ? "removed" : f?.state ?? "pending", consent: r.consent, consentAt: iso(r.consentAt),
             declaredAt: iso(r.declaredAt), confirmedAt: iso(r.confirmedAt), removedAt: iso(r.removedAt), restorableUntil: r.removedAt ? iso(r.removedAt + 30 * 86_400_000) : null,
             expiresAt: f?.state === "pending" ? iso(r.declaredAt + 7 * 86_400_000) : null,
-            repositoryId: f?.repositoryId ?? null, ownerId: f?.ownerId ?? null,
+            // the identifier as the forge gives it: the store's key carries its scope, which is not shown
+            repositoryId: f ? unscopedKey(f.forgeName, f.issuerKey, f.repositoryId) : null, ownerId: f?.ownerId ?? null,
             missions: missions.filter((m) => m.repositoryRef === r.id && !m.removedAt).map((m) => ({ id: m.id, path: m.path })),
             pendingSend: r.pendingSend ?? null,
             ...forgeView(r, f), pending: pending(r, f),
@@ -302,6 +303,8 @@ export function identityCases(ctx) {
         }),
         issuers: issuers.filter((i) => !i.removedAt).map((i) => issuerView(i, issuerKeys, ctx.config.origin, now())),
         limits: { issuers: 5, liveKeys: 4 },
+        // gitlab.com is offered at declaration only once the service opened it (RW_GITLAB_COM)
+        gitlabCom: Boolean(ctx.config.gitlabCom),
         reader: reader && reader.authorizedAt && !reader.withdrawnAt ? { authorizedAt: iso(reader.authorizedAt), workflow: "stranxik/runward-hosted/.github/workflows/temoin.yml" } : null,
         recovery: recovery ? { id: recovery.id, openedAt: iso(recovery.openedAt), usableFrom: iso(recovery.usableFrom), expiresAt: iso(recovery.expiresAt) } : null,
         lang: tenant.lang,

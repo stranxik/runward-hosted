@@ -74,7 +74,7 @@ main.addEventListener("submit", async (e) => {
     S.formValues = { forge, repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
     const consent = f.elements.content.checked;
     const body = { ...(forge === "github" ? {} : { forge: "gitlab", issuer: forge }), name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
-    const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: S.formValues.repo.toLowerCase() } : {});
+    const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: forge === "github" ? S.formValues.repo.toLowerCase() : `gitlab:${forge}:${S.formValues.repo.toLowerCase()}` } : {});
     if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: mots().common.verifyFailed, action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
     S.formError = null; S.formValues = null; say(mots().done.declared);
     const onArrival = parts().route === "arrivee";

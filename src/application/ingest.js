@@ -55,13 +55,19 @@ export function ingestCases(ctx) {
    * than that into the tenant's journal.
    */
   async function keyRetired(d, requestId) {
+    // the verifier held the token to its times before it said key-retired: its iat is within ten minutes.
+    // Claims that cannot be read name no workload, and a token already seen was already said: neither is
+    // written. The replay id is used once, as an accepted token's is.
     const c = gitlab.readClaims(d.claims);
+    if (!c) return;
+    const fresh = await store.tx(null, (tx) => tx.useJti(c.jti, (Math.min(c.exp, c.iat + MAX_TOKEN_AGE_S) + 60) * 1000, d.issuer.key));
+    if (!fresh) return;
     const within = await store.tx(null, (tx) => tx.takeRate(`key-retired:${d.kid}`, rateWindow(now()).bucket, requestId ?? store.newId(), RUNS_PER_HOUR, d.issuer.key));
     if (!within) return;
     await store.tx(d.issuer.tenantId, (tx) => append(tx, {
-      who: { type: "workload", id: workloadId(d.forge, d.issuer.key, c?.projectId ?? null) }, what: "send-not-accepted", object: null, requestId,
-      issued: c ? iso(c.iat * 1000) : null,
-      detail: { refusal: "key-retired", mission: "", kind: "", key: { kid: d.kid, thumbprint: d.thumbprint, state: d.state, since: iso(d.since) }, ...(c ? { claims: gitlab.claimsKept(c) } : {}) },
+      who: { type: "workload", id: workloadId(d.forge, d.issuer.key, c.projectId) }, what: "send-not-accepted", object: null, requestId,
+      issued: iso(c.iat * 1000),
+      detail: { refusal: "key-retired", mission: "", kind: "", key: { kid: d.kid, thumbprint: d.thumbprint, state: d.state, since: iso(d.since) }, claims: gitlab.claimsKept(c) },
     }));
   }
 
@@ -141,6 +147,11 @@ export function ingestCases(ctx) {
       return { ...r, state: f.state, repositoryId: f.repositoryId, ownerId: f.ownerId, definitionRef: f.definitionRef, forgeName: f.forgeName, issuerKey: f.issuerKey, protectionLifted: Boolean(r.protectionLiftedAt), missions, tenantWitness: t.witness };
     });
     if (repo.forgeName !== forge || repo.issuerKey !== issuer.key) { log.error("ingest.issuer-mismatch", { requestId }); throw new Refusal("repository-not-declared"); }
+    // GitLab: an instance restored from a backup counts its pipelines and jobs again, so the numbers of an
+    // upload already received come back. The run a send is counted and kept under carries the order epoch
+    // once a member opened one (`order-epoch-open`): the send of the new epoch is then another run, not a
+    // `duplicate-in-run` of the old one. Epoch 0, and GitHub, keep the bare number.
+    if (forge !== "github" && repo.epoch > 0) u.runId = `${u.runId}@${repo.epoch}`;
     try { rules.check(c, repo, { generic, mission }); } catch (e) {
       if (e instanceof Refusal) {
         // what a new confirmation would pin is kept for the member to read: a new owner, or a definition

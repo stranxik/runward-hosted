@@ -28,7 +28,7 @@ grant select, insert on rw.operator_journal to rw_resolve;
 -- known; the replay ids and counters keyed by the issuer key.
 grant select on rw.issuer, rw.issuer_key to rw_resolve;
 grant select, insert, delete on rw.token_use, rw.send_rate to rw_resolve;
-grant select, insert, update on rw.send_refused to rw_resolve;
+grant select, insert, update, delete on rw.send_refused to rw_resolve;   -- delete: the counter keeps three hours
 grant usage on sequence rw.operator_journal_seq_seq to rw_resolve;
 grant select, update on rw.service_state to rw_resolve;
 

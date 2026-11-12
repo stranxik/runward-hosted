@@ -17,7 +17,7 @@ let c, base, clock;
 const fetched = [];
 before(async () => {
   clock = manualClock(Date.now());
-  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_COMMIT: "c0ffee", RW_IMAGE: "sha256:abc", RW_SEND_WORKFLOW_SHAS: SEND_SHA });
+  const config = readConfig({ RW_STORE: "memory", RW_ORIGIN: "https://app.runward.dev", RW_EXTRA_HOSTS: "127.0.0.1", RW_COMMIT: "c0ffee", RW_IMAGE: "sha256:abc", RW_SEND_WORKFLOW_SHAS: SEND_SHA, RW_GITLAB_COM: "1" });
   const fetchImpl = async (url) => { fetched.push(String(url)); return new Response(JSON.stringify({ keys: [String(url).startsWith("https://gitlab.com/") ? GITLAB_COM_KEY.jwk : testJwk()] })); };
   c = compose(config, { clock, log: silentLog, store: memoryStore({ clock }), objects: memoryObjects(), authn: fakeAuthn(), fetchImpl, verifier: githubVerifier({ fetch: fetchImpl, clock }) });
   await new Promise((r) => c.http.server.listen(0, "127.0.0.1", r));
@@ -39,7 +39,7 @@ test("point 15: /send/ is a reserved prefix of the origin: nothing is served und
   assert.ok(!c.http.table.some((r) => r.re.source.includes("/send")), "no route is declared under /send");
 });
 
-test("the egress list holds the two public issuers' key hosts and nothing of a registered instance (section 1)", () => {
+test("the egress list holds the two public issuers' key hosts (gitlab.com's once opened) and nothing of a registered instance (section 1)", () => {
   assert.deepEqual([...c.egress.allowed].sort(), ["gitlab.com", "token.actions.githubusercontent.com"]);
 });
 

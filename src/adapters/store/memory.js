@@ -31,7 +31,7 @@ export function memoryStore({ clock }) {
   // its keys are is written once (a removal and a retirement are final)
   const forgeRow = (row, was) => {
     const github = row.forgeName === "github";
-    if (github ? row.issuerKey !== GITHUB_ISSUER_KEY : !["gitlab"].includes(row.forgeName)) throw new Error("forge_repository_keys_scoped");
+    if (github ? row.issuerKey !== GITHUB_ISSUER_KEY || String(row.nameKey).includes(":") || String(row.repositoryId ?? "").includes(":") : !["gitlab"].includes(row.forgeName)) throw new Error("forge_repository_keys_scoped");
     const prefix = github ? "" : `${row.forgeName}:${row.issuerKey}:`;
     if (!github && (!String(row.nameKey).startsWith(prefix) || (row.repositoryId != null && !String(row.repositoryId).startsWith(prefix)))) throw new Error("forge_repository_keys_scoped");
     if (!github && row.issuerKey !== GITLAB_COM_ISSUER && (!was || was.issuerKey !== row.issuerKey) && !state.rows.issuer.some((i) => i.tenantId === row.tenantId && i.id === row.issuerKey && !i.removedAt)) throw new Error("a repository's issuer key is a public issuer or a live registration of its own tenant");
@@ -192,6 +192,7 @@ export function memoryStore({ clock }) {
         return true;
       },
       countRefused(repositoryId, bucket, issuerKey = GITHUB_ISSUER_KEY) {
+        for (const key of state.refused.keys()) if (Number(key.split("\u0000")[2]) < bucket - 2) state.refused.delete(key);
         const k = `${issuerKey}\u0000${repositoryId ?? "?"}\u0000${bucket}`;
         state.refused.set(k, (state.refused.get(k) ?? 0) + 1);
         return state.refused.get(k);

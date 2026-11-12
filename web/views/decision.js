@@ -232,7 +232,7 @@ function receivedPanel(w, lang, m) {
   const sends = (st?.activity ?? []).filter((e) => typeof e.what === "string" && (e.what.startsWith("send-") || e.what === "repository-confirmed"));
   const items = sends.map((e) => {
     const word = Object.hasOwn(R.what, e.what) ? R.what[e.what] : e.what;
-    const meta = [e.commit ? `${esc(R.commit)} <code translate="no">${esc(String(e.commit).slice(0, 12))}</code>` : "", e.runNumber ? R.run(e.runNumber) : ""].filter(Boolean).join(" · ");
+    const meta = [e.commit ? `${esc(R.commit)} <code translate="no">${esc(String(e.commit).slice(0, 12))}</code>` : "", e.runNumber ? (e.forge === "gitlab" ? `pipeline ${esc(e.runNumber)}` : R.run(e.runNumber)) : ""].filter(Boolean).join(" · ");
     return `<li>${when(e.at, { sec: false })} · ${esc(word)}${e.refusal ? reasonOf(w, lang, e.refusal) : ""}${meta ? `<span class="sub">${meta}</span>` : ""}</li>`;
   }).join("");
   const consent = st && st.consent === false ? `<p>${esc(R.consent)}</p><div class="actions">${go("#/acces", R.consentAct, { q: true })}</div>` : "";

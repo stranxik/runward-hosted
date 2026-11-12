@@ -60,6 +60,10 @@ export function readConfig(env) {
     sendWorkflow: { published, revoked },
     readerRepositoryId: env.RW_READER_REPOSITORY_ID ?? null,
     issuer: env.RW_OIDC_ISSUER ?? GITHUB_ISSUER,
+    // gitlab.com is closed unless RW_GITLAB_COM=1: its tokens are read, and it is offered at declaration,
+    // only once its witness (ADR-0029 section 5, step d) is in runward/JOURNAL.md. Registered GitLab
+    // instances do not depend on it.
+    gitlabCom: env.RW_GITLAB_COM === "1",
     securityTxt: `Contact: ${env.RW_SECURITY_CONTACT ?? "https://github.com/stranxik/runward-hosted/security/advisories/new"}\nExpires: ${env.RW_SECURITY_EXPIRES ?? "2027-11-06T00:00:00Z"}\nPreferred-Languages: fr, en\nCanonical: ${origin}/.well-known/security.txt\n`,
     s3: { endpoint: env.S3_ENDPOINT, region: env.S3_REGION, bucket: env.S3_BUCKET, accessKeyId: env.S3_ACCESS_KEY_ID, secretAccessKey: env.S3_SECRET_ACCESS_KEY },
     databaseUrl: env.DATABASE_URL, databaseTls: { mode: tlsMode, ca },
@@ -71,10 +75,10 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   const issuerHost = new URL(config.issuer).host;
   const s3Host = config.objects === "s3" ? new URL(config.s3.endpoint).host : null;
   // every call out has a deadline and each host a circuit breaker (egress.js, EGRESS_DEFAULTS)
-  // the hosts outside the hoster: the keys of two public issuers, GitHub's and gitlab.com's, and the object
-  // store (ADR-0029 section 1, which refines ADR-0001). RW_OIDC_ISSUER moves the first for a local witness
+  // the hosts outside the hoster: the keys of the public issuers, GitHub's and, once opened, gitlab.com's,
+  // and the object store (ADR-0029 section 1, which refines ADR-0001). RW_OIDC_ISSUER moves the first for a local witness
   // and never adds an issuer; a registered instance is never called: its keys are rows of its tenant.
-  const egress = boundFetch([issuerHost, new URL(GITLAB_COM_KEYS).host, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
+  const egress = boundFetch([issuerHost, ...(config.gitlabCom ? [new URL(GITLAB_COM_KEYS).host] : []), ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
   const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
   const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
@@ -83,7 +87,7 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   const github = givenVerifier ?? githubVerifier({ issuer: config.issuer, fetch: egress, clock });
   const ports = {
     store, objects, clock, log, ulid,
-    verifier: issuerRegistry({ github, githubIssuer: config.issuer, gitlabCom: gitlabComVerifier({ fetch: egress, clock }), store, clock, origin: config.origin }),
+    verifier: issuerRegistry({ github, githubIssuer: config.issuer, gitlabCom: config.gitlabCom ? gitlabComVerifier({ fetch: egress, clock }) : null, store, clock, origin: config.origin }),
     authn: givenAuthn ?? simpleWebAuthn({ rpID: config.rpID, origin: config.origin }),
     assembler: fleetAssembler({ pin }),
     archive: { pack: tar },

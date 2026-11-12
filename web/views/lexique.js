@@ -384,16 +384,16 @@ export const MOTS = {
           not: "Que le contenu soit vrai.",
         },
         P3: {
-          proves: "Le pipeline que ce dépôt définit a calculé le verdict : gitlab.com a signé que sa définition racine est le fichier confirmé, au même commit que le code, sur la branche déclarée, et que cette branche est protégée.",
-          not: "Que la définition soit celle du produit. Quiconque peut faire entrer un commit sur cette branche peut changer ce que le pipeline calcule. Non signé, et capable de changer le résultat : ce que la définition inclut depuis l'extérieur du dépôt ; les variables CI/CD du projet, de ses groupes et de l'instance, et celles passées au lancement d'un pipeline ; la machine qui a exécuté le job, qui tient le jeton pendant qu'il tourne ; les règles de la protection elle-même, que le service ne lit pas (qui peut pousser ou fusionner, si un push forcé est permis).",
+          proves: "Le verdict a été calculé par le pipeline que ce dépôt définit : gitlab.com a signé que la définition racine de ce pipeline est le fichier confirmé, au même commit que le code, sur la branche déclarée, et que cette branche est protégée.",
+          not: "Que la définition soit celle du produit. Toute personne qui peut ajouter un commit à cette branche peut changer ce que le pipeline calcule. Rien de ce qui suit n'est signé, et chacun de ces éléments peut changer le résultat : ce que la définition inclut depuis l'extérieur du dépôt ; les variables CI/CD du projet, de ses groupes et de l'instance, et celles passées au lancement d'un pipeline ; la machine qui a exécuté le job, et qui détient le jeton pendant son exécution ; les règles de la protection elle-même, que le service ne lit pas (qui peut pousser ou fusionner, si un push forcé est permis).",
         },
         P3b: {
-          proves: "Le pipeline que ce dépôt définit a calculé le verdict : gitlab.com a signé que sa définition racine est le fichier confirmé, au même commit que le code, sur la branche déclarée. Cette flotte a choisi de ne pas exiger que la branche soit protégée.",
-          not: "Tout ce que la ligne ci-dessus ne prouve pas ; et que la branche soit protégée : quiconque peut y pousser, ou la créer, peut envoyer.",
+          proves: "Le verdict a été calculé par le pipeline que ce dépôt définit : gitlab.com a signé que la définition racine de ce pipeline est le fichier confirmé, au même commit que le code, sur la branche déclarée. Cette flotte a choisi de ne pas exiger que la branche soit protégée.",
+          not: "Tout ce que la ligne ci-dessus ne prouve pas ; ni que la branche soit protégée : toute personne qui peut y pousser, ou la créer, peut envoyer.",
         },
         P4: {
-          proves: "Le détenteur d'une clé que cette flotte a enregistrée a envoyé le fichier, et cette clé a signé les revendications affichées (projet, branche, protection, définition, commit).",
-          not: "Tout ce que disent ces revendications : le service n'a pas vérifié que la clé appartient à une instance GitLab. Quiconque détient la clé peut signer n'importe quelle revendication, sans aucun GitLab.",
+          proves: "Le fichier a été envoyé par le détenteur d'une clé que cette flotte a enregistrée, et cette clé a signé les valeurs affichées (projet, branche, protection, définition, commit).",
+          not: "Tout ce que disent ces valeurs : le service n'a pas vérifié que la clé appartient à une instance GitLab. Toute personne qui détient la clé peut signer n'importe quelle valeur, sans qu'aucune instance GitLab n'intervienne.",
         },
         h2: "Le chemin qu'a pris le fichier", summary: "Niveau de preuve du chemin",
         lead: "Le niveau décrit le chemin qu'a pris le fichier, jamais son contenu : à tous les niveaux, le verdict reste déclaré par la CI (<code>ci-declared</code>).",

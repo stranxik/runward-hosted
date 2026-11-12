@@ -461,9 +461,13 @@ test("section 4 and point 16: registering is a gesture bound to the digest of th
   assert.ok([...h.objects._map.keys()].some((k) => k.startsWith(`tenants/${f.tenant}/`) && h.objects._map.get(k).toString().includes("issuer-registered")), "written to the security log");
   // look-alikes of the public issuers, of Entra and of the service; and what is not a plain address
   const refused = (issuer) => { try { readIssuer(issuer, { serviceHosts: ["app.runward.dev", "runward.dev", "localhost:8080"] }); return "accepted"; } catch (e) { return e.code; } };
-  for (const i of ["https://gitlab.com", "http://gitlab.com", "https://GITLAB.COM", "https://gitlab.com.", "https://gitlab.com:443", "https://gitlab.com:8443/x", "https://ci.gitlab.com", "https://a.b.gitlab.com",
+  for (const i of ["https://gitlab.com", "http://gitlab.com", "https://GITLAB.COM", "https://gitlab.com:443", "https://gitlab.com:8443/x", "https://ci.gitlab.com", "https://a.b.gitlab.com",
     "https://token.actions.githubusercontent.com", "https://x.token.actions.githubusercontent.com", "https://login.microsoftonline.com/tenant/v2.0", "https://sts.windows.net/tenant",
+    // every host under which the index names a public forge: a registration under github.com would be named as GitHub's own are
+    "https://github.com", "http://github.com", "https://www.github.com", "https://api.github.com", "https://GitHub.com:8443",
     "https://app.runward.dev", "https://APP.runward.dev/send", "https://runward.dev", "https://x.runward.dev", "http://localhost:8080"]) assert.equal(refused(i), "issuer-not-allowed", i);
+  // a trailing dot and an empty label are refused, never taken off: one string each
+  for (const i of ["https://gitlab.com.", "https://gitlab.com..", "https://github.com.", "https://github.com..", "https://www.github.com.", "https://gitlab.example.test.", "https://.gitlab.example.test", "https://gitlab.example.test.:8443"]) assert.equal(refused(i), "issuer-malformed", i);
   for (const i of ["", "gitlab.example.test", "ftp://gitlab.example.test", "https://", "https://user@gitlab.example.test", "https://user:pw@gitlab.example.test", "https://gitlab.example.test@gitlab.com",
     "https://gitlab.example.test/?a=1", "https://gitlab.example.test?a=1", "https://gitlab.example.test#x", "https://gitlab.example.test/", "https://gitlab.example.test//x", "https://gitlab.example.test:port",
     "https://gitlab.example.test:1:2", "https://gıtlab.com", "https://xn--gtlab-zva.com", "https://gitlab.com​.evil.test", "https://gitlab.example.test /x", " https://gitlab.example.test",
@@ -554,7 +558,7 @@ test("point 14: the confirmation is bound to the values shown; values that chang
   const s = () => h.app.identity.sessionFrom(f.token);
   const pendingOf = async (id) => (await h.app.identity.accessView(await s())).repositories.find((r) => r.id === id).pending;
   // ---- GitLab
-  await gesture(h, f.session, "declare-with-consent", "group/app");
+  await gesture(h, f.session, "declare-with-consent", "gitlab:gitlab.com:group/app");
   const d = await h.app.repositories.declare(await s(), { forge: "gitlab", name: "group/app", consent: true, missions: [{ id: "app" }] }, {});
   assert.equal((await sendToken(h, comSign(comClaims(h, { path: "group/app", projectId: "77", pipeline: "1", job: "10" })), { mission: "app" })).status, 202);
   const shown = await pendingOf(d.id);
@@ -597,7 +601,7 @@ test("rule 3: a definition that does not name the declared file and branch is sh
   const f = await founder(h);
   const s = () => h.app.identity.sessionFrom(f.token);
   const view = async (id) => (await h.app.identity.accessView(await s())).repositories.find((r) => r.id === id);
-  await gesture(h, f.session, "declare-with-consent", "group/app");
+  await gesture(h, f.session, "declare-with-consent", "gitlab:gitlab.com:group/app");
   const d = await h.app.repositories.declare(await s(), { forge: "gitlab", name: "group/app", workflow: "ci/pipeline.yml", consent: true, missions: [{ id: "app" }] }, {});
   // the pipeline's root definition is .gitlab-ci.yml, the declaration says ci/pipeline.yml
   assert.equal((await sendToken(h, comSign(comClaims(h, { path: "group/app", pipeline: "1", job: "10" })), { mission: "app" })).status, 202);
@@ -764,4 +768,129 @@ test("T18 for GitLab: a verified token of a project nobody declared is answered 
   assert.equal((await sendToken(h, sign(claims({ path: "temoin/demo-externe", projectId: "3" }, { ci_config_ref_uri: undefined, ci_config_sha: undefined })))).refusal, "repository-not-declared");
   assert.equal((await journal(h, f.tenant)).length, before);
   assert.equal(FIXTURE_CHECK.length > 0, true);
+});
+
+// ------------------------------------------------------------------ the review of the pull request (2026-11-12)
+test("review 1: a registration under a public forge's host cannot be made, so the index never names a tenant's key github.com/<owner>/<repo>", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const key = gitlabKey();
+  for (const issuer of ["https://github.com", "https://www.github.com", "https://gitlab.com..", "https://gitlab.com."]) {
+    await assert.rejects(h.app.issuers.preview(await h.app.identity.sessionFrom(f.token), { issuer, keys: { keys: [key.jwk] }, kid: key.kid }), (e) => ["issuer-not-allowed", "issuer-malformed"].includes(e.code), issuer);
+  }
+  assert.equal((await h.store.tx(f.tenant, (tx) => tx.list("issuer"))).length, 0);
+});
+
+test("review 2: a retired key's token is held to its own times first, written once, and never breaks the service", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const { reg, sign, claims } = await instance(h, f);
+  const old = sign(claims({ pipeline: "20", job: "200" }));        // signed while the key lived, never sent
+  const keyId = (await h.app.identity.accessView(await h.app.identity.sessionFrom(f.token))).issuers[0].keys[0].id;
+  await gesture(h, f.session, "issuer-key-retire", keyId);
+  await h.app.issuers.keyRetire(await h.app.identity.sessionFrom(f.token), reg.id, keyId, {});
+  const count = async () => (await refusals(h, f.tenant)).filter((c) => c === "key-retired").length;
+  // (A) one fresh token replayed five times is written once
+  const fresh = sign(claims({ pipeline: "21", job: "210" }));
+  for (let i = 0; i < 5; i++) assert.equal((await sendToken(h, fresh)).refusal, "key-retired");
+  assert.equal(await count(), 1, "one entry for one token, however often it is replayed");
+  // planted: the token of before the retirement, replayed later: its own age answers, and nothing is written
+  h.clock.advance(11 * MIN);
+  for (let i = 0; i < 5; i++) assert.equal((await sendToken(h, old)).refusal, "token-too-old");
+  h.clock.advance(60 * MIN);
+  assert.equal((await sendToken(h, old)).refusal, "token-expired");
+  assert.equal(await count(), 1, "an old token signed when the key lived writes nothing");
+  // (B) planted: dates no calendar holds, signed by the retired key: refused as a token, no server error, nothing written
+  const now = Math.floor(h.clock.now() / 1000);
+  for (const over of [{ iat: Number.MAX_SAFE_INTEGER, exp: Number.MAX_SAFE_INTEGER }, { iat: Number.MAX_SAFE_INTEGER, exp: now + 3600 }, { iat: -Number.MAX_SAFE_INTEGER }, { iat: 1e300, exp: 1e300 }, { exp: Number.MAX_SAFE_INTEGER }]) {
+    const r = await sendToken(h, sign(claims({ pipeline: "22", job: "220" }, over)));
+    assert.ok(["token-unreadable", "token-too-old", "key-retired"].includes(r.refusal), `${JSON.stringify(over)}: ${JSON.stringify(r)}`);
+  }
+  assert.ok(await count() <= 2);
+  // the same dates under a live key: refused too, never an error
+  const live = await registerIssuer(h, f, { issuer: "https://gitlab.live.test" });
+  for (const over of [{ iat: Number.MAX_SAFE_INTEGER, exp: Number.MAX_SAFE_INTEGER }, { exp: Number.MAX_SAFE_INTEGER }]) {
+    const r = await sendToken(h, live.key.sign(gitlabClaims(h.clock, { issuer: "https://gitlab.live.test", audience: live.audience }, over)));
+    assert.ok(["token-unreadable", "repository-not-declared"].includes(r.refusal), JSON.stringify(r));
+  }
+});
+
+test("review 3: gitlab.com is closed unless the service opens it: its tokens are unreadable, it cannot be declared, and registered instances stay", async () => {
+  const h = harness({ config: { gitlabCom: false } });
+  const f = await founder(h);
+  await gesture(h, f.session, null, null);
+  const s = () => h.app.identity.sessionFrom(f.token);
+  await assert.rejects(h.app.repositories.declare(await s(), { forge: "gitlab", issuer: "gitlab.com", name: "group/app" }, {}), { code: "issuer-unknown" });
+  await assert.rejects(h.app.repositories.declare(await s(), { forge: "gitlab", name: "group/app" }, {}), { code: "issuer-unknown" }, "gitlab.com is the default issuer of the body: closed too");
+  assert.equal((await h.app.identity.accessView(await s())).gitlabCom, false);
+  assert.equal((await sendToken(h, comSign(comClaims(h)))).refusal, "token-unreadable");
+  assert.ok(!h.fetches.some((u) => String(u).includes("gitlab.com")), "its keys are not read");
+  const { sign, claims } = await instance(h, f);
+  assert.equal((await sendToken(h, sign(claims({ pipeline: "11", job: "110" })))).status, 201);
+  // the service's own default is closed; RW_GITLAB_COM=1 opens it, and adds its key host to the egress list
+  const { readConfig, compose } = await import("../../src/main.js");
+  const { memoryStore } = await import("../../src/adapters/store/memory.js");
+  const { memoryObjects } = await import("../../src/adapters/objects/objects.js");
+  const { silentLog } = await import("../../src/adapters/system/log.js");
+  const made = (env) => compose(readConfig({ RW_STORE: "memory", ...env }), { clock: h.clock, log: silentLog, store: memoryStore({ clock: h.clock }), objects: memoryObjects(), authn: { } });
+  assert.equal(readConfig({ RW_STORE: "memory" }).gitlabCom, false);
+  assert.deepEqual(made({}).egress.allowed, ["token.actions.githubusercontent.com"]);
+  assert.deepEqual([...made({ RW_GITLAB_COM: "1" }).egress.allowed].sort(), ["gitlab.com", "token.actions.githubusercontent.com"]);
+  for (const v of ["0", "true", "yes", ""]) assert.equal(readConfig({ RW_STORE: "memory", RW_GITLAB_COM: v }).gitlabCom, false, JSON.stringify(v));
+});
+
+test("review 4: after a new order epoch, a send whose pipeline and job numbers were already received is accepted, not a duplicate for ever", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const { repo, sign, claims } = await instance(h, f);
+  assert.equal((await sendToken(h, sign(claims({ pipeline: "500", job: "5000" })))).status, 201);
+  // the instance was restored: the same numbers come back, on another commit, with other bytes
+  const other = Buffer.from(FIXTURE_CHECK.toString("utf8").replace('"gaps"', '"clean"'));
+  h.clock.advance(MIN);
+  const again = () => sendToken(h, sign(claims({ pipeline: "500", job: "5000" })), { bytes: other });
+  assert.equal((await again()).refusal, "duplicate-in-run", "planted: in the same epoch it is the same run, with another digest");
+  await gesture(h, f.session, "order-epoch-open", repo.id);
+  await h.app.repositories.openEpoch(await h.app.identity.sessionFrom(f.token), repo.id, {});
+  const r = await again();
+  assert.deepEqual([r.status, r.body.current], [201, true], JSON.stringify(r));
+  const ups = await h.store.tx(f.tenant, (tx) => tx.list("upload", { runAttempt: "5000" }));
+  assert.deepEqual(ups.map((u) => [u.runId, u.runNumber, u.epoch]).sort(), [["500", "500", 0], ["500@1", "500", 1]]);
+  assert.equal((await sendToken(h, sign(claims({ pipeline: "501", job: "5010" })))).body.current, true, "and the order goes on in the new epoch");
+});
+
+test("review 6, 8, 9, 10, 11, 12: a GitHub key holds no colon; the refusal counter is purged; Access shows the forge's identifier; a GitHub upload of before the levels is reached; the consent gesture is bound to the forge and the issuer; a pinned GitLab repository without an owner is refused", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const s = () => h.app.identity.sessionFrom(f.token);
+  // 6
+  await assert.rejects(h.store.tx(f.tenant, (tx) => tx.insert("forge_repository", { id: h.store.newId(), nameKey: "gitlab:https://gitlab.com:x/y", name: "x/y", state: "pending" })), /forge_repository_keys_scoped/);
+  // 11: a verification made for a GitHub name is not spent on a GitLab project of that name, nor one issuer's on another's
+  const { reg, repo, sign, claims } = await instance(h, f);
+  const declare = async (object, input) => { await gesture(h, f.session, "declare-with-consent", object); try { return (await h.app.repositories.declare(await s(), { consent: true, ...input }, {})).state; } catch (e) { return e.code; } };
+  assert.equal(await declare("group/app", { forge: "gitlab", issuer: "gitlab.com", name: "group/app", missions: [{ id: "m1" }] }), "gesture-required");
+  assert.equal(await declare(`gitlab:${reg.id}:group/app`, { forge: "gitlab", issuer: "gitlab.com", name: "group/app", missions: [{ id: "m1" }] }), "gesture-required");
+  assert.equal(await declare("gitlab:gitlab.com:group/app", { name: "group/app", missions: [{ id: "m1" }] }), "gesture-required");
+  assert.equal(await declare("gitlab:gitlab.com:group/app", { forge: "gitlab", issuer: "gitlab.com", name: "group/app", missions: [{ id: "m1" }] }), "pending");
+  assert.equal(await declare("group/app", { name: "group/app", missions: [{ id: "m2" }] }), "pending", "GitHub's object is the name, as before");
+  // 9
+  const shown = (await h.app.identity.accessView(await s())).repositories.find((r) => r.id === repo.id);
+  assert.equal(shown.repositoryId, "1", "the project's identifier, not the store's scoped key");
+  // 8: a refusal counted three hours ago is gone at the next count
+  await h.store.tx(null, (tx) => tx.countRefused("77", 100, reg.id));
+  await h.store.tx(null, (tx) => tx.countRefused("78", 103, reg.id));
+  assert.deepEqual([...h.store._state.refused.keys()].map((k) => k.split("\u0000")[1]), ["78"]);
+  // 12
+  await h.store.tx(f.tenant, (tx) => tx.update("forge_repository", { id: repo.id }, { ownerId: null }));
+  assert.equal((await sendToken(h, sign(claims({ pipeline: "12", job: "120" })))).refusal, "owner-changed", "planted: a pinned repository whose owner is not held receives nothing");
+  // 10: a GitHub upload accepted before the levels were journaled carries none: it reached P1 all the same
+  await pinnedRepository(h, f);
+  assert.equal((await send(h, { run_number: "13", run_id: "40000000013" })).status, 201);
+  const cur = (await h.store.tx(f.tenant, (tx) => tx.list("upload", { rank: "current", mission: "dropyour" })))[0];
+  const { level: _level, ...before } = cur.claims;
+  await h.store.tx(f.tenant, (tx) => tx.update("upload", { id: cur.id }, { claims: before }));
+  const line = (await h.app.reading.status(await s())).lines.find((l) => l.mission === "dropyour");
+  assert.deepEqual([line.level.code, line.level.reached], ["P1", true]);
+  // the journal's brief names the forge of a workload's line, for the shell's words
+  const recent = (await h.app.reading.status(await s())).recent;
+  assert.ok(recent.some((e) => e.forge === "github") && (await h.app.reading.status(await s())).lines.some((l) => l.activity.some((e) => e.forge === "gitlab")));
 });

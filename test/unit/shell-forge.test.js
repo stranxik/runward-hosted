@@ -106,7 +106,7 @@ const COM = repo({ id: "r-com", forge: "gitlab", level: "P3", issuer: { kind: "p
 const SELF = repo({ id: "r-self", name: "team/app", forge: "gitlab", level: "P4", issuer: { kind: "registered", id: REG, issuer: "https://gitlab.example.test" }, audience: `https://app.runward.dev/send/${REG}`, protectionRequired: true, definitionRef: "gitlab.example.test/team/app//.gitlab-ci.yml@refs/heads/main", definitionPinned: true });
 const key = (over) => ({ id: KEY, kid: THUMB, thumbprint: THUMB, state: "live", addedAt: "2026-11-01T10:00:00.000Z", confirmedAt: "2026-11-01T10:00:00.000Z", retiredAt: null, expiresAt: "2027-11-01T10:00:00.000Z", expiresSoon: false, ...over });
 const ISSUER = { id: REG, forge: "gitlab", issuer: "https://gitlab.example.test", audience: `https://app.runward.dev/send/${REG}`, addedAt: "2026-11-01T10:00:00.000Z", receiving: true, keys: [key()] };
-const access = (over = {}) => ({ passkeys: [], sessions: [], sameProvider: false, repositories: [GITHUB, COM, SELF], issuers: [ISSUER], limits: { issuers: 5, liveKeys: 4 }, reader: null, recovery: null, lang: "fr", retention: { removedRepositoryDays: 30, backupDays: 7, archiveHours: 24 }, ...over });
+const access = (over = {}) => ({ passkeys: [], sessions: [], sameProvider: false, repositories: [GITHUB, COM, SELF], issuers: [ISSUER], limits: { issuers: 5, liveKeys: 4 }, gitlabCom: true, reader: null, recovery: null, lang: "fr", retention: { removedRepositoryDays: 30, backupDays: 7, archiveHours: 24 }, ...over });
 const SESSION = { member: { id: "m", role: "owner" }, tenant: { id: "t", title: "runward hébergé", lang: "fr" }, passkeys: 2, arrivalDone: true, arrivalOpen: true, sendWorkflow: ["5b0c9e2d41aa7f3e9c18d6b2a07e4f51c3d9a8e0"] };
 const line = (mission, repository, forge, level, over = {}) => ({ mission, repository, path: ".", state: "pinned", consent: true, forge, level, orderSignal: null, accepted: null, notAcceptedSince: 0, lastRefusal: null, lastRefusalSeq: null, lastRefusalAt: null, activity: [], ...over });
 const LEVEL = (code, over = {}) => ({ code, reached: true, issuer: code === "P4" ? "registered" : "public", kid: code === "P1" ? null : THUMB, thumbprint: code === "P1" ? null : THUMB, protectionRequired: code === "P1" ? null : code !== "P3b", ...over });
@@ -372,6 +372,10 @@ test("the declaration names its forge: GitHub's body is the one it was, gitlab.c
     assert.ok(html.indexOf(`data-level="${code}"`) < html.indexOf('name="repo"'), "the level is said before the member declares");
     for (const v of ["github", "gitlab.com", REG]) assert.ok(html.includes(`name="forge" value="${v}"`), `the choice offers ${v}`);
   }
+  // planted: while the service has not opened gitlab.com, the choice is not offered, and a kept choice falls back to GitHub
+  state({ lang: "en", access: access({ gitlabCom: false }), formValues: { forge: "gitlab.com", repo: "", wf: "", mission: "", path: ".", branch: "main" } });
+  const closed = viewDeclarer("").html;
+  assert.ok(!closed.includes('value="gitlab.com"') && closed.includes('value="github" checked') && closed.includes(`name="forge" value="${REG}"`), "gitlab.com closed: GitHub and the registered instances only");
   // a refusal of the forge port lands on its field
   assert.deepEqual([FIELD_OF["issuer-unknown"], FIELD_OF["repository-path-unsupported"], FIELD_OF["repository-malformed"], FIELD_OF["workflow-malformed"]], ["forge", "repo", "repo", "wf"]);
   // choosing a forge paints the form again with its default definition file

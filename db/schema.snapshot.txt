@@ -189,7 +189,7 @@ constraint rw.fleet_index fleet_index_pkey PRIMARY KEY (tenant_id, version)
 constraint rw.fleet_index fleet_index_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
 constraint rw.forge_repository forge_repository_forge_check CHECK ((forge = 'github'::text))
 constraint rw.forge_repository forge_repository_forge_name_check CHECK ((forge_name = ANY (ARRAY['github'::text, 'gitlab'::text])))
-constraint rw.forge_repository forge_repository_keys_scoped CHECK ((((forge_name = 'github'::text) AND (issuer_key = 'https://token.actions.githubusercontent.com'::text)) OR ((forge_name <> 'github'::text) AND starts_with(name_key, (((forge_name || ':'::text) || issuer_key) || ':'::text)) AND ((repository_id IS NULL) OR starts_with(repository_id, (((forge_name || ':'::text) || issuer_key) || ':'::text))))))
+constraint rw.forge_repository forge_repository_keys_scoped CHECK ((((forge_name = 'github'::text) AND (issuer_key = 'https://token.actions.githubusercontent.com'::text) AND (POSITION((':'::text) IN (name_key)) = 0) AND ((repository_id IS NULL) OR (POSITION((':'::text) IN (repository_id)) = 0))) OR ((forge_name <> 'github'::text) AND starts_with(name_key, (((forge_name || ':'::text) || issuer_key) || ':'::text)) AND ((repository_id IS NULL) OR starts_with(repository_id, (((forge_name || ':'::text) || issuer_key) || ':'::text))))))
 constraint rw.forge_repository forge_repository_pkey PRIMARY KEY (id)
 constraint rw.forge_repository forge_repository_state_check CHECK ((state = ANY (ARRAY['pending'::text, 'pinned'::text])))
 constraint rw.forge_repository forge_repository_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES rw.tenant(id)
@@ -494,6 +494,7 @@ grant rw.send_refused rw_owner SELECT
 grant rw.send_refused rw_owner TRIGGER
 grant rw.send_refused rw_owner TRUNCATE
 grant rw.send_refused rw_owner UPDATE
+grant rw.send_refused rw_resolve DELETE
 grant rw.send_refused rw_resolve INSERT
 grant rw.send_refused rw_resolve SELECT
 grant rw.send_refused rw_resolve UPDATE

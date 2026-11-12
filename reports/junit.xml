@@ -111,7 +111,7 @@
 	<testcase name="a restore from a backup of before the retention erasure: the archive packs nothing whose bytes are gone, and the replay empties the versions again (C22)" classname="test"/>
 	<testcase name="an export whose bytes are gone is not held: the archive leaves out the versions built from it and says why (C22)" classname="test"/>
 	<testcase name="point 15: /send/ is a reserved prefix of the origin: nothing is served under it, whatever the method" classname="test"/>
-	<testcase name="the egress list holds the two public issuers' key hosts and nothing of a registered instance (section 1)" classname="test"/>
+	<testcase name="the egress list holds the two public issuers' key hosts (gitlab.com's once opened) and nothing of a registered instance (section 1)" classname="test"/>
 	<testcase name="a registered instance over HTTP: registered by a gesture, its token travels the machine route, shown P4; the routes are the session's, same origin" classname="test"/>
 	<testcase name="T24: a key retired, a registration removed and a protection required again after the backup are replayed by a restore" classname="test"/>
 	<testcase name="the claims a real GitLab instance signed are read as the rules expect: typed, with the definition absent when it lives in another project" classname="test"/>
@@ -138,6 +138,11 @@
 	<testcase name="point 11: none of GitHub's rule codes is answered to a GitLab token, none of GitLab's to a GitHub one; refusals after the repository are journaled in its tenant" classname="test"/>
 	<testcase name="point 12: the API contract changes by addition, with two exceptions: two remedies that name no forge, and the object of repository-confirm" classname="test"/>
 	<testcase name="T18 for GitLab: a verified token of a project nobody declared is answered repository-not-declared, and nothing is written in any journal" classname="test"/>
+	<testcase name="review 1: a registration under a public forge's host cannot be made, so the index never names a tenant's key github.com/&lt;owner>/&lt;repo>" classname="test"/>
+	<testcase name="review 2: a retired key's token is held to its own times first, written once, and never breaks the service" classname="test"/>
+	<testcase name="review 3: gitlab.com is closed unless the service opens it: its tokens are unreadable, it cannot be declared, and registered instances stay" classname="test"/>
+	<testcase name="review 4: after a new order epoch, a send whose pipeline and job numbers were already received is accepted, not a duplicate for ever" classname="test"/>
+	<testcase name="review 6, 8, 9, 10, 11, 12: a GitHub key holds no colon; the refusal counter is purged; Access shows the forge's identifier; a GitHub upload of before the levels is reached; the consent gesture is bound to the forge and the issuer; a pinned GitLab repository without an owner is refused" classname="test"/>
 	<testcase name="the frame follows the reader's language: in English, no French word in the sidebar, the menu, the top bar, the banners or the foot" classname="test"/>
 	<testcase name="the shell's links to the public site follow the reader's language: runward.dev in French, runward.dev/en in English, in the same tab" classname="test"/>
 	<testcase name="the foot carries the house's signature in the reader's language, signed in and signed out: « runward, par Another Framework », the name linking to the studio's page" classname="test"/>
@@ -413,9 +418,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 412 -->
+	<!-- tests 417 -->
 	<!-- suites 0 -->
-	<!-- pass 412 -->
+	<!-- pass 417 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

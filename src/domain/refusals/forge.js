@@ -20,7 +20,7 @@ export const FORGE = {
   "confirmation-stale": { status: 409, fr: ["Les valeurs à épingler ne sont plus celles affichées.", "Relire les nouvelles valeurs, puis confirmer."], en: ["The values to pin are no longer the ones shown.", "Read the new values, then confirm."] },
 
   // ---- the declaration on another forge
-  "issuer-unknown": { status: 404, fr: ["Cette instance n'est pas enregistrée dans cette flotte.", "L'enregistrer dans Accès, ou choisir gitlab.com."], en: ["This instance is not registered in this fleet.", "Register it in Access, or choose gitlab.com."] },
+  "issuer-unknown": { status: 404, fr: ["Cette instance n'est pas enregistrée dans cette flotte, ou ce service ne reçoit pas encore d'elle.", "Enregistrer l'instance dans Accès."], en: ["This instance is not registered in this fleet, or this service does not receive from it yet.", "Register the instance in Access."] },
   "repository-path-unsupported": { status: 400, fr: ["La vue ne sait pas encore nommer ce dépôt : son chemin a plus de deux segments, ou l'hôte de son instance porte un port.", "Rien pour l'instant : il se déclarera quand le service aura épinglé une version de runward-fleet qui lit ces noms."], en: ["The view cannot name this repository yet: its path has more than two segments, or its instance's host carries a port.", "Nothing for now: it can be declared once the service pins a runward-fleet version that reads such names."] },
 
   // ---- a registered instance (section 4)

@@ -123,7 +123,7 @@ export async function sendToken(h, bearer, { mission = "demo", kind = "check", b
  * or a registration's id; `sign(claims)` signs its tokens; `claims`: what gitlabClaims takes.
  */
 export async function pinnedGitlab(h, f, { issuer = "gitlab.com", sign, claims = {}, name = "temoin/demo", mission = "demo", branch = "main" }) {
-  await gesture(h, f.session, "declare-with-consent", name.toLowerCase());
+  await gesture(h, f.session, "declare-with-consent", `gitlab:${issuer}:${name.toLowerCase()}`);
   const d = await h.app.repositories.declare(await h.app.identity.sessionFrom(f.token), { forge: "gitlab", issuer, name, defaultBranch: branch, consent: true, missions: [{ id: mission, path: "." }] }, {});
   const first = await sendToken(h, sign(gitlabClaims(h.clock, { path: name, branch, pipeline: "10", job: "100", ...claims })), { mission });
   const confirm = first.status === 202 ? await confirmRepository(h, f, d.id) : null;
@@ -142,9 +142,10 @@ export function harness({ sendWorkflow = { published: [SEND_SHA], revoked: [] },
   // the registry of issuers around the real GitHub adapter, as src/main.js#compose builds it (ADR-0029)
   // `decoys.n`: how many times the decoy signature check ran (one per failing case of a registration's path)
   const decoys = { n: 0 };
-  const verifier = issuerRegistry({ github: githubVerifier({ fetch, clock }), gitlabCom: gitlabComVerifier({ fetch, clock }), store, clock, origin: config.origin ?? ORIGIN, checks: { decoy: () => { decoys.n++; return decoyCheck(); } } });
+  const verifier = issuerRegistry({ github: githubVerifier({ fetch, clock }), gitlabCom: config.gitlabCom === false ? null : gitlabComVerifier({ fetch, clock }), store, clock, origin: config.origin ?? ORIGIN, checks: { decoy: () => { decoys.n++; return decoyCheck(); } } });
   const assembler = fleetAssembler({ pin: fleetPin({ lockFile: LOCK }) });
-  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, ...config });
+  // gitlab.com is open in the harness (the service's default is closed: RW_GITLAB_COM), unless a test closes it
+  const app = createApp({ store, objects, verifier, authn: fakeAuthn(), assembler, archive: { pack: tar }, clock, log: silentLog, ulid }, { origin: ORIGIN, sendWorkflow, gitlabCom: true, ...config });
   // `assembler` is the one the app holds: a test that plays an earlier pin changes its `pin.archiveSha256`
   return { app, clock, store, objects, fetches, assembler, decoys };
 }

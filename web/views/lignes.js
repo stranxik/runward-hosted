@@ -65,7 +65,7 @@ export function jLigne(e) {
   if (e.who === "workload") {
     const shape = e.what === "send-accepted" ? "full" : e.what === "send-not-accepted" || e.what === "send-quarantined" ? "inv" : "void";
     const quoi = Object.hasOwn(L.quoi, e.what) ? L.quoi[e.what](e.seq, motif(e.refusal)) : L.act(W.acts[e.what] ?? e.what, e.seq);
-    return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-${shape}" aria-hidden="true"></span></span><span><span translate="no">${esc(e.repository ?? "")}</span>${e.runNumber ? `, run ${esc(e.runNumber)}` : ""}<span class="sub">${esc(quoi)}</span></span></li>`;
+    return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-${shape}" aria-hidden="true"></span></span><span><span translate="no">${esc(e.repository ?? "")}</span>${e.runNumber ? `, ${e.forge === "gitlab" ? "pipeline" : "run"} ${esc(e.runNumber)}` : ""}<span class="sub">${esc(quoi)}</span></span></li>`;
   }
   return `<li><span class="h">${hm(e.at)}</span><span class="m"><span class="mk mk-void" aria-hidden="true"></span></span><span>${esc(W.acts[e.what] ?? e.what)}${e.repository ? ` · <span translate="no">${esc(e.repository)}</span>` : ""}<span class="sub">${esc(L.act(W.who[e.who] ?? e.who, e.seq))}</span></span></li>`;
 }

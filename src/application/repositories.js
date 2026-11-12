@@ -33,12 +33,16 @@ export function repositoryCases(ctx, identity) {
         let issuerKey = GITHUB_ISSUER_KEY;
         if (d.forge === "gitlab") {
           // the issuer: gitlab.com, or an instance this tenant registered (read under its own policies)
+          // gitlab.com is closed until the service opens it (RW_GITLAB_COM, after its witness: ADR-0029 step d)
+          if (d.issuer === "gitlab.com" && !ctx.config.gitlabCom) throw new Refusal("issuer-unknown");
           const reg = d.issuer === "gitlab.com" ? null : await tx.get("issuer", { id: d.issuer });
           if (d.issuer !== "gitlab.com" && (!reg || reg.removedAt)) throw new Refusal("issuer-unknown");
           issuerKey = reg ? reg.id : GITLAB_COM_ISSUER;
           carried(indexName("gitlab", issuerKey, reg, d.name));
         }
-        if (d.consent) await useGesture(tx, s, "declare-with-consent", d.nameKey);
+        // the gesture is bound to what is declared: the name, and for another forge than GitHub the forge
+        // and the issuer chosen, so a verification made for one is not spent on another
+        if (d.consent) await useGesture(tx, s, "declare-with-consent", d.forge === "github" ? d.nameKey : `${d.forge}:${d.issuer}:${d.nameKey}`);
         const taken = await tx.nameTaken({ forge: d.forge, issuerKey, nameKey: d.nameKey });
         if (taken === "here") throw new Refusal("repository-exists");
         if (taken === "elsewhere") throw new Refusal("repository-unavailable");

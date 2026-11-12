@@ -14,8 +14,17 @@ export const GITLAB_COM_ISSUER = "https://gitlab.com";
 /** The public issuers, by the exact string of their tokens' `iss`: a closed list (ADR-0029 section 1). */
 export const PUBLIC_ISSUERS = Object.freeze({ [GITHUB_ISSUER_KEY]: "github", [GITLAB_COM_ISSUER]: "gitlab" });
 /** The hosts no tenant may register as an issuer, with every host under them (section 4): the public
- * issuers', and Entra's, which ADR-0030 keeps for a later adapter. The service's own are added at the call. */
-export const RESERVED_ISSUER_HOSTS = Object.freeze(["gitlab.com", "token.actions.githubusercontent.com", "login.microsoftonline.com", "sts.windows.net"]);
+ * issuers', Entra's, which ADR-0030 keeps for a later adapter, and every host under which the index names
+ * a public forge's repositories: github.com is not an issuer's host, but a registration under it would be
+ * named `github.com/<owner>/<repo>` in the index, as GitHub's own are (ADR-0031 j, the review of the pull
+ * request). The service's own are added at the call. */
+export const RESERVED_ISSUER_HOSTS = Object.freeze(["gitlab.com", "github.com", "token.actions.githubusercontent.com", "login.microsoftonline.com", "sts.windows.net"]);
+/** The key of a repository as its forge gives it: the scope `scopedKey` wrote is taken off on read. */
+export function unscopedKey(forge, issuerKey, key) {
+  if (forge === "github" || typeof key !== "string") return key ?? null;
+  const prefix = `${forge}:${issuerKey}:`;
+  return key.startsWith(prefix) ? key.slice(prefix.length) : null;
+}
 
 /** A registration's identifier: 128 random bits, in hexadecimal. It is the issuer key of its uploads. */
 export const REGISTRATION_ID = /^[0-9a-f]{32}$/;

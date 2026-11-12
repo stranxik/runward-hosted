@@ -15,14 +15,15 @@
 --   - `name_key` and `repository_id` are resolution keys. GitHub's stay bare, as they are. Every other
 --     forge's read `<forge>:<issuer key>:<value>`, which the check forge_repository_keys_scoped holds: the
 --     two indexes of 0001 are then unique within a forge and an issuer key, as ADR-0029 asks, by the value
---     they index. A tenant that registers another's issuer string with its own key can neither take a
+--     they index. A GitHub key holds no colon (the same check), so it never reads as a scoped one. A tenant that registers another's issuer string with its own key can neither take a
 --     project's identifier, nor block it, nor learn that it is declared elsewhere.
 -- The image of before writes GitHub rows only; the defaults give them their forge name and issuer key.
 alter table rw.forge_repository add column forge_name text not null default 'github' check (forge_name in ('github', 'gitlab'));
 alter table rw.forge_repository add column issuer_key text not null default 'https://token.actions.githubusercontent.com';
 alter table rw.forge_repository add column definition_ref text;
 alter table rw.forge_repository add constraint forge_repository_keys_scoped check (
-  (forge_name = 'github' and issuer_key = 'https://token.actions.githubusercontent.com')
+  (forge_name = 'github' and issuer_key = 'https://token.actions.githubusercontent.com'
+      and position(':' in name_key) = 0 and (repository_id is null or position(':' in repository_id) = 0))
   or (forge_name <> 'github'
       and starts_with(name_key, forge_name || ':' || issuer_key || ':')
       and (repository_id is null or starts_with(repository_id, forge_name || ':' || issuer_key || ':'))));
@@ -173,6 +174,7 @@ begin
 end $$;
 create function rw.count_send_refused(p_issuer_key text, p_repository_id text, p_bucket bigint) returns integer
   language sql volatile security definer set search_path = pg_catalog, rw, pg_temp as $$
+  delete from rw.send_refused where bucket < p_bucket - 2;
   insert into rw.send_refused (issuer_key, repository_id, bucket, n) values (p_issuer_key, coalesce(p_repository_id, '?'), p_bucket, 1)
   on conflict (issuer_key, repository_id, bucket) do update set n = rw.send_refused.n + 1 returning n
 $$;
