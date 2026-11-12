@@ -2,7 +2,7 @@
 // data-do names a gesture), and the two forms.
 import { S, main, parts, colonneEl } from "./base.js";
 import { api, loadSession } from "./api.js";
-import { say, menu, closeMenuWhenWide } from "./shell.js";
+import { say, menu, closeMenuWhenWide, tiroir } from "./shell.js";
 import { FIELD_OF, DEFAULT_FILE } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
@@ -38,6 +38,16 @@ document.addEventListener("click", async (e) => {
   // the phone menu: its button, its veil; a link inside it closes it with the screen it opens (the shell's paint)
   if (what === "menu") { menu(); return; }
   if (what === "menu-close") { menu(false); return; }
+  // the fixed shell (ADR-0036): the drawer « À faire », a filter of the list of applications (kept for the page, the
+  // same filter again lifts it), « Vérifier par vous-même » opened from the head of a reading
+  if (what === "afaire") { tiroir(true); return; }
+  if (what === "afaire-close") { tiroir(false); return; }
+  if (what === "filtre") { S.coqueFiltre = k && S.coqueFiltre !== k ? k : null; S.focusKey = `filtre:${k}`; return rerender(); }
+  if (what === "verifier") {
+    const d = document.getElementById("verifier");
+    if (d) { d.open = true; d.scrollIntoView({ block: "start" }); d.querySelector("summary")?.focus({ preventScroll: true }); }
+    return;
+  }
   if (what === "ask") { S.confirming = k; S.busy = null; S.failed = null; S.focusKey = k; return rerender(); }
   if (what === "cancel") { const was = S.confirming; S.confirming = null; S.failed = null; S.focusKey = was; return rerender(); }
   if (what === "confirm") return confirmGesture(k);
@@ -70,12 +80,26 @@ document.addEventListener("click", async (e) => {
   }
 });
 
-closeMenuWhenWide(matchMedia("(min-width:900px)"));
+closeMenuWhenWide(matchMedia("(min-width:1024px)"));
 
-// the keyboard: Escape closes the phone menu
+// the keyboard: Escape closes the drawer, then the phone menu; while the drawer is open the focus stays inside it
 document.addEventListener("keydown", (e) => {
+  if (S.tiroir) {
+    if (e.key === "Escape") { tiroir(false); return; }
+    if (e.key === "Tab") {
+      const f = [...document.querySelectorAll("#tiroir button, #tiroir a")];
+      if (!f.length) return;
+      const first = f[0], last = f.at(-1);
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    return;
+  }
   if (e.key === "Escape" && colonneEl.classList.contains("menu-ouvert")) { menu(false); document.getElementById("menub")?.focus(); }
 });
+// a link followed from the drawer closes it with the screen it opens
+document.getElementById("tiroir")?.addEventListener?.("click", (e) => { if (e.target.closest("[data-go], a[href]")) tiroir(false); });
+// offline and back: the bar of Applications says the time it was read, and that it is offline (web/views/piste/portefeuille.js)
+for (const ev of ["online", "offline"]) window.addEventListener?.(ev, () => { if (["", "decision"].includes(parts().route) && S.status) rerender(); });
 
 main.addEventListener("submit", async (e) => {
   e.preventDefault();

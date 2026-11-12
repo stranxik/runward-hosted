@@ -124,6 +124,28 @@ export function blockGroups(st) {
   return groups;
 }
 
+/**
+ * « Ce qui bloque » as a table (ADR-0036): the groups of blockGroups merged by step and kind, each place with the
+ * status its row proposes when the check's text says one (« proposed:applied awaits ratification »: applied), and the
+ * check's distinct texts, kept as written for the fold under the table. Every refusal of the index is in exactly one
+ * group, as in blockGroups; `only` keeps one step's groups.
+ */
+export function blockTable(st, only = null) {
+  const out = [];
+  for (const g of blockGroups(st)) {
+    if (only && g.step !== only) continue;
+    const key = `${g.step ?? ""}\u0000${g.kind ?? ""}`;
+    let t = out.find((x) => x.key === key);
+    if (!t) { t = { key, step: g.step, kind: g.kind, problems: [], places: [] }; out.push(t); }
+    if (g.problem && !t.problems.includes(g.problem)) t.problems.push(g.problem);
+    const status = (/^proposed:(\S+)/.exec(String(g.problem ?? "")) ?? [])[1] ?? null;
+    for (const p of g.places) t.places.push({ ...p, status });
+  }
+  // the places of a group in the export's order (its file and line order)
+  for (const t of out) t.places.sort((a, b) => a.i - b.i);
+  return out;
+}
+
 /** The kinds of the refusals of an application, most frequent first (the order of the export among equals). */
 export function kindsOf(m) {
   const by = new Map();

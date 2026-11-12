@@ -10,7 +10,8 @@
 //     check comes in calmly, and what moved is computed between the check this page showed and the new one
 //     (donnees.js#moved): the service serves no earlier check, so nothing older is compared. A member busy on the
 //     screen (the focus on one of its controls) is not repainted under their hands: a line says a check arrived, with
-//     a button that shows it. The arrival is announced to assistive technologies either way.
+//     a button that shows it (since ADR-0036: typing in a field or answering a confirmation; a repaint keeps the panes'
+//     scroll, folds and focus). The arrival is announced to assistive technologies either way.
 import { S, main, parts } from "../base.js";
 import { api, loadFleet } from "../api.js";
 import { moved } from "./donnees.js";
@@ -49,7 +50,7 @@ function arrive(els) {
 // ------------------------------------------------------------- after each paint of the screen
 let peinte = null;
 function apresPeinture() {
-  if (!main.querySelector?.(".pi-piste, .pi-board")) { peinte = location.hash; return; }
+  if (!main.querySelector?.(".pi-piste, [data-volets]")) { peinte = location.hash; return; }
   const E = etat();
   const h = location.hash, arrivee = h !== peinte;
   peinte = h;
@@ -63,7 +64,8 @@ function apresPeinture() {
 
 // ------------------------------------------------------------- a station of the large rail
 function station(n) {
-  const E = etat(), id = decodeURIComponent(parts().sub || "");
+  // the application shown: the one its address names, or on a desk the one shown by default (decision.js sets it)
+  const E = etat(), id = E.montre ?? decodeURIComponent(parts().sub || "");
   E.sel = E.sel && E.sel.id === id && E.sel.n === n ? null : { id, n };
   const cur = E.sel ? E.sel.n : 0;
   main.querySelectorAll("#pi-grand [data-pi-station]").forEach((b) => {
@@ -72,6 +74,8 @@ function station(n) {
     b.closest(".pi-st")?.classList.toggle("sel", on);
   });
   main.querySelectorAll(".pi-pans > .pi-pan").forEach((p) => { p.hidden = p.id !== `pi-pan-${cur}`; });
+  // the required documents of the station kept are marked in their table
+  main.querySelectorAll(".pieces > .pc").forEach((li) => li.classList.toggle("sel", Number(li.dataset.pc) === cur));
   const shown = main.querySelector(`#pi-pan-${cur}`);
   if (shown && !reduit()) { shown.classList.add("pose"); setTimeout(() => shown.classList.remove("pose"), 400); }
 }
@@ -79,7 +83,9 @@ function station(n) {
 // ------------------------------------------------------------- the live update
 let lecture = false;
 const ouvert = () => { const r = parts().route; return r === "" || r === "decision"; };
-const occupe = () => { const a = document.activeElement; return Boolean(a && a !== main && a !== document.body && main.contains(a) && a.matches("button, a, input, summary, [tabindex]")); };
+// since the panes (ADR-0036) a repaint keeps each pane's scroll, the open folds and the focus on the row or button it
+// was on (web/views/volets.js): only a member typing in a field, or answering a confirmation, is left undisturbed
+const occupe = () => { const a = document.activeElement; return Boolean(S.confirming) || Boolean(a && main.contains(a) && a.matches("input, textarea, select")); };
 function annonce(msg) { const el = document.getElementById("annonce"); if (!el) return; el.textContent = ""; setTimeout(() => { el.textContent = msg; }, 60); }
 async function peindre() {
   const E = etat();
@@ -99,7 +105,9 @@ function signaler() {
   const b = document.createElement("button"); b.type = "button"; b.className = "btn btn-q"; b.dataset.piVif = "1"; b.textContent = V.show;
   const a = document.createElement("div"); a.className = "actions"; a.append(b);
   box.append(p, a);
-  main.prepend(box);
+  // in the window of the panes, the line stands in its bar; elsewhere, first on the screen
+  const bar = main.querySelector(".win-bar");
+  if (bar) bar.append(box); else main.prepend(box);
 }
 export async function verifier() {
   const E = etat();

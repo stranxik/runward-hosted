@@ -130,8 +130,10 @@ test("the session says the service's control account, and only it", async () => 
 test("« À faire »: one item per gesture, what to do, why, its deadline, its button landing on the screen of that gesture", () => {
   state();
   assert.deepEqual(A.aFaire().map((i) => [i.kind, i.name]), [["confirm", "dropyour"], ["install", "next-one"], ["consent", "radar"]], "a check that arrived first, then a deadline, then the rest");
-  const b = frame(true, "decision", "", {}).bandeaux;
-  assert.ok(b.startsWith('<section class="afaire"'), "the first block of the portfolio");
+  // the drawer of the top bar holds the whole block (ADR-0036); the strip at the head of the list says the same items
+  const b = A.blocAFaire();
+  assert.ok(b.startsWith('<section class="afaire"'), "the whole block");
+  assert.ok(frame(true, "decision", "", {}).tiroir.includes(b), "the drawer « À faire » opens on it");
   const [confirm, install, consent] = items(b);
   // the first upload: its date, no deadline (none is held), its confirmation
   assert.match(confirm, /Confirmez le premier contrôle de <span translate="no">dropyour<\/span>\./);
@@ -150,9 +152,19 @@ test("« À faire »: one item per gesture, what to do, why, its deadline, its b
   assert.ok(screens.declarer(`attente/${T.ids.waiting}`).html.includes('id="extrait"'), "the step the team adds");
   assert.equal(screens.acces(`depot/${T.ids.radar}/accord`).cible, "#depot-accord button", "its consent, focused");
   assert.equal(NEVER.test(text(b)), false);
-  // the portfolio only: another screen has no block
+  // the strip: each item's question, deadline and button, without its reason
+  const strip = A.bandeAFaire();
+  assert.ok(strip.startsWith('<section class="afaire af-strip"'));
+  assert.deepEqual(items(strip).map((i) => targets(i)[0][1]), [`#/declarer/confirmer/${T.ids.dropyour}`, `#/declarer/attente/${T.ids.waiting}`, `#/acces/depot/${T.ids.radar}/accord`]);
+  assert.equal(strip.includes("Tant que vous ne l'avez pas confirmé"), false, "the strip says what to do and by when, the drawer why");
+  // an application's own item, in its reading
+  assert.match(A.aFairePour(line(T.status, "dropyour")), /Confirmez le premier contrôle de <span translate="no">dropyour<\/span>\./);
+  assert.equal(A.aFairePour(line(T.status, "runward-hosted")), "", "the control: nothing waits for it");
+  // no banner carries the block any more, on any screen
   assert.equal(frame(true, "envois", "", {}).bandeaux.includes("afaire"), false);
-  assert.equal(frame(true, "decision", "runward-hosted", {}).bandeaux.includes("afaire"), false, "nor an application's reading");
+  assert.equal(frame(true, "decision", "", {}).bandeaux.includes("afaire"), false);
+  // the top bar's count: the items', and its label says it
+  assert.match(frame(true, "envois", "", {}).afaire, /<button class="afaire-btn" type="button" data-do="afaire"[^>]*data-n="3"[^>]*aria-label="À faire, 3 gestes attendus">À faire<span class="badge num" aria-hidden="true">3<\/span><\/button>/);
 });
 
 test("an item goes once its gesture is done: the first upload confirmed leaves « À faire »", async () => {
@@ -170,23 +182,29 @@ test("the second passkey is an item of the portfolio, and the banner that says i
   state({ session: { ...T.session, passkeys: 1 } });
   assert.equal(A.aFaire().at(-1).kind, "passkey");
   const port = frame(true, "decision", "", {}).bandeaux;
-  assert.match(port, /Ajoutez une seconde passkey\./);
-  assert.equal(port.includes("Vous n'avez qu'une passkey."), false);
+  assert.match(A.bandeAFaire(), /Ajoutez une seconde passkey\./);
+  assert.equal(port.includes("Vous n'avez qu'une passkey."), false, "on Applications the strip says it");
   assert.ok(frame(true, "envois", "", {}).bandeaux.includes("Vous n'avez qu'une passkey."));
   // with nothing else to do, the block is the passkey alone; with nothing at all, no block
   state({ session: { ...T.session, passkeys: 2 }, status: { ...T.status, lines: [] } });
   assert.equal(frame(true, "decision", "", {}).bandeaux, "");
+  assert.equal(A.bandeAFaire(), "", "nothing waits: no strip");
+  assert.match(frame(true, "decision", "", {}).tiroir, /Rien à faire pour l&#39;instant\./, "the drawer says so");
+  assert.match(frame(true, "decision", "", {}).afaire, /data-n="0"/);
+  // the items not known (a screen opened cold): no button, no count
+  state({ status: null, index: null });
+  assert.equal(frame(true, "envois", "", {}).afaire, "");
 });
 
 test("in English, « À faire » says the same in English", () => {
   state({ lang: "en" });
-  const b = frame(true, "decision", "", {}).bandeaux;
-  assert.ok(b.includes(">To do<") && b.includes("Confirm the first check of") && b.includes("No deadline.") && b.includes("or the declaration expires."));
+  const b = A.blocAFaire() + A.bandeAFaire() + frame(true, "decision", "", {}).afaire;
+  assert.ok(b.includes(">To do<") && b.includes("Confirm the first check of") && b.includes("No deadline.") && b.includes("or the declaration expires.") && b.includes("To do, 3 gestures waiting"));
   assert.equal(/À faire|Confirmez|délai|Avant le/.test(b), false);
 });
 
 // ------------------------------------------------------------- the menu
-test("the menu: four entries, the count of what waits on « Applications », one line per application, the export inside the account", () => {
+test("the menu: four entries, the count of what waits on « Applications », no line per application (the list of Applications says them), the export inside the account; the same four in the phone's tab bar", () => {
   state();
   const f = frame(true, "decision", "", {});
   const main = /<nav aria-label="Navigation principale">([\s\S]*?)<\/nav>/.exec(f.lat)[1];
@@ -195,14 +213,13 @@ test("the menu: four entries, the count of what waits on « Applications », one
   assert.match(main, /<span class="badge num" aria-hidden="true">3<\/span><span class="vh">, 3 à faire<\/span>/);
   assert.equal(f.lat.includes("#/acces/export"), false, "the export is a section of the account, not an entry");
   assert.ok(screens.acces("").html.includes("Récupérer vos données") && screens.acces("").html.includes('data-go="#/acces/export"'));
-  // the applications: the published ones, then those whose first check is awaited, each to its next step
-  const apps = /<nav aria-label="Applications, refusées par le contrôle d'abord">([\s\S]*?)<\/nav>/.exec(unesc(f.lat))[1];
-  const to = Object.fromEntries(targets(apps).map(([l, h]) => [l, h]));
-  assert.equal(to["runward-hosted"], "#/decision/runward-hosted");
-  assert.equal(to.dropyour, `#/declarer/confirmer/${encodeURIComponent("stranxik/dropyour")}`);
-  assert.equal(to["next-one"], `#/declarer/attente/${encodeURIComponent("stranxik/next-one")}`);
-  // the phone menu carries the same
-  assert.ok(f.mobnav.includes("Brancher une application") && f.mobnav.includes('class="badge num"'));
+  // the applications leave the sidebar (ADR-0036): the list of Applications says them, each to its reading
+  assert.equal(/#\/decision\/|#\/declarer\/(confirmer|attente)/.test(unesc(f.lat)), false, "no line per application in the sidebar");
+  // the phone: the tab bar carries the four entries and the count; the menu keeps the language, the technical views and the sign-out
+  assert.deepEqual(targets(f.tabs).map(([l, h]) => [l.replace(/\d+, \d+ à faire$/, ""), h]), [["Applications", "#/"], ["Brancher", "#/declarer"], ["Journal", "#/envois"], ["Compte", "#/acces"]]);
+  assert.match(f.tabs, /<a class="tab" href="#\/" aria-current="page">[\s\S]*?<span class="badge num" aria-hidden="true">3<\/span>/);
+  assert.ok(f.mobnav.includes('data-do="lecture-lang"') && f.mobnav.includes('data-do="logout"') && f.mobnav.includes("Vues techniques"));
+  assert.equal(f.mobnav.includes("Brancher une application"), false, "the four entries are the tab bar's");
   // the count is none while the items are not known (a screen opened cold, before the portfolio was read)
   state({ status: null, index: null });
   assert.equal(frame(true, "envois", "", {}).lat.includes("badge"), false);
@@ -239,7 +256,7 @@ test("the control account: its banner on every screen, no « Brancher une applic
   assert.equal(text(/^<div class="bandeau temoin"[^>]*>([\s\S]*?)<\/div>/.exec(f.bandeaux)[1]), "Compte de contrôle du service : chaque mise en production y dépose le contrôle de runward hébergé ; son premier envoi reste en attente, c'est normal.");
   assert.ok(frame(true, "acces", "", {}).bandeaux.includes("bandeau temoin"), "on every screen");
   assert.equal(f.lat.includes("Brancher une application"), false);
-  assert.equal(f.mobnav.includes("Brancher une application"), false);
+  assert.equal(f.tabs.includes("#/declarer"), false, "nor in the phone's tab bar");
   assert.ok(f.lat.includes("<b>Compte de contrôle du service</b>"));
   assert.deepEqual(A.aFaire(), [], "its first upload waits on purpose");
   assert.equal(A.compteTemoin(), true);

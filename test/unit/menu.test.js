@@ -1,8 +1,8 @@
-// The phone menu of the shell (web/views/shell.js, menu and closeMenuWhenWide). It exists under 900 px only: above,
-// the stylesheet hides its button, its veil and its sheet. While it is open it is the one thing that answers: the
-// screen, the trail's line, the banners and the foot are inert. A window that crosses 900 px with the menu open (a
-// tablet turned) must not keep a screen that ignores every tap with nothing visible: the menu closes when the width
-// is crossed. Planted control: without that listener the screen stays inert.
+// The phone menu of the shell (web/views/shell.js, menu and closeMenuWhenWide). It exists under 1024 px only (the
+// fixed shell's breakpoint, ADR-0036): above, the stylesheet hides its button, its veil and its sheet. While it is open
+// it is the one thing that answers: the screen, the tab bar, the banners and the foot are inert. A window that crosses
+// 1024 px with the menu open (a tablet turned) must not keep a screen that ignores every tap with nothing visible: the
+// menu closes when the width is crossed. Planted control: without that listener the screen stays inert.
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
@@ -32,10 +32,10 @@ const { menu, closeMenuWhenWide } = await import(pathToFileURL(join(served, "vie
 
 /** A media query as the browser gives it: listeners, and a way to say the width was crossed. */
 const query = () => { const ls = []; return { matches: false, addEventListener: (type, f) => { if (type === "change") ls.push(f); }, cross(matches) { this.matches = matches; for (const f of ls) f({ matches }); }, listeners: ls }; };
-const UNDER = ["main", "bartel", "bandeaux", "pied"];
+const UNDER = ["main", "tabs", "bandeaux", "pied"];
 const state = () => ({ open: byId("colonne").classList.contains("menu-ouvert"), expanded: byId("menub").getAttribute("aria-expanded"), inert: UNDER.filter((id) => byId(id).inert), sheetInert: byId("mobnav").inert });
 
-test("the phone menu open: the screen, the trail's line, the banners and the foot are inert, the sheet answers; closed, the reverse", () => {
+test("the phone menu open: the screen, the tab bar, the banners and the foot are inert, the sheet answers; closed, the reverse", () => {
   byId("menub").hidden = false;
   assert.equal(menu(true), true);
   assert.deepEqual(state(), { open: true, expanded: "true", inert: UNDER, sheetInert: false });
@@ -47,16 +47,16 @@ test("the phone menu open: the screen, the trail's line, the banners and the foo
   assert.deepEqual(state().inert, []);
 });
 
-test("a window that crosses 900 px with the menu open closes it: the screen never stays inert with nothing visible", () => {
+test("a window that crosses 1024 px with the menu open closes it: the screen never stays inert with nothing visible", () => {
   byId("menub").hidden = false;
   const wide = query();
   closeMenuWhenWide(wide);
   assert.equal(wide.listeners.length, 1, "it listens to the width");
   menu(true);
   assert.deepEqual(state().inert, UNDER);
-  wide.cross(true); // the tablet is turned: 900 px or more
+  wide.cross(true); // the tablet is turned: 1024 px or more
   assert.deepEqual(state(), { open: false, expanded: "false", inert: [], sheetInert: true });
-  // back under 900 px the menu stays closed, and opens again when asked
+  // back under 1024 px the menu stays closed, and opens again when asked
   wide.cross(false);
   assert.equal(state().open, false);
   assert.equal(menu(), true);
@@ -68,6 +68,6 @@ test("a window that crosses 900 px with the menu open closes it: the screen neve
   assert.deepEqual(state(), { open: true, expanded: "true", inert: UNDER, sheetInert: false }, "without the listener the screen ignores every tap");
   menu(false);
   // the page wires it on the width the stylesheet hides the menu at
-  assert.match(readFileSync(`${WEB}views/events.js`, "utf8"), /closeMenuWhenWide\(matchMedia\("\(min-width:900px\)"\)\);/);
-  assert.match(readFileSync(`${WEB}app.css`, "utf8"), /@media \(min-width:900px\)\{[^@]*\.menu-b, \.voile, \.menu-pan\{ display:none; \}/);
+  assert.match(readFileSync(`${WEB}views/events.js`, "utf8"), /closeMenuWhenWide\(matchMedia\("\(min-width:1024px\)"\)\);/);
+  assert.match(readFileSync(`${WEB}app.css`, "utf8"), /@media \(min-width:1024px\)\{[^@]*\.menu-b, \.voile, \.menu-pan\{ display:none; \}/);
 });

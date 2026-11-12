@@ -2,9 +2,10 @@
 // reading of one application at a stable address (#/decision/<mission id>).
 //
 // Since « la piste » (ADR-0035, refining ADR-0021 and ADR-0025), the screen is drawn by the app from the index's own
-// fields (web/views/piste/): the portfolio is a board of rails, one per application, six stations each, one sentence
-// and its action; an application is its rail in large, what blocks with each file and line, what the check and the
-// service recorded, « Vérifier par vous-même » and its checked deliveries. runward-fleet's own HTML,
+// fields (web/views/piste/); since the fixed shell (ADR-0036) it is one window of two panes (web/views/volets.js): the
+// applications as a compact list, each with its six stations in small and one short reason, and beside it the reading
+// of the one selected: its rail in large, what blocks as a table with each file and line, its documents, what the
+// check and the service recorded, its checked deliveries, « Vérifier par vous-même » folded. runward-fleet's own HTML,
 // renderView(index, "decision", id) from the pinned views, stays on the screen, byte for byte, folded below as the raw
 // detail: for the index's language it is what `runward-fleet build` writes for the same fleet.json (runward's
 // docs/spec/runward-fleet-decision.md §8), and the app adds no word inside it. Around it, the service says what only it
@@ -15,17 +16,20 @@
 // (architecture §6); the live update reads the status again every 30 s while the screen is open (piste/vif.js). Every
 // value from them is escaped here, in web/views/piste/ or by views.js; no example data.
 import { S, esc } from "./base.js";
-import { go, act, reqNote, loadingView, fenetre } from "./marks.js";
+import { go, act, reqNote, mk } from "./marks.js";
+import { when } from "./time.js";
 import { renderView } from "./fleet-views.js";
 import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
 import { niveauLigne, ordre } from "./claims.js";
-import { prochainPas, versAccord, versSection } from "./liens.js";
+import { versAccord } from "./liens.js";
 import { piste } from "./piste/mots.js";
 import { firstRun } from "./piste/rail.js";
-import { portfolio } from "./piste/portefeuille.js";
-import { reading } from "./piste/lecture.js";
+import { entrees, categorie, barreApps, listeApps, etatTete } from "./piste/portefeuille.js";
+import { reading, awaited } from "./piste/lecture.js";
 import { etat } from "./piste/vif.js";
+import { fenetre, barre, etat as etatVolet, squelette, VOLET_FOCUS } from "./volets.js";
+import { bandeAFaire, aFairePour } from "./afaire.js";
 
 // ------------------------------------------------------------- the language of the reading
 // The reader's language is the app's, one for the reading and its frame (web/views/lexique.js): the choice kept under
@@ -179,7 +183,8 @@ export function verifyCommand({ repository, commit, version, path }) {
 function verifyPanel(w, m) {
   const V = w.verify, L = typeof m.latest === "object" && m.latest ? m.latest : null;
   const st = ligne(m.id);
-  const win = (body) => fenetre(esc(V.title), body, { cls: "c-bar lecture-verif", attrs: ` aria-label="${esc(V.title)}"` });
+  // the body of the fold « Vérifier par vous-même » in the reading's side column (web/views/piste/lecture.js)
+  const win = (body) => `<div class="lecture-verif">${body}</div>`;
   if (!L) return win(`<p>${esc(V.lead)}</p><p class="note">${esc(V.none)}</p>`);
   const repository = String(m.repository ?? "").replace(/^github\.com\//, "");
   // the index carries the commit with where it was read from: { value, source, commitSource } (runward-fleet build)
@@ -217,7 +222,7 @@ function reasonOf(w, lang, code) {
 function levelPanel(m) {
   const st = ligne(m.id), L = mots().forge.level;
   if (!st?.level) return "";
-  return fenetre(esc(L.h2), `<p class="note">${L.lead}</p>${niveauLigne(st)}${ordre(st)}`, { plat: true, cls: "c-bar lecture-niveau", attrs: ` aria-label="${esc(L.h2)}"` });
+  return `<p class="note">${L.lead}</p>${niveauLigne(st)}${ordre(st)}`;
 }
 
 /** Consent not given for this application: its checks are not accepted, said under its reading with its button. */
@@ -226,67 +231,95 @@ function receivedNotes(w, m) {
   return st && st.consent === false ? `<div class="bandeau"><p>${esc(R.consent)}</p><div class="actions">${go(versAccord(st), R.consentAct, { q: true })}</div></div>` : "";
 }
 
-const frame = (lang, html, vue = "") => `<div class="lecture" lang="${lang}"${vue ? ` data-vue="${vue}"` : ""}>${html}</div>`;
-
 // ------------------------------------------------------------- the screen
-// « La piste » (ADR-0035, refining ADR-0021 and ADR-0025): the portfolio is a board of rails, one per application,
-// and an application is its rail in large with what blocks, what happened, how to check it yourself and its checked
-// deliveries (web/views/piste/). runward-fleet's own reading stays on the screen, byte for byte, folded below as the
-// raw detail: the app adds no word inside it.
+// The fixed shell (ADR-0036, refining ADR-0034 and ADR-0035): Applications is one window of two panes. The list on the
+// left (« À faire » first when something waits, then the applications, each with its mark, its six stations in small,
+// its short reason and the time of its check), the reading of the one selected on the right, each pane scrolling on its
+// own (web/views/volets.js). The address is the one it has always been: #/ the list (on a desk, the first application
+// read beside it, no address naming it), #/decision/<id> one application. An application declared whose first check is
+// awaited has its reading at the same address: where it stands among the five gestures, and its button.
 
 /** The service's words for a refusal's code, as text (a code this lexicon does not know, as written). */
 const reasonText = (w) => (code) => (Object.hasOwn(w.reasons, code) ? w.reasons[code] : code);
 
-/** Where the first run stands with the declared applications awaited: a first check to confirm, delivered, or the step to add. */
-const firstStep = (lines) => (lines.some((l) => ["confirm", "owner"].includes(prochainPas(l).kind)) ? 3 : lines.some((l) => ["wait", "consent"].includes(prochainPas(l).kind)) ? 2 : 1);
+/** Where the first run stands for an application awaited: a first check to confirm, delivered, or the step to add. */
+const stepOf = (kind) => (kind === "confirm" || kind === "owner" ? 3 : kind === "wait" || kind === "consent" ? 2 : 1);
+
+/** The pane screen, as the shell paints it (web/views/shell.js, `main: "volets"`). */
+const volets = (base, { title, crumb, html, ecran = "liste", sel = null }) => ({ ...base, title, crumb, main: "volets", cle: "applications", ecran, sel, focus: VOLET_FOCUS, html: `<div class="lecture" lang="${readingLang()}" data-vue="volets">${html}</div>` });
+
+/** The loading of Applications: the skeleton of the panes, no number (web/views/router.js asks it while it reads). */
+export const loadingDecision = () => {
+  const W = mots().coque;
+  return { title: mots().frame.apps, key: "fleet", signed: "in", main: "volets", cle: "applications", ecran: "liste", html: squelette(6, W.states.loading) };
+};
 
 export function viewDecision(sub) {
-  const lang = readingLang(), w = WORDS[lang];
+  const lang = readingLang(), w = WORDS[lang], C = mots().coque;
   let id = "";
   try { id = sub ? decodeURIComponent(sub) : ""; } catch { return null; }
   const base = { key: "fleet", signed: "in", fleetRoute: "decision", decision: id };
-  if (S.fleetError) return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete" data-erreur><h1 class="t1">${esc(w.errorTitle)}</h1><p class="sous">${esc(w.errorText)}${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", w.retry)}${go("#/envois", w.uploads, { q: true })}</div></div>`) };
-  if (!S.status) return loadingView(w.portfolio);
+  if (S.fleetError) {
+    return volets(base, { title: w.portfolio, html: fenetre({ bar: barre({ titre: esc(w.portfolio) }), seul: etatVolet({ marque: `<p class="mk-etat">${mk("void", mots().common.notShown)}</p>`, titre: esc(w.errorTitle), h1: true, texte: `${esc(w.errorText)}${reqNote(S.fleetError)}`, actions: `${act("reload-screen", w.retry)}${go("#/envois", w.uploads, { q: true })}` }) }) });
+  }
+  if (!S.status) return loadingDecision();
   const st = S.status, E = etat();
   const missions = S.index?.missions ?? [];
   // the service's control account (ADR-0034): its first upload waits on purpose, the frame's banner says so; no row
   // awaited, no first run, no « Brancher » here (read defensively: absent, an account as any other)
   const temoin = Boolean(S.session?.tenant?.witness);
   const waiting = temoin ? [] : st.lines.filter((l) => !missions.some((m) => m.id === l.mission));
+  const list = entrees(S.index, st, waiting);
   const F = piste().first;
-  if (!missions.length && !id) {
-    // nothing to read yet: the first run, drawn as a rail of five gestures. With nothing declared, the first one; with
-    // applications declared, where they stand, and each one's row with its next step
+  if (!list.length && !id) {
+    // nothing to read yet: the first run, drawn as a rail of five gestures, the first one current
     E.premier = null;
-    if (temoin) return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete pi-tete"><h1 class="t1">${esc(w.title)}</h1></div>`, "piste-vide") };
-    if (!waiting.length) {
-      return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete pi-tete"><h1 class="t1">${esc(F.emptyTitle)}</h1><p class="sous">${esc(F.emptyText)}</p></div>
-        ${firstRun(0, `<p>${esc(F.emptyNote)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`)}`, "piste-vide") };
-    }
-    return { ...base, title: w.portfolio, html: frame(lang, `${portfolio({ index: null, status: st, waiting, w, reasons: reasonText(w), avant: firstRun(firstStep(waiting)) })}
-      <div class="actions lecture-actions">${go(versSection("depots"), w.waitAct, { q: true })}${go("#/declarer", w.connect, { q: true })}</div>`, "piste-port") };
+    if (temoin) return volets(base, { title: w.portfolio, html: fenetre({ bar: barre({ titre: esc(C.apps(0)) }), seul: etatVolet({ titre: esc(w.title), h1: true }) }) });
+    return volets(base, { title: w.portfolio, html: fenetre({ bar: barre({ titre: esc(C.apps(0)) }), seul: `<div class="d-body premier">${etatVolet({ titre: esc(F.emptyTitle), texte: esc(F.emptyText), h1: true })}${firstRun(0, `<p>${esc(F.emptyNote)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`)}</div>` }) });
   }
   const idx = S.index && S.index.lang !== lang ? { ...S.index, lang } : S.index;
   const setAside = st.quarantined ? `<p class="avert">${w.setAside(st.quarantined)} <a href="#/envois">${esc(w.uploads)}</a></p>` : "";
   const bouge = Object.fromEntries(Object.entries(E.moved).map(([k, d]) => [k, d.steps]));
-  if (!id) {
-    E.premier = null;
-    // the portfolio: the rails, then runward-fleet's reading of the portfolio, folded (its five state tiles and its list)
-    return { ...base, title: w.portfolio, html: frame(lang, `${setAside}${portfolio({ index: idx, status: st, waiting, w, reasons: reasonText(w), bouge, neuf: E.neuf })}
-      <div class="actions lecture-actions">${waiting.length ? go(versSection("depots"), w.waitAct, { q: true }) : ""}${temoin ? "" : go("#/declarer", w.connect, { q: true })}</div>
-      <details class="pi-pli" data-pli="detail-port"><summary>${esc(piste().detail.portfolio)}</summary><div class="pi-pli-b">${renderView(idx, "decision")}</div></details>`, "piste-port") };
+  const filtre = S.coqueFiltre ?? null;
+  const shown = list.filter((e) => !filtre || categorie(e) === filtre);
+  // the one shown: the one the address names; on a desk with no address naming one, the first of the list
+  const e = id ? list.find((x) => x.id === id) ?? null : shown[0] ?? list[0] ?? null;
+  if (!id) E.premier = null;
+  E.montre = e?.id ?? null;
+  const at = e ? list.indexOf(e) : -1;
+  const href = (x) => (x ? `#/decision/${encodeURIComponent(x.id)}` : null);
+  const pos = e ? { i: at + 1, n: list.length, avant: href(list[at - 1]), apres: href(list[at + 1]) } : null;
+  const ctx = { reasonOf: (code) => reasonOf(w, lang, code), reasonText: reasonText(w), received: w.received, verifyTitle: w.verify.title };
+  let detail;
+  if (!e) {
+    detail = etatVolet({ titre: esc(w.unknownTitle), h1: true, texte: `${esc(w.unknownText)} <code translate="no">${esc(id)}</code>`, actions: go("#/", w.all, { q: true }) });
+  } else if (e.m) {
+    const premier = E.premier === e.id;
+    if (E.premier && !premier) E.premier = null;
+    const sel = E.sel && E.sel.id === e.id ? E.sel.n : null;
+    detail = reading(e.m, e.line, {
+      sel, premier, bouge: E.moved[e.id] ?? null, pos,
+      verify: verifyPanel(w, e.m), level: levelPanel(e.m),
+      detail: renderView(idx, "decision", e.id),
+      ctx, avant: `${setAside}${receivedNotes(w, e.m)}`,
+    });
+  } else {
+    const n = e.next, N = w.next;
+    detail = awaited({
+      name: e.name, state: etatTete(e), next: n, line: e.line, ctx, pos, cur: stepOf(n.kind),
+      said: n.kind === "confirm" ? N.confirm(when(n.at, { sec: false })) : esc(N[n.kind]),
+      act: go(n.href, N[`${n.kind}Act`], { q: n.kind === "install" || n.kind === "wait" }),
+      todo: aFairePour(e.line),
+    });
   }
-  const m = missions.find((x) => x.id === id);
-  const crumb = (name) => [[w.portfolio, "#/"], [name, null, true]];
-  if (!m) return { ...base, title: w.portfolio, crumb: crumb(id), html: frame(lang, `<div class="tete"><h1 class="t1">${esc(w.unknownTitle)}</h1><p class="sous">${esc(w.unknownText)} <code translate="no">${esc(id)}</code></p><div class="actions">${go("#/", w.all)}</div></div>`) };
-  const premier = E.premier === m.id;
-  if (E.premier && !premier) E.premier = null;
-  const sel = E.sel && E.sel.id === m.id ? E.sel.n : null;
-  const body = reading(m, ligne(m.id), {
-    sel, premier, bouge: E.moved[m.id] ?? null,
-    verify: verifyPanel(w, m), level: levelPanel(m),
-    detail: renderView(idx, "decision", m.id),
-    ctx: { reasonOf: (code) => reasonOf(w, lang, code), reasonText: reasonText(w), received: w.received },
+  const crumb = id ? [[w.portfolio, "#/"], [e ? e.name : id, null, true]] : null;
+  return volets(base, {
+    title: id && e ? e.name : w.portfolio, crumb, ecran: id ? "detail" : "liste", sel: e?.id ?? id,
+    html: fenetre({
+      bar: barreApps(list, st, filtre),
+      liste: listeApps(list, { w, sel: id || null, choisie: e?.id ?? null, filtre, bouge, neuf: E.neuf, afaire: bandeAFaire(), detail: idx?.missions?.length ? renderView(idx, "decision") : "" }),
+      detail,
+      label: C.listLabel,
+    }),
   });
-  return { ...base, title: m.name, crumb: crumb(m.name), html: frame(lang, `${setAside}${body}${receivedNotes(w, m)}`, "piste-app") };
 }
