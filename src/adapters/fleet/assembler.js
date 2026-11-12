@@ -37,7 +37,7 @@ function installedFiles(dir) {
  * The archive digest is written on every published index and names the build that replays it (ADR-0021),
  * so it is returned only when what is installed IS that archive, and the service does not start otherwise:
  * the integrity npm recorded at install (node_modules/.package-lock.json) is the lock's, and the installed
- * files are the lock's "files", name for name and digest for digest. The version alone names three archives.
+ * files are the lock's "files", name for name and digest for digest. The version alone names four archives.
  */
 export function fleetPin({ lockFile, pkgDir = PKG_DIR }) {
   const lock = JSON.parse(readFileSync(lockFile, "utf8"));
