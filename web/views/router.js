@@ -22,7 +22,7 @@ import { viewArrivee } from "./arrivee.js";
 import { viewDeclarer } from "./declarer.js";
 import { viewEnvois } from "./envois.js";
 import { viewFleet, viewVuesFermees } from "./fleet.js";
-import { viewDecision } from "./decision.js";
+import { viewDecision, loadingDecision } from "./decision.js";
 import { viewAcces } from "./acces.js";
 import { viewPanne } from "./panne.js";
 import { viewLegal } from "./legal.js";
@@ -36,8 +36,11 @@ const FLEET_ROUTES = ROUTES.filter((r) => r !== "decision");
 /** The fleet's screens: the dashboard (#/flotte), a mission, and the views of the pinned runward-fleet this app shows. */
 const FLEET = { view: (sub, route) => viewFleet(route, sub ? decodeURIComponent(sub) : ""), reads: "fleet", signedIn: true };
 /** The decision reading: the portfolio at #/ and #/decision, an application at #/decision/<id>. It reads the index. */
-const DECISION = { view: (sub) => viewDecision(sub), reads: "fleet", signedIn: true };
-/** The screens, by route: its view (given the rest of the address), what it reads, whether it asks a session. */
+const DECISION = { view: (sub) => viewDecision(sub), reads: "fleet", signedIn: true, loading: () => loadingDecision() };
+/**
+ * The screens, by route: its view (given the rest of the address), what it reads, whether it asks a session, and the
+ * screen shown while it reads (`loading`, else the common one: a screen of panes shows its own skeleton, ADR-0036).
+ */
 const SCREENS = {
   "": DECISION,
   decision: DECISION,
@@ -103,7 +106,7 @@ export async function show() {
   const key = reads ? reads.key(sub, query) : null;
   if (S.session && key && (loadedFor !== key || screen.fresh)) {
     // a screen read again at its entry (`fresh`) keeps what it shows while it reads: no skeleton between two of its steps
-    if (loadedFor !== key) paint(loadingView(""));
+    if (loadedFor !== key) paint(screen.loading ? screen.loading() : loadingView(""));
     loadedFor = key;
     await reads.load(sub, query);
   }

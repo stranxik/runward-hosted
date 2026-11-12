@@ -234,13 +234,12 @@ body.connecte .top{ background:color-mix(in srgb, var(--bg) 72%, transparent); b
 .fil b{ font-weight:var(--fw-strong); color:var(--text); overflow-wrap:anywhere; }
 .menu-b{ min-height:32px; padding:4px 14px; }
 .menu-b[hidden]{ display:none; }
-.barre-tel{ display:none; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; padding:16px var(--gut) 0; }
 #bandeaux{ display:grid; gap:10px; padding:16px var(--gut) 0; }
 #bandeaux:empty{ display:none; }
 main{ flex:1; display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:22px; width:100%; min-width:0; padding:22px var(--gut) 48px; }
 main > *{ margin:0; min-width:0; }
 @media (min-width:760px){ main{ gap:26px; padding-top:30px; padding-bottom:64px; } }
-body.connecte main, body.connecte #bandeaux, body.connecte .barre-tel{ max-width:1192px; }
+body.connecte main, body.connecte #bandeaux{ max-width:1192px; }
 body:not(.connecte) main:not(.hero-g){ max-width:calc(880px + 2 * var(--gut)); }
 .pied{ position:relative; z-index:1; flex:none; display:flex; flex-wrap:wrap; align-items:center; gap:6px 22px; min-height:64px; margin:0; padding:14px var(--gut); border-top:1px solid var(--line); background:var(--bg); font-size:var(--fs-ui); color:var(--text-2); }
 .pied a{ display:inline-flex; align-items:center; min-height:32px; text-decoration:none; color:var(--text-2); }
@@ -273,14 +272,14 @@ body:not(.connecte) main:not(.hero-g){ max-width:calc(880px + 2 * var(--gut)); }
 .menu-pan .lien{ align-self:flex-start; margin:10px 10px 6px; }
 .menu-ouvert .voile, .menu-ouvert .menu-pan{ opacity:1; visibility:visible; }
 
-@media (min-width:900px){
+/* the sidebar from 1024 px on, the fixed shell's breakpoint (ADR-0036, web/coque.css); under it, the tab bar and the menu */
+@media (min-width:1024px){
   body.connecte .corps{ grid-template-columns:248px minmax(0,1fr); }
   .lat:not([hidden]){ display:block; border-right:1px solid var(--verre-line); background:color-mix(in srgb, var(--bg) 60%, transparent); backdrop-filter:blur(18px) saturate(1.3); }
   body.connecte .top .marque, .menu-b, .voile, .menu-pan{ display:none; }
 }
-@media (max-width:899px){
+@media (max-width:1023px){
   body.connecte .top .fil, body.connecte .top .langue{ display:none; }
-  body.connecte .barre-tel{ display:flex; }
 }
 
 /* ============================================================================================================

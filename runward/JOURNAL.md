@@ -525,6 +525,13 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: ADR-0035 accepted (the author): the portfolio and an application drawn by the app from the index as rails of six steps, runward-fleet's reading folded below byte for byte, what moved compared between two checks the page saw. Not for 2026-11-18: serving the earlier check from the service, so that what moved survives a reload; it waits for its own record after the event.
 - Next: the production witness of « La piste » on desktop and phone, and the three-minute demo rehearsed end to end.
 
+## 2026-11-12 - the fixed shell, lot 1: Applications in panes
+
+- Done: on a desk the sidebar and the top bar stay and the page never scrolls; Applications is a list (« À faire » first as a strip, each application with its mark, its six stations in small, one short reason, the time of its check) beside the reading of the one selected (a sticky head with previous and next, the rail, « Ce qui bloque » as a table grouped by step, the documents, what happened, the deliveries, the folds); « À faire » a count in the top bar with its drawer; on a phone a list, a detail with its way back, a tab bar. The pane primitives (`web/views/volets.js`, `web/coque.css`) documented for the lot that builds Journal and Compte on them. An application awaited has its reading at `#/decision/<mission>`. Fact-check fix: « Les six étapes passent » said a gate that step 4 does not carry; now « Les étapes contrôlées passent ».
+- Evidence: the targeted unit tests (volets, piste, decision, afaire, frame-lang, liens, menu, tokens, assets, shell, shell-forge, site) pass on the Mac; the local witness on the real service (in-memory store, one headless Chrome; 1440, 1024, 390 and 360 px, light and dark, reduced motion, English; the live update, offline, a read error, the loading) finds no fault.
+- Decided: ADR-0036 (proposed), refining ADR-0034 and ADR-0035.
+- Next: the author's decision on ADR-0036; Journal and Compte on the panes (lot 2); the production witness after the deploy.
+
 ## 2026-11-12 - lot 2 of the fixed shell: the connect flow, the journal filtered, Compte as panes
 
 - Done: « Brancher une application » as five gestures in the panes of the fixed shell (web/views/declarer.js, flux.js, flux-vif.js); the journal as list and detail, filtered by application, kind and period through additive query parameters of `GET /api/v0/journal` (src/domain/journal-filter.js); Compte as sections and detail; the arrival counts every repository declared. The defect seen in production (a tab open since the declaration said « Il n'y a rien à confirmer » until a reload) is fixed: the flow reads again at each entry and every 30 s while shown.

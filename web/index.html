@@ -16,6 +16,7 @@
 <link rel="stylesheet" href="__COUCHE_CSS__">
 <link rel="stylesheet" href="__FLEET_CSS__">
 <link rel="stylesheet" href="__APP_CSS__">
+<link rel="stylesheet" href="__COQUE_CSS__">
 <link rel="stylesheet" href="__PARCOURS_CSS__">
 <link rel="modulepreload" href="__VIEWS_JS__">
 </head>
@@ -27,13 +28,15 @@
 <div class="corps" id="corps">
   <aside class="lat" id="lat" aria-label="Navigation de l'app" data-mot-aria="navApp" hidden></aside>
   <div class="colonne" id="colonne">
-    <!-- one header on every screen: the brand (signed out, and on a phone), the screen's title or its trail, the
-         language, the theme, and on a phone the menu -->
+    <!-- one header on every screen: the brand (signed out, and on a phone), the screen's title or its trail (on a
+         phone, in a detail, the way back), « À faire » and its count, the language, the theme, and on a phone the menu -->
     <header class="top" id="top">
       <a class="marque" href="#/" translate="no"><svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="14" width="72" height="72" rx="16"/><path d="M36 36 L50 50 L36 64"/></g><rect x="54" y="43" width="14" height="14" rx="3" fill="currentColor"/></svg>runward<span data-mot="brandSuffix"> hébergé</span></a>
       <span class="hote" id="stamp" translate="no"></span>
+      <span class="retour-c" id="retour"></span>
       <nav class="fil" id="fil" aria-label="Fil d'Ariane" data-mot-aria="crumb"></nav>
       <div class="outils">
+        <span class="afaire-c" id="afaire-top"></span>
         <span class="langue" id="langue" role="group" aria-label="Langue" data-mot-aria="langGroup"></span>
         <button class="btn-t" type="button" data-theme-btn aria-label="Changer de thème, clair ou sombre" data-mot-aria="theme"><svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg></button>
         <button class="btn btn-q menu-b" id="menub" type="button" data-do="menu" aria-expanded="false" aria-controls="mobnav" data-mot="menu" hidden>Menu</button>
@@ -41,12 +44,15 @@
     </header>
     <div class="voile" id="voile" data-do="menu-close"></div>
     <nav class="menu-pan" id="mobnav" aria-label="Navigation de l'app" data-mot-aria="navApp"></nav>
-    <div class="barre-tel" id="bartel"><nav class="fil" id="fil2" aria-label="Fil d'Ariane" data-mot-aria="crumb"></nav><span class="langue" id="langue2" role="group" aria-label="Langue" data-mot-aria="langGroup"></span></div>
     <div id="bandeaux"></div>
     <main id="main" tabindex="-1"><noscript><span lang="fr">Cette page affiche ses vues avec JavaScript.</span> <span lang="en">This page shows its views with JavaScript.</span></noscript></main>
     <footer class="pied" id="pied"></footer>
   </div>
 </div>
+<!-- the fixed shell (ADR-0036): the phone's tab bar, and the drawer « À faire » the top bar opens, over a veil -->
+<nav class="tabs" id="tabs" aria-label="Navigation principale" data-mot-aria="tabs" hidden></nav>
+<div class="voile-t" id="voile-t" data-do="afaire-close" hidden></div>
+<div class="tiroir" id="tiroir" role="dialog" aria-modal="true" aria-labelledby="h-afaire" hidden></div>
 <div id="annonce" class="vh" role="status" aria-live="polite"></div>
 <script type="module" src="__APP_JS__"></script>
 </body>

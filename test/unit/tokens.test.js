@@ -28,6 +28,7 @@ const layer = () => readFileSync(`${WEB}${LAYER}`, "utf8");
 const scripts = () => Object.fromEntries(MODULES.map((f) => [`web/${f}`, readFileSync(`${WEB}${f}`, "utf8")]));
 const served = () => ({
   "web/app.css": readFileSync(`${WEB}app.css`, "utf8"),
+  "web/coque.css": readFileSync(`${WEB}coque.css`, "utf8"),
   ...scripts(),
   "web/index.html": readFileSync(`${WEB}index.html`, "utf8"),
   "web/famille.css": readFileSync(`${WEB}famille.css`, "utf8"),
@@ -221,6 +222,10 @@ test("no entrance animation in the app's stylesheet; two loops only, the loading
   assert.deepEqual(once, [".tete"]);
   assert.equal(/\.scn \.nue i\{[^}]*animation/.test(`${css}\n.scn .nue i{ animation:nue-a 24s infinite; }`), true);
   assert.equal(/\.anim\b/.test(css + Object.values(scripts()).join("\n")), false);
+  // the fixed shell's stylesheet (ADR-0036) moves by transitions only: no animation at all
+  const coque = readFileSync(`${WEB}coque.css`, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.equal(/\banimation\s*:|@keyframes/.test(coque), false, "no animation in web/coque.css");
+  assert.equal(/\banimation\s*:/.test(`${coque}\n.row{ animation:entre 200ms 1; }`), true, "planted control: an animation is seen");
 });
 
 test("the relevés in the mono read at 12 px, the fleet views' included (author's rule)", () => {

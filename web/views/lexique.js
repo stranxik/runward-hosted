@@ -39,7 +39,7 @@ export const MOTS = {
     brand: "runward hébergé",
     // ---- the frame: web/index.html, the sidebar, the phone menu, the top bar, the banners, the foot
     frame: {
-      page: { brand: "runward hébergé", brandSuffix: " hébergé", skip: "Aller au contenu", navApp: "Navigation de l'app", menu: "Menu", theme: "Changer de thème, clair ou sombre", crumb: "Fil d'Ariane", langGroup: "Langue" },
+      page: { brand: "runward hébergé", brandSuffix: " hébergé", skip: "Aller au contenu", navApp: "Navigation de l'app", menu: "Menu", theme: "Changer de thème, clair ou sombre", crumb: "Fil d'Ariane", langGroup: "Langue", tabs: "Navigation principale" },
       // the menu's four entries (ADR-0034): one name per object, « application »
       apps: "Applications", connect: "Brancher une application", journal: "Journal", account: "Compte", portfolio: "Applications",
       todoBadge: (n) => `, ${n} à faire`,
@@ -191,7 +191,7 @@ export const MOTS = {
         label: "Les six étapes de la démo, le trait plein jusqu'où le contrôle laisse passer la version",
         state: { ok: "prouvée", vide: "rien d'exigé", refus: "refusée par le contrôle" },
         refused: { state: "Refusée par le contrôle", p: "Un agent a renommé une fonction : deux preuves citent encore l'ancien nom. Les tests restent verts, la livraison ne part pas." },
-        clean: { state: "Rien ne bloque", p: "Deux lignes corrigées : les six étapes passent. La décision reste la vôtre." },
+        clean: { state: "Rien ne bloque", p: "Deux lignes corrigées : plus rien ne bloque. La décision reste la vôtre." },
       },
       intent: (where) => `Connectez-vous pour ouvrir cette page : ${where}. Vous y reviendrez juste après.`,
       onPhone: "Ma passkey est sur mon téléphone", usePhone: "Utiliser mon téléphone",
@@ -550,7 +550,26 @@ export const MOTS = {
       security: "Sécurité", report: 'Pour signaler une faille : le contact de <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
     },
     introuvable: { title: "Adresse inconnue", head: "runward hébergé", h1: "Cette adresse n'existe pas.", mk: "introuvable", face: (where) => `${where} ne mène à aucune page de ce service. Le lien est peut-être incomplet.` },
-
+    // ---- the fixed shell and its panes (ADR-0036): the top bar's « À faire » and its drawer, the phone's tab bar and its
+    // way back, the window of Applications (its bar, its list, the head of a reading), the states of a pane. Added in one
+    // block, at the end, so that the lots that build the other panes add theirs beside it
+    coque: {
+      tabConnect: "Brancher",
+      todo: "À faire", todoOpen: (n) => `À faire, ${n} geste${s(n)} attendu${s(n)}`, todoNone: "Rien à faire pour l'instant.", close: "Fermer",
+      apps: (n) => `${n} application${s(n)}`, listLabel: "Vos applications", sortNote: "refusées par le contrôle d'abord",
+      filters: "Filtrer les applications par état", allApps: "Toutes les applications",
+      chips: { gaps: "refusée", gapsMany: "refusées", level: "sous le niveau exigé", clean: "où rien ne bloque", confirm: "à confirmer", silent: "sans contrôle reçu" },
+      updated: (t) => `Mis à jour à ${t}`, stale: (t) => `Hors ligne : affiché tel que lu à ${t}`,
+      row: {
+        stopped: (n, step, k, miss) => `Arrêtée à l'étape ${n}, ${step}. ${k} refus${miss ? `, ${miss} pièce${s(miss)} manquante${s(miss)}` : ""}.`,
+        refused: (k) => `Refusée par le contrôle. ${k} refus.`,
+      },
+      prev: "Application précédente", next: "Application suivante", pos: (i, n) => `${i} / ${n}`, posLabel: (i, n) => `application ${i} sur ${n}`,
+      blocks: { cols: ["Fichier", "Ligne", "Exigence"], status: "proposé", noLine: "sans", lines: (n) => `${n} ligne${s(n)}`, onlyStep: (n, step) => `Étape ${n}, ${step}`, all: "Tout voir", missing: "pièce exigée absente" },
+      pieces: { title: "Les pièces exigées, étape par étape", lead: (f, t) => `${f} remplie${s(f)} sur ${t}`, none: "aucune pièce exigée" },
+      waits: "Ce qui attend un geste",
+      states: { noneInFilter: "Aucune application dans cet état.", loading: "Lecture de vos applications" },
+    },
     // ---- lot 2 of the fixed shell (ADR-0037): the connect flow in five gestures, the journal as list and detail with
     // its filters, Compte as sections and detail. The flow's words are the app's (declarer, workflow, forge, piste.first)
     // wherever they exist; these are the ones it adds.
@@ -606,7 +625,7 @@ export const MOTS = {
   en: {
     brand: "runward hosted",
     frame: {
-      page: { brand: "runward hosted", brandSuffix: " hosted", skip: "Skip to content", navApp: "App navigation", menu: "Menu", theme: "Switch theme, light or dark", crumb: "Breadcrumb", langGroup: "Language" },
+      page: { brand: "runward hosted", brandSuffix: " hosted", skip: "Skip to content", navApp: "App navigation", menu: "Menu", theme: "Switch theme, light or dark", crumb: "Breadcrumb", langGroup: "Language", tabs: "Main navigation" },
       apps: "Applications", connect: "Connect an application", journal: "Journal", account: "Account", portfolio: "Applications",
       todoBadge: (n) => `, ${n} to do`,
       views: { flotte: "Dashboard", vue: "Full view", history: "Over time", proof: "Proof", signatures: "Signatures", pr: "In the PR", sources: "Sources" },
@@ -747,7 +766,7 @@ export const MOTS = {
         label: "The demo's six steps, the solid line as far as the check lets the version go",
         state: { ok: "proven", vide: "nothing required", refus: "refused by the check" },
         refused: { state: "Refused by the check", p: "An agent renamed a function: two proofs still cite the old name. The tests stay green, the delivery does not go." },
-        clean: { state: "Nothing blocks", p: "Two lines corrected: the six steps pass. The decision stays yours." },
+        clean: { state: "Nothing blocks", p: "Two lines corrected: nothing blocks any more. The decision stays yours." },
       },
       intent: (where) => `Sign in to open this page: ${where}. You will come back to it right after.`,
       onPhone: "My passkey is on my phone", usePhone: "Use my phone",
@@ -1096,6 +1115,23 @@ export const MOTS = {
       security: "Security", report: 'To report a vulnerability: the contact in <a href="/.well-known/security.txt"><code>/.well-known/security.txt</code></a> (RFC 9116).',
     },
     introuvable: { title: "Unknown address", head: "runward hosted", h1: "This address does not exist.", mk: "not found", face: (where) => `${where} leads to no page of this service. The link may be incomplete.` },
+    coque: {
+      tabConnect: "Connect",
+      todo: "To do", todoOpen: (n) => `To do, ${n} gesture${pl(n)} waiting`, todoNone: "Nothing to do for now.", close: "Close",
+      apps: (n) => `${n} application${pl(n)}`, listLabel: "Your applications", sortNote: "those refused by the check first",
+      filters: "Filter the applications by state", allApps: "All applications",
+      chips: { gaps: "refused", gapsMany: "refused", level: "below the required level", clean: "with nothing blocking", confirm: "to confirm", silent: "with no check received" },
+      updated: (t) => `Updated at ${t}`, stale: (t) => `Offline: shown as read at ${t}`,
+      row: {
+        stopped: (n, step, k, miss) => `Stopped at step ${n}, ${step}. ${k} refusal${pl(k)}${miss ? `, ${miss} document${pl(miss)} missing` : ""}.`,
+        refused: (k) => `Refused by the check. ${k} refusal${pl(k)}.`,
+      },
+      prev: "Previous application", next: "Next application", pos: (i, n) => `${i} / ${n}`, posLabel: (i, n) => `application ${i} of ${n}`,
+      blocks: { cols: ["File", "Line", "Requirement"], status: "proposed", noLine: "none", lines: (n) => `${n} line${pl(n)}`, onlyStep: (n, step) => `Step ${n}, ${step}`, all: "See all", missing: "required document absent" },
+      pieces: { title: "The required documents, step by step", lead: (f, t) => `${f} filled in of ${t}`, none: "no document required" },
+      waits: "What waits for a gesture",
+      states: { noneInFilter: "No application in this state.", loading: "Reading your applications" },
+    },
     // ---- lot 2 of the fixed shell (ADR-0037): the same keys as in French
     parcours: {
       flux: {

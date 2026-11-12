@@ -118,21 +118,22 @@ function open(hash) {
   return null;
 }
 
-test("the portfolio: each application awaited says its next step, and its button lands where that step is done", () => {
+test("Applications: each application awaited says its next step on its row, and its reading's button lands where that step is done", () => {
   state();
   const v = screens.decision("");
   const enc = (n) => encodeURIComponent(n);
-  // its first check arrived: « Confirmer le premier contrôle », with its date, to its confirmation
+  // its first check arrived: its row says it, with its date; its reading (same address as any application) has its button
   assert.match(v.html, /Premier contrôle reçu le <time datetime="[^"]+">[^<]+<\/time>, à confirmer\./);
-  assert.equal(targets(v.html).filter(([l]) => l === "Confirmer le premier contrôle").map(([, t]) => t).join(), `#/declarer/confirmer/${enc("stranxik/dropyour")}`);
+  assert.ok(targets(v.html).some(([l, h]) => h === "#/decision/dropyour" && l.startsWith("dropyour")), "its row opens its reading");
+  const dropyour = screens.decision("dropyour").html;
+  assert.equal(targets(dropyour).filter(([l]) => l === "Confirmer le premier contrôle").map(([, t]) => t).join(), `#/declarer/confirmer/${enc("stranxik/dropyour")}`);
   // nothing sent: what the team adds, the snippet
-  assert.equal(target(v.html, "Voir ce que l'équipe ajoute"), `#/declarer/attente/${enc("stranxik/next-one")}`);
+  assert.equal(target(screens.decision("next-one").html, "Voir ce que l'équipe ajoute"), `#/declarer/attente/${enc("stranxik/next-one")}`);
   // confirmed without consent: its consent
   // confirmed without consent: the index carries it (not observed); its reading leads to its consent
   assert.ok(T.index.missions.some((m) => m.id === "radar"));
   assert.equal(target(open("#/decision/radar").html, "Donner l'accord dans Compte"), `#/acces/depot/${enc("stranxik/radar")}/accord`);
-  // the list of them: the repositories' section, never the top of Accès
-  assert.equal(target(v.html, "Tous les dépôts déclarés"), "#/acces/depots");
+  // never the top of Accès
   assert.equal(targets(v.html).some(([, t]) => t === "#/acces"), false);
   // and each lands on its action
   const c = open(`#/declarer/confirmer/${enc("stranxik/dropyour")}`);
@@ -294,7 +295,7 @@ test("in English, the new words are English", () => {
   state({ lang: "en" });
   const v = screens.decision("");
   assert.match(v.html, /First check received on <time/);
-  assert.ok(v.html.includes(">Confirm the first check<") && v.html.includes(">See what the team adds<") && v.html.includes(">All declared repositories<"));
+  assert.ok(screens.decision("dropyour").html.includes(">Confirm the first check<") && screens.decision("next-one").html.includes(">See what the team adds<"));
   assert.ok(screens.decision("radar").html.includes(">Give consent in Account<"));
   const a = screens.acces("depots");
   assert.ok(a.html.includes("first upload received") && a.html.includes("to be confirmed") && a.html.includes(">Declared repositories<"));
