@@ -52,7 +52,7 @@ function api(raw) {
     putArchive: (tenant, id, bytes) => raw.put(keys.archive(tenant, id), bytes, "application/x-tar"),
     getArchive: (tenant, id) => raw.get(keys.archive(tenant, id)),
     removeArchive: (tenant, id) => raw.del(keys.archive(tenant, id)),
-    ping: () => raw.ping(),
+    ping: (options) => raw.ping(options),
   };
 }
 
@@ -74,13 +74,15 @@ export function memoryObjects() {
 // "written before the commit" was accepted and lost while /api/health said objectStore ok). One fixed key,
 // a constant body without data; /api/health is public, so the verdict is kept PING_TTL_MS (a failure
 // PING_RETRY_MS) and one check runs at a time: at most two calls to the store per period, whatever the traffic.
+// The warm-up alone asks past the kept verdict (`fresh`), a bounded number of times, before any traffic.
 export const WITNESS_KEY = "health/witness";
 const WITNESS = Buffer.from("runward-hosted: the health witness, written then read back; it holds no data\n");
 export const PING_TTL_MS = 30_000;
 export const PING_RETRY_MS = 5_000;
 
 /** S3 path-style on any compatible endpoint. `fetch` is the egress-bound fetch (system/egress.js). */
-export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch, now = () => Date.now() }) {
+/** `onPingFault(why)`: told why a check of the witness failed (an error, or a sentence without data), for the log. */
+export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch, now = () => Date.now(), onPingFault = () => {} }) {
   let last = null; // { ok, at }
   let checking = null;
   const aws = new AwsClient({ accessKeyId, secretAccessKey, service: "s3", region });
@@ -106,14 +108,19 @@ export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessK
       } while (token);
       return out;
     },
-    async ping() {
-      if (last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
+    // `fresh`: the store is asked now, whatever verdict is kept (the warm-up before the port is bound,
+    // src/main.js#warm, which counts its own calls); a check already in flight is joined, never doubled.
+    async ping({ fresh = false } = {}) {
+      if (!fresh && last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
       checking ??= (async () => {
         const put = await call("PUT", WITNESS_KEY, WITNESS, "text/plain");
-        if (!put.ok) return false;
+        if (!put.ok) { onPingFault(`witness PUT ${put.status}`); return false; }
         const got = await call("GET", WITNESS_KEY);
-        return got.ok && Buffer.from(await got.arrayBuffer()).equals(WITNESS);
-      })().then((ok) => ok, () => false).then((ok) => { last = { ok, at: now() }; checking = null; return ok; });
+        if (!got.ok) { onPingFault(`witness GET ${got.status}`); return false; }
+        const same = Buffer.from(await got.arrayBuffer()).equals(WITNESS);
+        if (!same) onPingFault("witness read back differs");
+        return same;
+      })().then((ok) => ok, (e) => { onPingFault(e); return false; }).then((ok) => { last = { ok, at: now() }; checking = null; return ok; });
       return checking;
     },
   });
