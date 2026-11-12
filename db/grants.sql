@@ -13,7 +13,9 @@ begin
     'resolve_repository(text,text,text)', 'name_taken(text,text)', 'resolve_credential(text)', 'resolve_session(text)',
     'resolve_link(text)', 'put_challenge(uuid,text,text,uuid,uuid,text,text)', 'take_challenge(uuid)',
     'use_jti(text,timestamptz)', 'take_rate(text,bigint,text,integer)', 'count_refused(text,bigint)',
-    'tenant_ids()', 'operator_note(text,jsonb)', 'maintenance()', 'set_maintenance(jsonb)', 'daily_jobs()'] loop
+    'tenant_ids()', 'operator_note(text,jsonb)', 'maintenance()', 'set_maintenance(jsonb)', 'daily_jobs()',
+    'resolve_forge_repository(text,text,text)', 'name_key_taken(text,text)', 'resolve_issuer(text)',
+    'use_token(text,text,timestamptz,boolean)', 'take_send_rate(text,text,bigint,text,integer)', 'count_send_refused(text,text,bigint)'] loop
     execute format('alter function rw.%s owner to rw_resolve', f);
     execute format('revoke all on function rw.%s from public', f);
   end loop;
@@ -22,6 +24,11 @@ grant select on rw.tenant, rw.forge_repository, rw.passkey, rw.session, rw.link 
 grant select, insert, delete on rw.webauthn_challenge, rw.oidc_jti, rw.rate_counter to rw_resolve;
 grant select, insert, update on rw.refused_counter to rw_resolve;
 grant select, insert on rw.operator_journal to rw_resolve;
+-- The forge port (0007): a registration's keys are read by their exact identifier before the tenant is
+-- known; the replay ids and counters keyed by the issuer key.
+grant select on rw.issuer, rw.issuer_key to rw_resolve;
+grant select, insert, delete on rw.token_use, rw.send_rate to rw_resolve;
+grant select, insert, update, delete on rw.send_refused to rw_resolve;   -- delete: the counter keeps three hours
 grant usage on sequence rw.operator_journal_seq_seq to rw_resolve;
 grant select, update on rw.service_state to rw_resolve;
 
@@ -29,10 +36,13 @@ grant select, update on rw.service_state to rw_resolve;
 grant execute on function rw.resolve_repository(text,text,text), rw.name_taken(text,text), rw.resolve_credential(text),
   rw.resolve_session(text), rw.resolve_link(text), rw.put_challenge(uuid,text,text,uuid,uuid,text,text),
   rw.take_challenge(uuid), rw.use_jti(text,timestamptz), rw.take_rate(text,bigint,text,integer),
-  rw.count_refused(text,bigint), rw.maintenance(), rw.rw_tenant(), rw.daily_jobs() to rw_app;
+  rw.count_refused(text,bigint), rw.maintenance(), rw.rw_tenant(), rw.daily_jobs(),
+  rw.resolve_forge_repository(text,text,text), rw.name_key_taken(text,text), rw.resolve_issuer(text),
+  rw.use_token(text,text,timestamptz,boolean), rw.take_send_rate(text,text,bigint,text,integer),
+  rw.count_send_refused(text,text,bigint) to rw_app;
 grant select, update on rw.tenant to rw_app;
 grant select, insert, update on rw.member, rw.passkey, rw.session, rw.forge_repository, rw.repository, rw.mission,
-  rw.upload, rw.blob, rw.fleet_index, rw.reader, rw.archive to rw_app;
+  rw.upload, rw.blob, rw.fleet_index, rw.reader, rw.archive, rw.issuer, rw.issuer_key to rw_app;
 grant select, update on rw.link to rw_app;
 grant select, insert on rw.ledger to rw_app;
 revoke truncate on all tables in schema rw from rw_app, rw_maint;
@@ -44,6 +54,9 @@ grant select, insert on rw.tenant, rw.link to rw_maint;
 grant update on rw.link to rw_maint;
 grant select, update on rw.member, rw.passkey, rw.session, rw.upload, rw.blob, rw.archive, rw.repository, rw.forge_repository to rw_maint;
 grant select on rw.mission, rw.fleet_index, rw.reader to rw_maint;
+-- The replay after a restore records again a registration removed and a key retired (T24): the triggers of
+-- 0007 hold this UPDATE, and the service's, to that: a key's material never changes, a retirement is final.
+grant select, update on rw.issuer, rw.issuer_key to rw_maint;
 -- Erasure reaches the published versions of the index (0006): the retention job and the replay after a
 -- restore empty the bytes of a version built from erased content. The trigger fleet_index_written_once
 -- holds this UPDATE, and the service's, to that erasure: no other column moves, no byte is rewritten.

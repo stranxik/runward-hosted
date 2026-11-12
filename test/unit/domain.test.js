@@ -6,6 +6,7 @@ import { placeUpload, readClaims, checkUploadHeaders, cleanClaim } from "../../s
 import { linkState, linkWindow, sessionOpen, DAY, HOUR, sameProvider } from "../../src/domain/identity.js";
 import { REFUSALS, refusal, mergeRefusals } from "../../src/domain/refusals/index.js";
 import { FLOOR } from "../../src/domain/refusals/floor.js";
+import { FORGE } from "../../src/domain/refusals/forge.js";
 import { readDeclaration } from "../../src/domain/repository.js";
 
 test("canonical encoding: sorted keys, no whitespace, non-negative integers only", () => {
@@ -84,8 +85,9 @@ test("every refusal has French and English, a message and an action, and one sta
 });
 
 test("the catalogue of refusals is merged from one file per domain: every code of every file, and a code declared twice is refused", () => {
-  assert.deepEqual(Object.keys(REFUSALS), Object.keys(FLOOR), "today the floor's file is the only part: same codes, same order");
+  assert.deepEqual(Object.keys(REFUSALS), [...Object.keys(FLOOR), ...Object.keys(FORGE)], "the floor's file, then the forge port's (ADR-0029): same codes, same order");
   for (const code of Object.keys(FLOOR)) assert.equal(REFUSALS[code], FLOOR[code], code);
+  for (const code of Object.keys(FORGE)) assert.equal(REFUSALS[code], FORGE[code], code);
   const def = { status: 400, fr: ["a", "b"], en: ["a", "b"] };
   assert.deepEqual(Object.keys(mergeRefusals([["floor", { "one": def }], ["lot", { "two": def }]])), ["one", "two"]);
   // planted control: the same code in two files

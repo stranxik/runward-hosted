@@ -3,15 +3,15 @@
 import { S, main, parts, colonneEl } from "./base.js";
 import { api, loadSession } from "./api.js";
 import { say, menu, closeMenuWhenWide } from "./shell.js";
-import { FIELD_OF } from "./declarer.js";
+import { FIELD_OF, DEFAULT_FILE } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
-import { signIn, redeem, addPasskey, confirmGesture, write } from "./gestures.js";
+import { signIn, redeem, addPasskey, confirmGesture, write, confirmRepository, issuerPreview, issuerWrite } from "./gestures.js";
 import { retour, versDepot } from "./liens.js";
 
 document.addEventListener("click", async (e) => {
   const g = e.target.closest("[data-go]");
-  if (g) { e.preventDefault(); S.formError = null; const to = g.dataset.go; if (location.hash === to) show(); else location.hash = to; return; }
+  if (g) { e.preventDefault(); S.formError = null; S.issuer = null; const to = g.dataset.go; if (location.hash === to) show(); else location.hash = to; return; }
   const b = e.target.closest("[data-do]");
   if (!b) return;
   const k = b.dataset.k, what = b.dataset.do;
@@ -26,10 +26,11 @@ document.addEventListener("click", async (e) => {
   if (what === "copy") {
     // the extract of a workflow (with its line end, a status beside the button) or the command of « Vérifier par
     // vous-même » (as written: a pasted line end would run it; its status is announced)
-    const W = mots(), pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat");
+    // or an audience, the exact value a pipeline writes (ADR-0029): as written too, its status announced
+    const W = mots(), pre = document.getElementById(b.dataset.copyTarget), out = document.getElementById("copie-etat"), aud = b.hasAttribute("data-copy-audience");
     const plain = b.hasAttribute("data-copy-plain"), label = b.dataset.label ?? W.workflow.copy;
-    try { await navigator.clipboard.writeText(plain ? pre.textContent : pre.textContent + "\n"); b.textContent = W.done.copied; if (out) out.textContent = W.done.inClipboard; else say(W.done.commandCopied); }
-    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out) out.textContent = W.done.selected; else say(W.done.commandSelected); }
+    try { await navigator.clipboard.writeText(plain ? pre.textContent : pre.textContent + "\n"); b.textContent = W.done.copied; if (out && !aud) out.textContent = W.done.inClipboard; else say(aud ? W.done.audienceCopied : W.done.commandCopied); }
+    catch { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); if (out && !aud) out.textContent = W.done.selected; else say(aud ? W.done.audienceSelected : W.done.commandSelected); }
     setTimeout(() => { if (b.isConnected) b.textContent = label; }, 2400);
     return;
   }
@@ -44,13 +45,14 @@ document.addEventListener("click", async (e) => {
     if (r.ok) say(mots().done.single);
     await refreshScreen(); location.hash = "#/arrivee"; return;
   }
+  // a repository confirmed: bound to the values the screen showed (web/views/gestures.js)
   if (what === "gesture" && k.startsWith("confirm:")) {
-    const id = k.slice(8);
-    const r = await write("POST", `/api/v0/repositories/${id}/confirm`, {}, { gesture: "repository-confirm", object: id });
-    if (!r.ok) { S.failed = k; return rerender(); }
-    say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
+    if (!(await confirmRepository(k.slice(8)))) return;
     await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
   }
+  // a GitLab instance registered, or a key added to one: the gesture on what the preview showed
+  if (what === "gesture" && k === "issuer") return issuerWrite();
+  if (what === "issuer-edit") { S.issuer = { ...S.issuer, preview: null, error: null }; return rerender(); }
   if (what === "export") {
     S.export = { busy: true }; rerender();
     const r = await write("POST", "/api/v0/export", {}, { gesture: "export", object: "" });
@@ -71,16 +73,19 @@ main.addEventListener("submit", async (e) => {
   const f = e.target;
   const val = (n) => f.elements[n]?.value?.trim() ?? "";
   if (f.id === "declare") {
-    S.formValues = { repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
+    // the forge: GitHub (the body is the one it always was), gitlab.com, or a registered instance by its identifier
+    const forge = f.elements.forge?.value || "github";
+    S.formValues = { forge, repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
     const consent = f.elements.content.checked;
-    const body = { name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
-    const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: S.formValues.repo.toLowerCase() } : {});
+    const body = { ...(forge === "github" ? {} : { forge: "gitlab", issuer: forge }), name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
+    const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: forge === "github" ? S.formValues.repo.toLowerCase() : `gitlab:${forge}:${S.formValues.repo.toLowerCase()}` } : {});
     if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: mots().common.verifyFailed, action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
     S.formError = null; S.formValues = null; say(mots().done.declared);
     const onArrival = parts().route === "arrivee";
     await refreshScreen();
     location.hash = onArrival ? "#/arrivee" : `#/declarer/attente/${r.data.id}`;
   }
+  if (f.id === "issuer") return issuerPreview(f.dataset.id ?? "", { issuer: val("issuer"), keys: f.elements.keys.value, kid: val("kid") });
   if (f.id === "modify") {
     const id = f.dataset.id;
     const remove = [...f.querySelectorAll('input[name="remove"]:checked')].map((x) => x.value);
@@ -89,4 +94,17 @@ main.addEventListener("submit", async (e) => {
     if (!r.ok) { const x = r.data ? r : { message: mots().common.verifyFailed, action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
     S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = retour(versDepot(id));
   }
+});
+
+// the forge chosen at declaration (ADR-0029): the form is painted again with that forge's labels, its default
+// definition file and the level its uploads will reach, said before the member adds a pipeline
+main.addEventListener("change", (e) => {
+  const f = e.target.closest?.("form#declare");
+  if (!f || e.target.name !== "forge") return;
+  const val = (n) => f.elements[n]?.value?.trim() ?? "";
+  const forge = e.target.value, to = forge === "github" ? "github" : "gitlab";
+  const wf = !val("wf") || Object.values(DEFAULT_FILE).includes(val("wf")) ? DEFAULT_FILE[to] : val("wf");
+  S.formValues = { forge, repo: val("repo"), wf, mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
+  S.formError = null; S.focusKey = `forge:${forge}`;
+  rerender();
 });

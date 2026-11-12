@@ -16,6 +16,7 @@ import { journalRoutes } from "./routes/journal.js";
 import { exportRoutes } from "./routes/export.js";
 import { systemRoutes } from "./routes/system.js";
 import { movedTo } from "./moved.js";
+import { issuerRoutes, forgeRepositoryRoutes } from "./routes/forge.js";
 import { rateLimiter, failureLimiter, recentlyValid, clientAddress, errorWindow, RATE_LIMITS, OVERFLOW_HISTORY_MINUTES } from "./limits.js";
 
 export const COOKIE = "__Host-rw_session";
@@ -43,6 +44,8 @@ export function routes(app) {
     ...journalRoutes(app),
     ...exportRoutes(app),
     ...systemRoutes(app),
+    ...issuerRoutes(app),
+    ...forgeRepositoryRoutes(app),
   ];
 }
 
@@ -133,6 +136,9 @@ export function createHttp({ app, config, assets, version, health, log, clock })
       if (!String(req.url).startsWith("//")) { try { url = new URL(req.url, origin); } catch { /* not a path */ } }
       if (!url || url.origin !== origin) { route = "unparsable"; return fail("not-found"); }
       const path = url.pathname;
+      // /send/ is the path of the audience a registered instance's tokens carry (ADR-0029 section 4): a
+      // reserved prefix of the origin, under which nothing is ever served, whatever the method
+      if (path === "/send" || path.startsWith("/send/")) { route = "reserved"; return fail("not-found"); }
 
       // ---- static files, the shell, and the public pages that left this origin (ADR-0028, which supersedes
       //      ADR-0022). / is the app: the shell, whose signed-out root opens the sign-in (web/views/router.js);

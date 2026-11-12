@@ -116,9 +116,12 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
   assert.equal(r.status, 202);
   const pend = await r.json();
   assert.equal(pend.refusal, "repository-pending"); assert.ok(pend.message && pend.action && pend.requestId);
-  const go = await (await call("POST", "/api/v0/auth/fresh/options", { body: { gesture: "repository-confirm", object: repo.id }, headers: H, cookie })).json();
+  // the confirmation is bound to the repository and to the digest of the values the screen shows (ADR-0029 section 1)
+  const shown = (await (await call("GET", "/api/v0/access", { cookie })).json()).repositories.find((x) => x.id === repo.id).pending;
+  assert.deepEqual(shown.values, { forge: "github", repositoryId: claims.repository_id, ownerId: claims.repository_owner_id });
+  const go = await (await call("POST", "/api/v0/auth/fresh/options", { body: { gesture: "repository-confirm", object: `${repo.id}:${shown.digest}` }, headers: H, cookie })).json();
   await call("POST", "/api/v0/auth/fresh", { body: { challengeId: go.challengeId, response: { id: "http-1", challenge: go.options.challenge } }, headers: H, cookie });
-  r = await call("POST", `/api/v0/repositories/${repo.id}/confirm`, { body: {}, headers: H, cookie });
+  r = await call("POST", `/api/v0/repositories/${repo.id}/confirm`, { body: { digest: shown.digest }, headers: H, cookie });
   assert.equal(r.status, 200);
   r = await call("GET", `/f/${tenant}/index.json`, { cookie });
   assert.equal(r.status, 200);

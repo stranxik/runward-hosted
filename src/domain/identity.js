@@ -56,6 +56,10 @@ export const GESTURES = [
   "consent", "consent-withdraw", "content-erase", "export", "passkey-add", "passkey-remove",
   "passkey-single", "repository-confirm", "recovery-cancel", "reader-authorize", "reader-withdraw",
   "declare-with-consent", "invitation-create",
+  // the forge port (ADR-0029): a registered instance and its keys, each bound to the digest of what the
+  // screen shows; the protected-branch requirement and the order epoch of a GitLab repository
+  "issuer-register", "issuer-key-add", "issuer-key-retire", "issuer-remove",
+  "protection-lift", "protection-restore", "order-epoch-open",
 ];
 
 /** A fresh verification (less than 5 minutes) is required; throws `fresh-required` otherwise. */

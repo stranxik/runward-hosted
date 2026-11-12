@@ -2,6 +2,7 @@
 import { context } from "./context.js";
 import { identityCases } from "./identity.js";
 import { repositoryCases } from "./repositories.js";
+import { issuerCases } from "./issuers.js";
 import { ingestCases } from "./ingest.js";
 import { readingCases } from "./reading.js";
 import { operatorCases, readerCases } from "./operator.js";
@@ -15,9 +16,10 @@ export function createApp(ports, config) {
   const ctx = context(ports, config);
   const identity = identityCases(ctx);
   const repositories = repositoryCases(ctx, identity);
+  const issuers = issuerCases(ctx, identity);
   const ingest = ingestCases(ctx);
   const reading = readingCases(ctx, identity);
   const operator = operatorCases(ctx);
   const reader = readerCases(ctx, ingest, reading);
-  return { ctx, identity, repositories, ingest, reading, operator, reader };
+  return { ctx, identity, repositories, issuers, ingest, reading, operator, reader };
 }

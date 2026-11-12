@@ -7,6 +7,7 @@ import postgres from "postgres";
 import { randomUUID } from "node:crypto";
 import { TABLES, checkColumns, snake } from "./tables.js";
 import { StoreConflict } from "./errors.js";
+import { scopedKey, GITHUB_ISSUER_KEY } from "../../domain/forge.js";
 
 // jsonb goes in as text and is cast by the server: a JSON text sent as a jsonb parameter would be
 // encoded a second time and stored as a JSON string (a defect found on PostgreSQL, guarded in test/pg).
@@ -118,11 +119,23 @@ export function postgresStore({ url, max = 4, ssl }) {
         return rows.map((r) => ({ seq: Number(r.seq), prev: r.prev, hash: r.hash, body: r.body, at: new Date(r.at).getTime() }));
       },
       // ---- resolution functions (SECURITY DEFINER, owned by rw_resolve, exact key)
-      async resolveRepository({ forge, repositoryId, nameKey }) {
-        const [r] = await q`select * from rw.resolve_repository(${forge}, ${repositoryId}, ${nameKey})`;
+      // `repositoryId` and `nameKey` are the forge's own values; the issuer key enters both keys here
+      // (GitHub's stay bare), and the functions of 0007 read within that issuer key only
+      async resolveRepository({ forge, issuerKey = GITHUB_ISSUER_KEY, repositoryId, nameKey }) {
+        const [r] = await q`select * from rw.resolve_forge_repository(${issuerKey}, ${scopedKey(forge, issuerKey, repositoryId)}, ${scopedKey(forge, issuerKey, nameKey)})`;
         return r ? { tenantId: r.tenant_id, id: r.id, state: r.state, removed: r.removed } : null;
       },
-      async nameTaken({ forge, nameKey }) { const [r] = await q`select rw.name_taken(${forge}, ${nameKey}) as v`; return r.v; },
+      async nameTaken({ forge, issuerKey = GITHUB_ISSUER_KEY, nameKey }) { const [r] = await q`select rw.name_key_taken(${issuerKey}, ${scopedKey(forge, issuerKey, nameKey)}) as v`; return r.v; },
+      // a registration and its keys, by its exact identifier, before the tenant is known
+      async resolveIssuer(id) {
+        const rows = await q`select * from rw.resolve_issuer(${id})`;
+        if (!rows.length) return null;
+        const at = (v) => (v == null ? null : new Date(v).getTime());
+        return {
+          tenantId: rows[0].tenant_id, forge: rows[0].forge, issuer: rows[0].issuer, removed: rows[0].removed,
+          keys: rows.filter((r) => r.key_id).map((r) => ({ id: r.key_id, kid: r.kid, jwk: typeof r.jwk === "string" ? JSON.parse(r.jwk) : r.jwk, thumbprint: r.thumbprint, addedAt: at(r.added_at), confirmedAt: at(r.confirmed_at), retiredAt: at(r.retired_at) })),
+        };
+      },
       async resolveCredential(id) { const [r] = await q`select * from rw.resolve_credential(${id})`; return r ? { tenantId: r.tenant_id, passkeyId: r.passkey_id } : null; },
       async resolveSession(h) { const [r] = await q`select * from rw.resolve_session(${h})`; return r ? { tenantId: r.tenant_id, id: r.id } : null; },
       async resolveLink(h) { const [r] = await q`select * from rw.resolve_link(${h})`; return r ? { tenantId: r.tenant_id, id: r.id } : null; },
@@ -131,9 +144,12 @@ export function postgresStore({ url, max = 4, ssl }) {
         const [r] = await q`select * from rw.take_challenge(${id}::uuid)`;
         return r ? { challenge: r.challenge, purpose: r.purpose, sessionId: r.session_id, linkId: r.link_id, gesture: r.gesture, object: r.object, live: r.live } : null;
       },
-      async useJti(jti, expiresAt) { const [r] = await q`select rw.use_jti(${jti}, ${new Date(expiresAt).toISOString()}::timestamptz) as ok`; return r.ok; },
-      async takeRate(repositoryId, bucket, runId, limit) { const [r] = await q`select rw.take_rate(${repositoryId}, ${bucket}, ${runId}, ${limit}) as ok`; return r.ok; },
-      async countRefused(repositoryId, bucket) { const [r] = await q`select rw.count_refused(${repositoryId ?? "?"}, ${bucket}) as n`; return r.n; },
+      // a replay id is used once within its issuer key, and a counter is its issuer key's. A GitHub replay id
+      // is also written where the image before 0007 looks (rw.oidc_jti), so that a token used on one image
+      // is not accepted by the other while both run during a deploy.
+      async useJti(jti, expiresAt, issuerKey = GITHUB_ISSUER_KEY) { const [r] = await q`select rw.use_token(${issuerKey}, ${jti}, ${new Date(expiresAt).toISOString()}::timestamptz, ${issuerKey === GITHUB_ISSUER_KEY}) as ok`; return r.ok; },
+      async takeRate(repositoryId, bucket, runId, limit, issuerKey = GITHUB_ISSUER_KEY) { const [r] = await q`select rw.take_send_rate(${issuerKey}, ${repositoryId}, ${bucket}, ${runId}, ${limit}) as ok`; return r.ok; },
+      async countRefused(repositoryId, bucket, issuerKey = GITHUB_ISSUER_KEY) { const [r] = await q`select rw.count_send_refused(${issuerKey}, ${repositoryId ?? "?"}, ${bucket}) as n`; return r.n; },
       async maintenance() { const [r] = await q`select rw.maintenance() as m`; return r.m ?? null; },
       async setMaintenance(m) { await q`select rw.set_maintenance(${m === null ? null : JSON.stringify(m)}::text::jsonb)`; },
       async tenantIds() { const rows = await q`select * from rw.tenant_ids() as id`; return rows.map((r) => r.id); },

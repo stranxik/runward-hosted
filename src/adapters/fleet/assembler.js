@@ -66,7 +66,20 @@ export function fleetAssembler({ pin }) {
     pin,
     exportPath,
     /**
-     * Assemble an index. `missions`: [{ id, name, repository ("owner/repo"), path, commit, uploads: { kind: sha256 },
+     * Can the pinned runward-fleet carry this repository name (`host[:port]/full/path`)? Asked of the
+     * library itself, on an inventory of one silent mission, so that the answer moves with the pin: a name
+     * it refuses is refused at declaration, never truncated (ADR-0029 section 1).
+     */
+    admits(repository) {
+      const doc = { format: MANIFEST_FORMAT, title: "probe", asOf: "2026-01-01 00:00 UTC", lang: "en", missions: [{ id: "probe", name: "probe", repository, expects: ["check"], exports: {} }] };
+      try { buildIndex({ manifest: { name: "fleet.json", bytes: Buffer.from(`${JSON.stringify(doc, null, 2)}\n`) }, read: () => null, version: pin.version }); return true; } catch (e) {
+        if (e instanceof BuildError) return false;
+        throw e;
+      }
+    },
+    /**
+     * Assemble an index. `missions`: [{ id, name, repository ("owner/repo", or a GitLab project's full path), host (the forge's
+     * host, "github.com" when absent), forge, path, commit, uploads: { kind: sha256 },
      * received: { kind: label } }]. `received` is the date the service accepted each upload, written as the export's
      * `at` label: the decision reading of runward-fleet says it as the date of the last check received (runward's
      * ADR-0125, docs/spec/runward-fleet-decision.md §8); a mission with no label for a kind writes none.
@@ -82,11 +95,11 @@ export function fleetAssembler({ pin }) {
         missions: missions.map((m) => ({
           id: m.id,
           name: m.path && m.path !== "." ? `${m.repository} · ${m.path}` : m.repository,
-          repository: `github.com/${m.repository}`,
+          repository: `${m.host ?? "github.com"}/${m.repository}`,
           ...(m.path && m.path !== "." ? { path: m.path } : {}),
           ...(m.commit ? { commit: m.commit, commitSource: "the sha claim of the upload's workload identity token" } : {}),
           expects: ["check"],
-          exports: Object.fromEntries(Object.entries(m.uploads).map(([kind, digest]) => [kind, { file: exportPath(m.id, kind, digest), producedBy: "runward check --strict --json (send.yml)", ...(m.received?.[kind] ? { at: m.received[kind] } : {}) }])),
+          exports: Object.fromEntries(Object.entries(m.uploads).map(([kind, digest]) => [kind, { file: exportPath(m.id, kind, digest), producedBy: m.forge === "gitlab" ? "runward check --strict --json (the repository's GitLab pipeline)" : "runward check --strict --json (send.yml)", ...(m.received?.[kind] ? { at: m.received[kind] } : {}) }])),
         })),
       };
       const manifest = Buffer.from(`${JSON.stringify(doc, null, 2)}\n`);

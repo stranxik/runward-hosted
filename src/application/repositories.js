@@ -1,6 +1,8 @@
 // Declared repositories, their missions, consent and erasure (architecture §3.1, §3.4; PADR-0017).
 import { Refusal } from "../domain/refusals/index.js";
-import { readDeclaration, readBranch, checkRestoreRepository, confirmation, MISSION_ID, REMOVED_KEEP } from "../domain/repository.js";
+import { readDeclaration, readBranch, readDefinitionFile, checkRestoreRepository, confirmation, githubPinValues, MISSION_ID, REMOVED_KEEP } from "../domain/repository.js";
+import { GITHUB_ISSUER_KEY, GITLAB_COM_ISSUER, scopedKey, nameKeyOf, pinDigest, confirmObject } from "../domain/forge.js";
+import { indexNameOf } from "../domain/issuer.js";
 import { StoreConflict } from "../ports/errors.js";
 import { iso } from "./context.js";
 
@@ -18,22 +20,39 @@ export function repositoryCases(ctx, identity) {
     return r;
   }
 
+  /** The name the index gives a repository: host[:port]/full/path (ADR-0029 section 1). */
+  const indexName = (forgeName, issuerKey, issuer, name) => (forgeName === "github" ? `github.com/${name}` : issuerKey === GITLAB_COM_ISSUER ? `gitlab.com/${name}` : indexNameOf(issuer.issuer, name));
+  /** A name the pinned runward-fleet cannot carry is refused, with its reason, never truncated (section 1). */
+  const carried = (name) => { if (!ctx.ports.assembler.admits(name)) throw new Refusal("repository-path-unsupported", { forge: "gitlab", name }); };
+
   async function declare(s, input, { requestId }) {
     const d = readDeclaration(input);
     try {
       return await store.tx(s.tenantId, async (tx) => {
         await useFresh(tx, s);
-        if (d.consent) await useGesture(tx, s, "declare-with-consent", d.nameKey);
-        const taken = await tx.nameTaken({ forge: "github", nameKey: d.nameKey });
+        let issuerKey = GITHUB_ISSUER_KEY;
+        if (d.forge === "gitlab") {
+          // the issuer: gitlab.com, or an instance this tenant registered (read under its own policies)
+          // gitlab.com is closed until the service opens it (RW_GITLAB_COM, after its witness: ADR-0029 step d)
+          if (d.issuer === "gitlab.com" && !ctx.config.gitlabCom) throw new Refusal("issuer-unknown");
+          const reg = d.issuer === "gitlab.com" ? null : await tx.get("issuer", { id: d.issuer });
+          if (d.issuer !== "gitlab.com" && (!reg || reg.removedAt)) throw new Refusal("issuer-unknown");
+          issuerKey = reg ? reg.id : GITLAB_COM_ISSUER;
+          carried(indexName("gitlab", issuerKey, reg, d.name));
+        }
+        // the gesture is bound to what is declared: the name, and for another forge than GitHub the forge
+        // and the issuer chosen, so a verification made for one is not spent on another
+        if (d.consent) await useGesture(tx, s, "declare-with-consent", d.forge === "github" ? d.nameKey : `${d.forge}:${d.issuer}:${d.nameKey}`);
+        const taken = await tx.nameTaken({ forge: d.forge, issuerKey, nameKey: d.nameKey });
         if (taken === "here") throw new Refusal("repository-exists");
         if (taken === "elsewhere") throw new Refusal("repository-unavailable");
         const existing = await tx.list("mission");
         for (const m of d.missions) if (existing.some((x) => x.id === m.id)) throw new Refusal("mission-exists");
         const id = store.newId();
-        await tx.insert("forge_repository", { id, forge: "github", nameKey: d.nameKey, name: d.name, state: "pending" });
+        await tx.insert("forge_repository", { id, forgeName: d.forge, issuerKey, nameKey: nameKeyOf(d.forge, issuerKey, d.name), name: d.name, state: "pending" });
         await tx.insert("repository", { id, name: d.name, workflow: d.workflow, defaultBranch: d.defaultBranch, consent: d.consent, consentAt: d.consent ? now() : null, declaredAt: now() });
         for (const m of d.missions) await tx.insert("mission", { id: m.id, repositoryRef: id, path: m.path, addedAt: now() });
-        const e = await append(tx, { who: human(s), what: "repository-declared", object: id, requestId, detail: { name: d.name, workflow: d.workflow, defaultBranch: d.defaultBranch, missions: d.missions.map((m) => m.id) } });
+        const e = await append(tx, { who: human(s), what: "repository-declared", object: id, requestId, detail: { name: d.name, workflow: d.workflow, defaultBranch: d.defaultBranch, missions: d.missions.map((m) => m.id), ...(d.forge === "github" ? {} : { forge: d.forge, issuerKey }) } });
         if (d.consent) { await security(tx, { what: "consent-given", repository: id }); await append(tx, { who: human(s), what: "consent-given", object: id, requestId }); }
         return { id, state: "pending", entry: e, expiresAt: iso(now() + 7 * 86_400_000) };
       });
@@ -49,15 +68,29 @@ export function repositoryCases(ctx, identity) {
       const r = await owned(tx, id);
       if (r.removedAt) throw new Refusal("not-found");
       const changes = {};
+      const f = await tx.get("forge_repository", { id });
+      const gitlab = f.forgeName === "gitlab";
       if (input.workflow !== undefined && input.workflow !== r.workflow) {
-        const d = readDeclaration({ name: r.name, workflow: input.workflow, missions: [{ id: "x" }] });
-        await tx.update("repository", { id }, { workflow: d.workflow, epoch: r.epoch + 1 });
-        changes.workflow = d.workflow; changes.epoch = r.epoch + 1;
+        if (gitlab) {
+          const file = readDefinitionFile(input.workflow);
+          await tx.update("repository", { id }, { workflow: file });
+          changes.workflow = file;
+        } else {
+          const d = readDeclaration({ name: r.name, workflow: input.workflow, missions: [{ id: "x" }] });
+          await tx.update("repository", { id }, { workflow: d.workflow, epoch: r.epoch + 1 });
+          changes.workflow = d.workflow; changes.epoch = r.epoch + 1;
+        }
       }
       if (input.defaultBranch !== undefined && input.defaultBranch !== r.defaultBranch) {
         const b = readBranch(input.defaultBranch);
         await tx.update("repository", { id }, { defaultBranch: b });
         changes.defaultBranch = b;
+      }
+      // GitLab: a change of the declared file or branch unpins the definition; every upload is then refused
+      // `definition-not-pinned` until a member confirms the new one (ADR-0029 section 3 rule 3)
+      if (gitlab && f.definitionRef && (changes.workflow !== undefined || changes.defaultBranch !== undefined)) {
+        await tx.update("forge_repository", { id }, { definitionRef: null });
+        changes.definitionUnpinned = true;
       }
       const missions = await tx.list("mission");
       for (const m of input.addMissions ?? []) {
@@ -81,15 +114,36 @@ export function repositoryCases(ctx, identity) {
     });
   }
 
-  /** Pin repository_id and repository_owner_id from the kept upload's claims, or confirm a new owner. */
-  async function confirm(s, id, { requestId }) {
+  /**
+   * Pin what the kept upload's claims carry (GitHub: repository_id and repository_owner_id; GitLab: the
+   * project, its namespace, its path and the pipeline definition), or confirm a new owner or definition.
+   * The gesture is bound to the repository and to the digest of the values to pin, which the screen showed
+   * (ADR-0029 section 1): `input.digest` is the one the member saw, and a confirmation whose values are no
+   * longer those is refused `confirmation-stale`. What is pinned is what the member saw.
+   */
+  async function confirm(s, id, input, { requestId }) {
     try {
       return await store.tx(s.tenantId, async (tx) => {
-        await useGesture(tx, s, "repository-confirm", id);
         const r = await owned(tx, id);
         if (r.removedAt) throw new Refusal("not-found");
-        const pin = confirmation(r);
-        await tx.update("forge_repository", { id }, { repositoryId: pin.repositoryId, ownerId: pin.ownerId, state: "pinned" });
+        const f = await tx.get("forge_repository", { id });
+        const gitlab = f.forgeName === "gitlab";
+        const pin = confirmation(r, f);
+        const digest = pinDigest(gitlab ? pin.values : githubPinValues(pin));
+        if (input?.digest !== undefined && input.digest !== digest) throw new Refusal("confirmation-stale", { digest });
+        await useGesture(tx, s, "repository-confirm", confirmObject(id, digest));
+        if (gitlab) {
+          // the definition must name the declared file, on the declared branch, of the token's own project
+          if (!pin.confirmable) throw new Refusal("definition-not-pinned", { forge: "gitlab" });
+          // a renamed or moved project is named by its new path, if the index can carry it
+          if (pin.path !== r.name) {
+            carried(indexName("gitlab", f.issuerKey, f.issuerKey === GITLAB_COM_ISSUER ? null : await tx.get("issuer", { id: f.issuerKey }), pin.path));
+            await tx.update("repository", { id }, { name: pin.path });
+          }
+          await tx.update("forge_repository", { id }, { repositoryId: scopedKey("gitlab", f.issuerKey, pin.repositoryId), ownerId: pin.ownerId, definitionRef: pin.definitionRef, name: pin.path, nameKey: nameKeyOf("gitlab", f.issuerKey, pin.path), state: "pinned" });
+        } else {
+          await tx.update("forge_repository", { id }, { repositoryId: pin.repositoryId, ownerId: pin.ownerId, state: "pinned" });
+        }
         await tx.update("repository", { id }, { confirmedAt: r.confirmedAt ?? now(), pendingSend: null });
         let published = null, quarantine = null;
         if (!r.pendingSend.uploadId) {
@@ -109,7 +163,7 @@ export function repositoryCases(ctx, identity) {
             quarantine = built.refusal;
           }
         }
-        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, ...(published ? { indexSha256: published.sha256, indexVersion: published.version, fleetVersion: ctx.ports.assembler.pin.version, fleetArchiveSha256: ctx.ports.assembler.pin.archiveSha256 } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
+        const e = await append(tx, { who: human(s), what: "repository-confirmed", object: id, requestId, detail: { repositoryId: pin.repositoryId, ownerId: pin.ownerId, pinned: digest, ...(gitlab ? { forge: "gitlab", issuerKey: f.issuerKey, path: pin.path, definitionRef: pin.definitionRef } : {}), ...(published ? { indexSha256: published.sha256, indexVersion: published.version, fleetVersion: ctx.ports.assembler.pin.version, fleetArchiveSha256: ctx.ports.assembler.pin.archiveSha256 } : {}), ...(quarantine ? { refusal: quarantine } : {}) } });
         return { entry: e, published, quarantine, ...(quarantine ? { refusal: quarantine } : {}) };
       });
     } catch (e) {
@@ -147,6 +201,46 @@ export function repositoryCases(ctx, identity) {
       if (e instanceof StoreConflict) throw new Refusal("repository-unavailable");
       throw e;
     }
+  }
+
+  /** A GitLab repository of this tenant, live, or `not-found`: the two gestures below are GitLab's. */
+  async function gitlabOwned(tx, id) {
+    const r = await owned(tx, id);
+    const f = await tx.get("forge_repository", { id });
+    if (r.removedAt || f.forgeName !== "gitlab") throw new Refusal("not-found");
+    return r;
+  }
+
+  /**
+   * Lift, or require again, the protection of the declared branch (ADR-0029 section 2). Lifting lowers the
+   * level of every later upload to P3b; requiring it again withdraws an access, so both are written to the
+   * security log before commit and replayed after a restore (T24).
+   */
+  async function protection(s, id, lift, { requestId }) {
+    return store.tx(s.tenantId, async (tx) => {
+      await useGesture(tx, s, lift ? "protection-lift" : "protection-restore", id);
+      const r = await gitlabOwned(tx, id);
+      await tx.update("repository", { id }, { protectionLiftedAt: lift ? now() : null });
+      if (lift) await security(tx, { what: "protection-lifted", repository: id });
+      else await security(tx, { what: "protection-restored", repository: id });
+      const e = await append(tx, { who: human(s), what: lift ? "protection-lifted" : "protection-restored", object: id, requestId, detail: { name: r.name } });
+      return { entry: e, protectionRequired: !lift };
+    });
+  }
+
+  /**
+   * Open a new order epoch (ADR-0029 section 3 rule 7): after an instance was restored from a backup its
+   * pipelines count again from lower numbers, and no rule tells that from a late job of an old pipeline.
+   * The next upload of each mission and kind becomes the current one.
+   */
+  async function openEpoch(s, id, { requestId }) {
+    return store.tx(s.tenantId, async (tx) => {
+      await useGesture(tx, s, "order-epoch-open", id);
+      const r = await gitlabOwned(tx, id);
+      await tx.update("repository", { id }, { epoch: r.epoch + 1 });
+      const e = await append(tx, { who: human(s), what: "order-epoch-opened", object: id, requestId, detail: { name: r.name, epoch: r.epoch + 1 } });
+      return { entry: e, epoch: r.epoch + 1 };
+    });
   }
 
   async function consent(s, id, { requestId }) {
@@ -229,5 +323,5 @@ export function repositoryCases(ctx, identity) {
     });
   }
 
-  return { declare, patch, confirm, remove, restore, consent, withdrawConsent, eraseContent, settings, reader };
+  return { declare, patch, confirm, protection, openEpoch, remove, restore, consent, withdrawConsent, eraseContent, settings, reader };
 }

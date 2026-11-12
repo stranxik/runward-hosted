@@ -4,16 +4,20 @@
 //
 // Pure data: no import, no clock, no I/O.
 
-/** @typedef {{ status: number, fr: [string, string], en: [string, string], retry?: boolean }} RefusalDef */
+/**
+ * `gitlab`: the words of the same refusal when the token, or the declaration, is GitLab's (ADR-0029 section 1:
+ * a refusal keeps its code and status, its remedy is chosen by the forge). GitHub's words are the default.
+ * @typedef {{ status: number, fr: [string, string], en: [string, string], retry?: boolean, gitlab?: { fr: [string, string], en: [string, string] } }} RefusalDef
+ */
 
 /** @type {Record<string, RefusalDef>} */
 export const FLOOR = {
   // ---- the upload (PADR-0010)
-  "token-missing": { status: 401, fr: ["Aucun jeton d'identité de charge n'accompagne l'envoi.", "Appeler le workflow d'envoi avec id-token: write sur le job appelant."], en: ["No workload identity token came with the upload.", "Call the send workflow with id-token: write on the calling job."] },
-  "token-unreadable": { status: 401, fr: ["Le jeton d'identité de charge est illisible.", "Appeler le workflow d'envoi avec id-token: write sur le job appelant."], en: ["The workload identity token cannot be read.", "Call the send workflow with id-token: write on the calling job."] },
-  "token-audience": { status: 401, fr: ["Le jeton ne vise pas ce service.", "Ne pas modifier l'audience : le workflow d'envoi la fixe."], en: ["The token is not addressed to this service.", "Do not change the audience: the send workflow sets it."] },
-  "token-expired": { status: 401, fr: ["Le jeton est périmé.", "Relancer le job (re-run failed jobs)."], en: ["The token has expired.", "Re-run the job (re-run failed jobs)."] },
-  "token-replayed": { status: 401, fr: ["Ce jeton a déjà servi.", "Relancer le job (re-run failed jobs)."], en: ["This token was already used.", "Re-run the job (re-run failed jobs)."] },
+  "token-missing": { status: 401, fr: ["Aucun jeton d'identité de charge n'accompagne l'envoi.", "Donner au job qui envoie le jeton d'identité de sa CI, comme la page du dépôt dans l'app l'écrit."], en: ["No workload identity token came with the upload.", "Give the sending job its CI's identity token, as the repository's page in the app writes it."] },
+  "token-unreadable": { status: 401, fr: ["Le jeton d'identité de charge est illisible.", "Envoyer le jeton d'identité que la CI du dépôt délivre, tel quel, comme la page du dépôt dans l'app l'écrit."], en: ["The workload identity token cannot be read.", "Send the identity token the repository's CI issues, as it is, as the repository's page in the app writes it."] },
+  "token-audience": { status: 401, fr: ["Le jeton ne vise pas ce service.", "Ne pas modifier l'audience : le workflow d'envoi la fixe."], en: ["The token is not addressed to this service.", "Do not change the audience: the send workflow sets it."], gitlab: { fr: ["Le jeton ne vise pas ce service.", "Écrire dans id_tokens l'audience exacte que l'app donne pour ce dépôt (champ audience de cette réponse)."], en: ["The token is not addressed to this service.", "Write in id_tokens the exact audience the app gives for this repository (the audience field of this answer)."] } },
+  "token-expired": { status: 401, fr: ["Le jeton est périmé.", "Relancer le job (re-run failed jobs)."], en: ["The token has expired.", "Re-run the job (re-run failed jobs)."], gitlab: { fr: ["Le jeton est périmé.", "Relancer le job d'envoi (Retry)."], en: ["The token has expired.", "Retry the send job."] } },
+  "token-replayed": { status: 401, fr: ["Ce jeton a déjà servi.", "Relancer le job (re-run failed jobs)."], en: ["This token was already used.", "Re-run the job (re-run failed jobs)."], gitlab: { fr: ["Ce jeton a déjà servi.", "Relancer le job d'envoi (Retry) : un jeton sert une fois."], en: ["This token was already used.", "Retry the send job: a token is used once."] } },
   "duplicate-in-run": { status: 409, fr: ["Un autre envoi de même run, tentative, mission et type, d'une autre empreinte, est déjà arrivé.", "N'appeler le workflow d'envoi qu'une fois par mission."], en: ["Another upload of the same run, attempt, mission and kind, with another digest, already arrived.", "Call the send workflow once per mission."] },
   "called-workflow-revoked": { status: 403, fr: ["Cette release du workflow d'envoi a été retirée.", "Monter à la release indiquée."], en: ["This release of the send workflow was withdrawn.", "Move to the release named."] },
   "called-workflow-not-pinned": { status: 403, fr: ["L'envoi ne vient pas du workflow d'envoi du produit à un SHA publié.", "Appeler stranxik/runward-hosted/.github/workflows/send.yml à un SHA publié."], en: ["The upload does not come from the product's send workflow at a published SHA.", "Call stranxik/runward-hosted/.github/workflows/send.yml at a published SHA."] },
@@ -64,10 +68,10 @@ export const FLOOR = {
   "link-invalid": { status: 404, fr: ["Ce lien n'ouvre rien.", "Vérifier le lien reçu, entier."], en: ["This link opens nothing.", "Check the link you received, in full."] },
 
   // ---- repositories and access (architecture §3.1)
-  "repository-malformed": { status: 400, fr: ["Le nom du dépôt doit se lire propriétaire/dépôt.", "Corriger le nom."], en: ["The repository name must read owner/repository.", "Fix the name."] },
+  "repository-malformed": { status: 400, fr: ["Le nom du dépôt doit se lire propriétaire/dépôt.", "Corriger le nom."], en: ["The repository name must read owner/repository.", "Fix the name."], gitlab: { fr: ["Le chemin du projet doit se lire groupe/projet, sous-groupes compris.", "Corriger le chemin."], en: ["The project's path must read group/project, subgroups included.", "Fix the path."] } },
   "repository-exists": { status: 409, fr: ["Ce dépôt est déjà déclaré dans cette flotte.", "Le retrouver dans Accès."], en: ["This repository is already declared in this fleet.", "Find it in Access."] },
   "repository-unavailable": { status: 409, fr: ["Ce dépôt ne peut pas être déclaré ici.", "Vérifier le nom, ou écrire au contact sécurité."], en: ["This repository cannot be declared here.", "Check the name, or write to the security contact."] },
-  "workflow-malformed": { status: 400, fr: ["Le workflow appelant doit être un fichier de .github/workflows/.", "Corriger le chemin."], en: ["The calling workflow must be a file under .github/workflows/.", "Fix the path."] },
+  "workflow-malformed": { status: 400, fr: ["Le workflow appelant doit être un fichier de .github/workflows/.", "Corriger le chemin."], en: ["The calling workflow must be a file under .github/workflows/.", "Fix the path."], gitlab: { fr: ["La définition du pipeline doit être un chemin du dépôt : lettres, chiffres, point, tiret bas, tiret, barre.", "Corriger le chemin, par exemple .gitlab-ci.yml."], en: ["The pipeline definition must be a path of the repository: letters, digits, dot, underscore, hyphen, slash.", "Fix the path, for example .gitlab-ci.yml."] } },
   "branch-malformed": { status: 400, fr: ["Ce nom de branche n'est pas valide.", "Écrire la branche par défaut du dépôt, par exemple main."], en: ["This branch name is not valid.", "Write the repository's default branch, for example main."] },
   "mission-malformed": { status: 400, fr: ["L'identifiant de mission doit être en minuscules, chiffres et tirets.", "Corriger l'identifiant."], en: ["The mission id must be lowercase letters, digits and hyphens.", "Fix the id."] },
   "mission-exists": { status: 409, fr: ["Cette mission existe déjà dans cette flotte.", "Choisir un autre identifiant."], en: ["This mission already exists in this fleet.", "Choose another id."] },
