@@ -368,6 +368,13 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Decided: nothing by the session.
 - Next: the committed reports regenerated in the reference environment (the new test's cases).
 
+## 2026-11-12 - a refusal at several steps is said in words, without English or "conformité"
+
+- Done: when runward writes the gate as « deliverables filled, gate red at Floor, Govern », the app now says it with the phases' names (« étapes Plancher et Gouverner »), as it already did for « 3 · Floor ». The refusal's sentence reads « Refusée par le contrôle (…) : des exigences de l'équipe ne sont pas encore prouvées. » instead of « Refusée à la deliverables filled, gate red at Floor, Govern : des lignes de conformité restent ouvertes. », found on the dashboard and the technical detail on 2026-11-12 by an audit of the app's wording. « porte » becomes « étape » and « livrable absent » « pièce exigée manquante » in the same lines.
+- Evidence: `test/unit/porte.test.js`, 3 cases (both forms in French and English on the real fixture `demo-renamed`; the sentence carries no English and no banned word; planted: a gate in neither form is returned as written).
+- Decided: nothing by the session.
+- Next: the wording pass of the app's simplification, if the author chooses it.
+
 ## 2026-11-11 - the forge port and the GitLab adapter, implemented; a registered instance witnessed as far as the pinned runward-fleet lets it
 
 - Done: ADR-0029 is implemented, in its order.
@@ -404,3 +411,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the suites on the NAS and the gate, their counts in the pull request.
 - Decided: nothing by the session. Proposed: ADR-0031, revised.
 - Next: the author's decision on ADR-0031; step b (runward-fleet re-pinned), then the end of step c; step d, after which the author sets `RW_GITLAB_COM=1`.
+
+## 2026-11-12 - ADR-0031 accepted
+
+- Done: ADR-0031 records the author's acceptance.
+- Evidence: the author in chat, 2026-11-12: "go pour tout", in answer to a list that recommended accepting ADR-0031 once the second pass of the security review of this pull request found findings 1 to 4 fixed and replayed.
+- Decided: ADR-0031 accepted (the author): the issuer key enters the values the indexes of 0001 hold; plain columns later by a two-step migration, not by an exemption of the migration guard.
+- Next: the merge of this pull request by the author; then runward-fleet re-pinned (runward #513) and the witness of section 5c finished on the self-managed instance.

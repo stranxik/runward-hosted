@@ -108,9 +108,9 @@ export const MOTS = {
       "commit-mismatch": "définition qui n'est pas au commit du code", "ref-not-declared": "branche autre que la branche déclarée", "ref-not-protected": "branche déclarée non protégée", "source-not-admitted": "pipeline non lancé par un push" },
     // ---- the lines the dashboard, a mission and the sidebar say (web/views/lignes.js)
     lines: {
-      allGates: "toutes les portes", gate: (n, phase) => `porte ${n}, ${phase}`, and: " et ",
-      blocked: (gate, n, list) => `Bloquée à la ${gate} : ${n} livrable${s(n)} absent${s(n)}, dont ${list}.`,
-      refusedAt: (gate) => `Refusée à la ${gate} : des lignes de conformité restent ouvertes.`,
+      allGates: "toutes les étapes", gate: (n, phase) => `étape ${n}, ${phase}`, steps: (list, many) => `${many ? "étapes" : "étape"} ${list}`, and: " et ",
+      blocked: (gate, n, list) => `Bloquée (${gate}) : ${n} pièce${s(n)} exigée${s(n)} manquante${s(n)}, dont ${list}.`,
+      refusedAt: (gate) => `Refusée par le contrôle (${gate}) : des exigences de l'équipe ne sont pas encore prouvées.`,
       levelNotMet: "Toutes les portes sont franchies, mais rien n'y est vérifié mécaniquement : le niveau demandé n'est pas atteint.",
       lastRefused: (at, seq, why) => `Aucun envoi accepté. Le dernier, à ${at} (entrée ${seq}), n'a pas été accepté : ${why}.`,
       noUpload: "Aucun envoi accepté pour cette mission déclarée : c'est un constat, pas un filtre.",
@@ -597,9 +597,9 @@ export const MOTS = {
       "token-too-old": "token more than 10 minutes old", "key-retired": "key retired or expired", "definition-absent": "pipeline definition missing from the token", "definition-not-pinned": "pipeline definition to confirm",
       "commit-mismatch": "definition not at the code's commit", "ref-not-declared": "a branch other than the declared one", "ref-not-protected": "declared branch not protected", "source-not-admitted": "pipeline not started by a push" },
     lines: {
-      allGates: "all gates", gate: (n, phase) => `gate ${n}, ${phase}`, and: " and ",
-      blocked: (gate, n, list) => `Blocked at ${gate}: ${n} deliverable${pl(n)} missing, including ${list}.`,
-      refusedAt: (gate) => `Refused at ${gate}: conformance rows are still open.`,
+      allGates: "all steps", gate: (n, phase) => `step ${n}, ${phase}`, steps: (list, many) => `${many ? "steps" : "step"} ${list}`, and: " and ",
+      blocked: (gate, n, list) => `Blocked (${gate}): ${n} required item${pl(n)} missing, including ${list}.`,
+      refusedAt: (gate) => `Refused by the control (${gate}): some of the team's requirements are not proven yet.`,
       levelNotMet: "All gates are passed, but nothing in them is checked mechanically: the level asked for is not met.",
       lastRefused: (at, seq, why) => `No upload accepted. The last one, at ${at} (entry ${seq}), was not accepted: ${why}.`,
       noUpload: "No upload accepted for this declared mission: a finding, not a filter.",

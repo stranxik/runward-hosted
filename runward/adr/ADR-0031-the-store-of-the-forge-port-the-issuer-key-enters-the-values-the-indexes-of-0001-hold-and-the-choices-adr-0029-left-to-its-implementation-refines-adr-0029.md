@@ -1,7 +1,7 @@
 # ADR-0031: The store of the forge port: the issuer key enters the values the indexes of 0001 hold, and the choices ADR-0029 left to its implementation (refines ADR-0029)
 
 **Date**: 2026-11-11
-**Status**: proposed. Written by the agent session that implemented ADR-0029; the author decides. The code of the pull request that carries this record follows it; an answer that changes a point changes the code with it.
+**Status**: accepted 2026-11-12 by the author in chat ("go pour tout", in answer to a list that recommended accepting ADR-0031 after the second review pass of PR #26). Written by the agent session that implemented ADR-0029. The code of the pull request that carries this record follows it; an answer that changes a point changes the code with it.
 **Refines**: ADR-0029 (accepted 2026-11-11) on the shape of its store, on two points where the review of the pull request showed its text to be unsafe as written (j and l), and on the other choices its text does not make
 **Scope**: `db/migrations/0007_forge_port.sql`, the two store adapters, and the points listed under "Choices"
 **Deciders**: Thibault Souris (author). Written by an agent session.

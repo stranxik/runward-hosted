@@ -90,7 +90,7 @@ The control plane of PADR-0003 to PADR-0007 (framing §5).
 | The app's layer is the house's visual base; runward keeps its own signs; the house signs the foot | pending: ADR-0026, proposed |
 | The public site is runward.dev; the app's origin carries the app only: the shell at `/`, the sign-in for a signed-out visitor, the former public pages answering 308 to runward.dev | decided: ADR-0028, accepted 2026-11-11 (supersedes ADR-0022) |
 | A forge port: an upload is bound by the identity each forge gives (GitHub, gitlab.com, registered GitLab instances), several issuers in one process, and the level of evidence it reaches is shown per application | decided: ADR-0029 (refines ADR-0003 and ADR-0001), accepted 2026-11-11; implemented for GitHub, gitlab.com and registered GitLab instances, the witness of a registered instance partial until runward-fleet is re-pinned (`runward/JOURNAL.md`) |
-| The store of the forge port: the issuer key enters the values the indexes of 0001 hold; the choices ADR-0029 left to its implementation | pending: ADR-0031 (refines ADR-0029), proposed |
+| The store of the forge port: the issuer key enters the values the indexes of 0001 hold; the choices ADR-0029 left to its implementation | decided: ADR-0031, accepted 2026-11-12 (refines ADR-0029) |
 | Azure DevOps by an Entra access token for runward's application: a direction, its rules fixed after a real token is read | direction: ADR-0030, accepted 2026-11-11 as a direction; no code, no rule before a real Entra token is read |
 
 ### Ratification
