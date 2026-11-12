@@ -18,5 +18,8 @@ export const short = (h) => (h ? `${String(h).slice(0, 12)}…` : "");
 // gesture is doing (confirming, busy, failed). A module reads and writes it by its fields.
 export const S = { session: undefined, index: null, status: null, access: null, journal: null, intent: null, link: null, linkInfo: null, newVersion: false, confirming: null, busy: null, failed: null, error: null, export: null, offline: false, origine: null, cibleVue: null, vuePeinte: null };
 
-/** The address as the router reads it: #/<route>/<sub>. */
-export const parts = () => { const h = location.hash.replace(/^#\/?/, ""); const p = h.split("/"); return { h, route: p[0], sub: p.slice(1).join("/") }; };
+/**
+ * The address as the router reads it: #/<route>/<sub>[?<query>]. The query (the journal's filters, ADR-0037) is the
+ * state a link keeps beside the screen; `route` and `sub` never carry it, so an address without one reads as it always did.
+ */
+export const parts = () => { const full = location.hash.replace(/^#\/?/, ""), q = full.indexOf("?"); const h = q < 0 ? full : full.slice(0, q), p = h.split("/"); return { h, route: p[0], sub: p.slice(1).join("/"), query: q < 0 ? "" : full.slice(q + 1) }; };

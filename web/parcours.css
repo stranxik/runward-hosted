@@ -1,0 +1,123 @@
+/* Lot 2 of the fixed shell (ADR-0037): what the connect flow, the journal and Compte add to the panes of
+   web/coque.css (ADR-0036). Values come from the app's layer (web/couche-runward-app.css) and the family's structure
+   (web/famille.css): no colour, size or duration is written here that they do not hold. Reduced motion: the family
+   removes every transition (web/famille.css). */
+
+/* ============================================================== the rows of the three lists */
+.row.frow, .row.crow{ display:grid; grid-template-columns:minmax(0,1fr); gap:2px; padding:11px 16px; }
+.row.frow b, .row.crow b{ font-size:var(--fs-ui); font-weight:var(--fw-strong); overflow-wrap:anywhere; }
+.row.frow > span, .row.crow > span{ font-size:var(--fs-small); color:var(--text-2); overflow-wrap:anywhere; }
+.row.frow .fr-st{ display:inline-flex; align-items:center; gap:7px; font-size:var(--fs-releve); }
+.row.frow.nouveau b::before{ content:"+"; display:inline-grid; place-items:center; width:18px; height:18px; margin-right:8px; border:1px solid var(--line-2); border-radius:var(--r-thumb); font-weight:var(--fw-strong); line-height:1; }
+.rows .sec{ padding:14px 16px 6px; font-size:var(--fs-releve); color:var(--text-2); }
+
+.row.jrow{ display:grid; grid-template-columns:52px 14px minmax(0,1fr) auto; column-gap:10px; row-gap:2px; align-items:baseline; padding:10px 16px; }
+.row.jrow .no{ font-family:var(--mono); font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
+.row.jrow .jm{ align-self:center; display:inline-flex; }
+.row.jrow .jm .jm-inv{ width:9px; height:9px; margin:1px; border:0; border-radius:var(--r-mark); background:var(--refus); transform:rotate(45deg); }
+.row.jrow .q{ font-size:var(--fs-small); font-weight:var(--fw-strong); min-width:0; overflow-wrap:anywhere; }
+.row.jrow .w{ grid-column:3 / -1; font-size:var(--fs-releve); color:var(--text-2); overflow-wrap:anywhere; }
+.row.jrow .t{ grid-row:1; grid-column:4; font-family:var(--mono); font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
+
+/* the foot of the journal's list: older entries, its note */
+.l-pied{ display:grid; gap:10px; padding:14px 16px 20px; }
+.l-pied .actions{ display:flex; flex-wrap:wrap; gap:8px; }
+
+/* ============================================================== the journal's filters, in the window's bar */
+#journal-filtres{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-width:0; }
+#journal-filtres .jf{ display:inline-flex; min-width:0; }
+#journal-filtres select{ font:inherit; font-size:var(--fs-small); color:var(--text); background:var(--bg); min-height:30px; max-width:220px; padding:2px 26px 2px 10px; border:1px solid var(--line-2); border-radius:var(--r-pill);
+  appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--text-2) 50%), linear-gradient(135deg, var(--text-2) 50%, transparent 50%);
+  background-position:calc(100% - 14px) 52%, calc(100% - 9px) 52%; background-size:5px 5px; background-repeat:no-repeat; cursor:pointer; text-overflow:ellipsis; }
+#journal-filtres select:hover{ border-color:var(--text-2); }
+#journal-filtres select:focus-visible{ outline:2px solid var(--hit); outline-offset:1px; }
+#journal-filtres .jf-x{ min-height:30px; padding:2px 12px; font-size:var(--fs-small); }
+
+/* ============================================================== the details */
+.champs{ display:grid; grid-template-columns:max-content minmax(0,1fr); gap:6px 14px; font-size:var(--fs-small); }
+.champs dt{ color:var(--text-2); }
+.champs dd{ min-width:0; overflow-wrap:anywhere; margin:0; }
+.sh-b{ display:grid; gap:10px; padding:14px; }
+.compte-sec > .blk > h2:first-child, .compte-sec > .scr > .scr-bar{ position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.compte-sec > .blk, .compte-sec > .scr{ margin:0; border:1px solid var(--line); border-radius:var(--r-notice); background:var(--bg); padding:4px 14px 14px; box-shadow:none; backdrop-filter:none; }
+.compte-sec > .scr > .scr-body{ padding:10px 0 0; }
+.compte-tache{ max-width:880px; }
+
+/* ============================================================== the connect flow: its rail, its steps */
+/* a narrow detail: the head's five bars and « Étape n sur 5 » say where the flow stands, the rail is left out */
+@container detail (max-width:619px){ .sheet-rail{ display:none; } }
+/* the step's one action at the bottom of the screen: a phone's only (web/coque.css lays the panes) */
+.d-bas{ display:none; }
+/* a gesture done, read again: its station of the rail is a button (the large rail's own, web/app.css) */
+.pi-piste.grand.mer .pi-st:has(> button){ padding:0; border:0; background:none; }
+.pi-piste.grand.mer .pi-st > button{ color:inherit; }
+/* the level said before the declaration and before the extract (ADR-0029 section 2), compact */
+.fx .niveau-d{ display:grid; gap:4px; padding:10px 12px; border:1px solid var(--line); border-radius:var(--r-panel); background:var(--bg-2); }
+.fx .niveau-d p{ margin:0; font-size:var(--fs-small); }
+.fx .niveau-d .niveau{ display:grid; gap:2px; margin:0; padding:0; border:0; background:none; }
+.fx .niveau-d .niveau p{ font-size:var(--fs-small); }
+.sheet-rail{ padding:10px 14px 12px; }
+.sheet-rail .pi-piste{ margin:0; }
+.prog{ display:inline-grid; grid-template-columns:repeat(5, 18px); gap:3px; }
+.prog i{ height:4px; border-radius:2px; background:var(--beat); }
+.prog i.ok{ background:var(--text); }
+.prog i.ici{ background:linear-gradient(90deg, var(--text) 50%, var(--beat) 50%); }
+.fx{ display:grid; gap:12px; padding:16px 16px 18px; min-width:0; }
+.fx-h{ font-size:20px; font-weight:var(--fw-strong); letter-spacing:var(--ls-h3); line-height:1.25; overflow-wrap:anywhere; margin:0; }
+.fx-l{ font-size:var(--fs-ui); max-width:68ch; margin:0; }
+.fx-n{ font-size:var(--fs-small); color:var(--text-2); max-width:72ch; margin:0; }
+.fx-act{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+.fx-verdict{ display:grid; gap:10px; padding:12px 14px; border:1px solid var(--line); border-radius:var(--r-notice); background:var(--bg); }
+.fx-verdict .pi-qui{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.fx-verdict p{ margin:0; font-size:var(--fs-small); }
+
+/* the extract: compact, its own scroll, never the page's */
+.extrait{ display:grid; gap:10px; min-width:0; }
+.extrait .term{ max-height:240px; overflow:auto; white-space:pre; overflow-wrap:normal; margin:0; }
+.extrait .actions{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0; }
+.extrait .note, .extrait .avert{ margin:0; font-size:var(--fs-small); }
+
+/* the live line: what the service said so far, and that the page reads it again by itself */
+.vivant{ display:flex; align-items:center; gap:10px; margin:0; padding:10px 12px; border-radius:var(--r-panel); border:1px solid var(--line); background:var(--bg-2); font-size:var(--fs-small); font-weight:var(--fw-strong); }
+.vivant i{ flex:none; width:9px; height:9px; border-radius:50%; border:1.5px dotted var(--bar); }
+.vivant.live{ border-color:color-mix(in srgb, var(--direct) 55%, var(--line)); }
+.vivant.live i{ border:0; background:var(--direct); box-shadow:0 0 0 3px color-mix(in srgb, var(--direct) 22%, transparent); }
+.vivant.recu i{ border:0; background:var(--text); }
+
+/* the form: one action, the rest folded */
+.seg{ border:0; margin:0; padding:0; display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; }
+.seg legend{ float:left; margin-right:12px; font-size:var(--fs-small); color:var(--text-2); }
+.seg label{ display:inline-flex; align-items:center; gap:8px; min-height:32px; padding:2px 12px; border:1px solid var(--line-2); border-radius:var(--r-pill); font-size:var(--fs-small); cursor:pointer; }
+.seg label:has(input:checked){ border-color:var(--text); }
+.seg input{ accent-color:var(--text); margin:0; }
+.champ{ display:grid; gap:5px; min-width:0; font-size:var(--fs-small); color:var(--text-2); }
+.champ input{ font:inherit; font-family:var(--mono); font-size:var(--fs-ui); color:var(--text); min-height:var(--h-field, 36px); padding:6px 10px; border:1px solid var(--line-2); border-radius:var(--r-panel); background:var(--bg); min-width:0; width:100%; box-sizing:border-box; }
+.champ input:focus-visible{ outline:2px solid var(--hit); outline-offset:1px; }
+.champ input[aria-invalid="true"]{ border-color:var(--refus); }
+.champ .err{ color:var(--text); font-size:var(--fs-small); }
+.grille-c{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px 14px; }
+@container detail (max-width:619px){ .grille-c{ grid-template-columns:minmax(0,1fr); } }
+.coche{ display:grid; grid-template-columns:18px minmax(0,1fr); gap:10px; align-items:start; font-size:var(--fs-small); color:var(--text-2); cursor:pointer; }
+.coche input{ width:16px; height:16px; margin:2px 0 0; accent-color:var(--text); }
+
+/* ============================================================== the phone: list then detail, actions at the bottom */
+@media (max-width:1023px){
+  /* the page scrolls on a phone: the action stays above the tab bar (64 px, web/coque.css) */
+  .d-bas{ display:flex; position:sticky; bottom:calc(64px + env(safe-area-inset-bottom)); z-index:3; gap:8px; padding:10px 14px; background:color-mix(in srgb, var(--bg-2) 92%, transparent); backdrop-filter:blur(14px); border-top:1px solid var(--line); }
+  .d-bas .btn{ flex:1; min-height:44px; white-space:normal; }
+  .row.frow, .row.crow, .row.jrow{ min-height:44px; }
+  /* the journal's filters stay on a phone, on their own line under the title, scrolling in it (web/coque.css hides
+     Applications' chips there; the journal has no other way to filter) */
+  .win-bar #journal-filtres{ display:flex; grid-column:1 / -1; grid-row:2; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; padding:2px 0; }
+  #journal-filtres .jf, #journal-filtres .jf-x{ flex:none; }
+  .win-bar:has(#journal-filtres) .direct{ display:none; }
+  #journal-filtres::-webkit-scrollbar{ display:none; }
+  #journal-filtres select, #journal-filtres .jf-x{ min-height:44px; font-size:16px; max-width:70vw; }
+  .champ input{ min-height:44px; font-size:16px; }
+  .seg label{ min-height:44px; }
+  .coche{ grid-template-columns:22px minmax(0,1fr); }
+  .coche input{ width:20px; height:20px; }
+  .fx-act .btn, .pi-piste.grand.mer .pi-st > button{ min-height:44px; }
+  .extrait .term{ max-height:200px; }
+  .row.jrow{ grid-template-columns:44px 14px minmax(0,1fr) auto; }
+}

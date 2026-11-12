@@ -813,8 +813,11 @@ test("point 12: the API contract changes by addition, with two exceptions: two r
   // the contract of before the port (docs/adr-forge-port@85285c1): 40 routes, 62 refusals
   assert.equal(hash(contract.routes.slice(0, 40).join("\n")), "f4d02480639ed30fb3191a7c1d10aafd4979c22da4414b7bdb8affb763852ce6", "the routes of before are there, in their order");
   const added = Object.keys(FORGE).map((c) => `${c} ${REFUSALS[c].status}`);
-  assert.equal(hash(JSON.stringify(contract.refusals.filter((r) => !added.includes(r)))), "9f4b9416cb581b1b37b72ea19671fd5634d90f6a9c1744bb487f5b8320b0cf5a", "the refusals of before keep their codes and statuses");
-  assert.equal(contract.routes.length, 49); assert.equal(contract.refusals.length, 62 + added.length);
+  // added after the port, each by its ADR: the journal's filters (ADR-0037)
+  const later = ["journal-filter-invalid 400"];
+  assert.equal(hash(JSON.stringify(contract.refusals.filter((r) => !added.includes(r) && !later.includes(r)))), "9f4b9416cb581b1b37b72ea19671fd5634d90f6a9c1744bb487f5b8320b0cf5a", "the refusals of before keep their codes and statuses");
+  assert.equal(contract.routes.length, 49); assert.equal(contract.refusals.length, 62 + added.length + later.length);
+  for (const r of later) assert.ok(contract.refusals.includes(r), `${r}: in the contract`);
   for (const c of ["token-too-old", "definition-absent", "definition-not-pinned", "commit-mismatch", "ref-not-declared", "ref-not-protected", "source-not-admitted", "key-retired", "confirmation-stale"]) assert.ok(c in FORGE, `ADR-0029's code ${c}`);
   // exception 1: the two refusals answered before a forge is known name none
   for (const code of ["token-missing", "token-unreadable"]) for (const lang of ["fr", "en"]) {

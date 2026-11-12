@@ -9,8 +9,14 @@ import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write, confirmRepository, issuerPreview, issuerWrite } from "./gestures.js";
 import { retour, versDepot } from "./liens.js";
 import { etat } from "./piste/vif.js";
+import { marquerFusionne } from "./flux.js";
+import { versJournal } from "./journal-filtres.js";
+import "./flux-vif.js";
 
 document.addEventListener("click", async (e) => {
+  // the first verdict's way to its application (ADR-0037): the reading says it is the first one (ADR-0035)
+  const premier = e.target.closest("[data-flux-premier]");
+  if (premier) etat().premier = premier.dataset.fluxPremier;
   const g = e.target.closest("[data-go]");
   if (g) { e.preventDefault(); S.formError = null; S.issuer = null; const to = g.dataset.go; if (location.hash === to) show(); else location.hash = to; return; }
   const b = e.target.closest("[data-do]");
@@ -37,6 +43,10 @@ document.addEventListener("click", async (e) => {
   }
   // the phone menu: its button, its veil; a link inside it closes it with the screen it opens (the shell's paint)
   if (what === "menu") { menu(); return; }
+  // the connect flow (ADR-0037): « c'est fait, j'ai fusionné » moves this screen to the waiting, and nothing else: it is a
+  // marker of this browser, never sent to the service, never a proof (web/views/flux.js); a gesture done, read again
+  if (what === "flux-fait") { marquerFusionne(k); S.fluxVue = null; S.focusKey = null; return rerender(); }
+  if (what === "flux-vue") { const [id, n] = k.split(":"); S.fluxVue = n === "0" ? null : { id, n: Number(n) }; S.focusKey = `flux-vue:${k}`; return rerender(); }
   if (what === "menu-close") { menu(false); return; }
   // the fixed shell (ADR-0036): the drawer « À faire », a filter of the list of applications (kept for the page, the
   // same filter again lifts it), « Vérifier par vous-même » opened from the head of a reading
@@ -66,7 +76,9 @@ document.addEventListener("click", async (e) => {
     // which says it is the first; a new owner confirmed, nothing published, a check set aside or several applications go
     // back as before
     const mission = repo?.state === "pending" && repo.missions?.length === 1 ? repo.missions[0].id : null;
-    if (S.session.arrivalDone && mission && done.published && !done.quarantine) { etat().premier = mission; location.hash = `#/decision/${encodeURIComponent(mission)}`; return; }
+    // ADR-0037 (refines ADR-0035 point 4): the flow shows its fifth gesture, the first verdict, with the way to its
+    // application, whose reading says it is the first; the flow's reads are made again (the router's `fresh`)
+    if (S.session.arrivalDone && mission && done.published && !done.quarantine) { etat().premier = mission; S.fluxVue = null; const to = `#/declarer/confirmer/${encodeURIComponent(repo.id)}`; if (location.hash !== to) location.hash = to; else await show(); return; }
     location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
   }
   // a GitLab instance registered, or a key added to one: the gesture on what the preview showed
@@ -108,8 +120,8 @@ main.addEventListener("submit", async (e) => {
   if (f.id === "declare") {
     // the forge: GitHub (the body is the one it always was), gitlab.com, or a registered instance by its identifier
     const forge = f.elements.forge?.value || "github";
-    S.formValues = { forge, repo: val("repo"), wf: val("wf"), mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
     const consent = f.elements.content.checked;
+    S.formValues = { forge, repo: val("repo"), wf: val("wf") || DEFAULT_FILE[forge === "github" ? "github" : "gitlab"], mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main", content: consent };
     const body = { ...(forge === "github" ? {} : { forge: "gitlab", issuer: forge }), name: S.formValues.repo, workflow: S.formValues.wf, defaultBranch: S.formValues.branch, missions: S.formValues.mission ? [{ id: S.formValues.mission, path: S.formValues.path }] : [], consent };
     const r = await write("POST", "/api/v0/repositories", body, consent ? { gesture: "declare-with-consent", object: forge === "github" ? S.formValues.repo.toLowerCase() : `gitlab:${forge}:${S.formValues.repo.toLowerCase()}` } : {});
     if (!r.ok) { const x = r.data ? r : r.verify?.r ?? { message: mots().common.verifyFailed, action: "" }; S.formError = { field: FIELD_OF[x.refusal] ?? null, message: x.message, action: x.action, requestId: x.requestId }; return rerender(); }
@@ -118,6 +130,7 @@ main.addEventListener("submit", async (e) => {
     await refreshScreen();
     location.hash = onArrival ? "#/arrivee" : `#/declarer/attente/${r.data.id}`;
   }
+  if (f.id === "journal-filtres") { const v = (n) => f.elements[n]?.value || null; location.hash = versJournal({ app: v("app"), quoi: v("quoi"), periode: v("periode") }); return; }
   if (f.id === "issuer") return issuerPreview(f.dataset.id ?? "", { issuer: val("issuer"), keys: f.elements.keys.value, kid: val("kid") });
   if (f.id === "modify") {
     const id = f.dataset.id;
@@ -132,12 +145,15 @@ main.addEventListener("submit", async (e) => {
 // the forge chosen at declaration (ADR-0029): the form is painted again with that forge's labels, its default
 // definition file and the level its uploads will reach, said before the member adds a pipeline
 main.addEventListener("change", (e) => {
+  // the journal's filters (ADR-0037): a choice writes the address, which keeps it; the entry shown is let go
+  const jf = e.target.closest?.("form#journal-filtres");
+  if (jf?.id === "journal-filtres") { const v = (n) => jf.elements[n]?.value || null; S.focusKey = `jf:${e.target.name}`; location.hash = versJournal({ app: v("app"), quoi: v("quoi"), periode: v("periode") }); return; }
   const f = e.target.closest?.("form#declare");
   if (!f || e.target.name !== "forge") return;
   const val = (n) => f.elements[n]?.value?.trim() ?? "";
   const forge = e.target.value, to = forge === "github" ? "github" : "gitlab";
   const wf = !val("wf") || Object.values(DEFAULT_FILE).includes(val("wf")) ? DEFAULT_FILE[to] : val("wf");
-  S.formValues = { forge, repo: val("repo"), wf, mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main" };
+  S.formValues = { forge, repo: val("repo"), wf, mission: val("mission"), path: val("path") || ".", branch: val("branch") || "main", content: Boolean(f.elements.content?.checked) };
   S.formError = null; S.focusKey = `forge:${forge}`;
   rerender();
 });

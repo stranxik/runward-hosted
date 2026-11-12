@@ -12,7 +12,7 @@
 // it (web/views/api.js). The budget of architecture §6 holds for every screen: 4 reads at most at its opening.
 import { parts, S } from "./base.js";
 import { loadingView } from "./marks.js";
-import { loadFleet, loadAccess, loadJournal, loadSession } from "./api.js";
+import { loadFleet, loadAccess, loadJournal, loadSession, loadFlux, loadStatus } from "./api.js";
 import { ROUTES } from "./fleet-views.js";
 import { paint } from "./shell.js";
 import { viewEntree } from "./entree.js";
@@ -27,6 +27,7 @@ import { viewAcces } from "./acces.js";
 import { viewPanne } from "./panne.js";
 import { viewLegal } from "./legal.js";
 import { view404 } from "./introuvable.js";
+import { journalKey } from "./journal-filtres.js";
 
 // The views of runward-fleet this app shows. The decision reading (`decision`, runward's ADR-0125, pinned by
 // ADR-0021) is the app's own screen below, the one a signed-in member lands on (#/), with one application's
@@ -46,9 +47,11 @@ const SCREENS = {
   entree: { view: (sub) => viewEntree(sub) },
   lien: { view: (sub) => viewLien(sub) },
   reprise: { view: (sub) => (sub ? null : viewReprise()) },
-  arrivee: { view: (sub) => viewArrivee(sub), reads: "access", signedIn: true },
-  declarer: { view: (sub) => viewDeclarer(sub), reads: "access", signedIn: true },
-  envois: { view: () => viewEnvois(), reads: "journal", signedIn: true },
+  // the connect flow and the arrival read again at each entry (`fresh`), and while they are shown (web/views/flux-vif.js):
+  // a tab left open since the declaration shows the first check that arrived since, never what it read at its load
+  arrivee: { view: (sub) => viewArrivee(sub), reads: "access", signedIn: true, fresh: true },
+  declarer: { view: (sub) => viewDeclarer(sub), reads: "flux", signedIn: true, fresh: true },
+  envois: { view: (sub, route, query) => viewEnvois(sub, query), reads: "journal", signedIn: true },
   acces: { view: (sub) => viewAcces(sub), reads: "access", signedIn: true },
   panne: { view: (sub) => viewPanne(sub) },
   legal: { view: (sub) => (sub ? null : viewLegal()) },
@@ -60,20 +63,24 @@ const screenOf = (route) => (Object.hasOwn(SCREENS, route) ? SCREENS[route] : is
 const READS = {
   fleet: { key: () => "fleet", load: () => loadFleet() },
   access: { key: () => "access", load: () => loadAccess() },
-  journal: { key: (sub) => `journal:${sub}`, load: (sub) => loadJournal(sub) },
+  // the journal's page and its filters (ADR-0037): the entry shown (`entree`) is not a read, a change of filter is
+  journal: { key: (sub, query) => `journal:${sub}?${journalKey(query)}`, load: (sub, query) => Promise.all([loadJournal(sub, query), loadStatus()]) },
+  // the connect flow (ADR-0037): the access view (the repositories, their pins), the status lines (a refusal, the
+  // first check's arrival) and the index (the first verdict); three reads, within the budget of architecture §6
+  flux: { key: () => "flux", load: () => loadFlux() },
 };
 
 function resolve() {
-  const { route, sub } = parts();
+  const { route, sub, query } = parts();
   const screen = screenOf(route);
-  return screen ? screen.view(sub, route) : null;
+  return screen ? screen.view(sub, route, query) : null;
 }
 
 let loadedFor = null;
 /** The next opening reads again (after a gesture that changed what the screen shows). */
 export const forgetReads = () => { loadedFor = null; };
 export async function show() {
-  const { h, route, sub } = parts();
+  const { route, sub, query } = parts();
   const screen = screenOf(route);
   if (S.session === undefined && !S.error) await loadSession();
   if (S.session === undefined && S.error) { if (route !== "panne") { location.replace(navigator.onLine === false ? "#/panne/hors-ligne" : "#/panne"); return; } }
@@ -96,11 +103,12 @@ export async function show() {
   // the sidebar lists the missions from the index once this page has read it; a screen opened cold
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
   const reads = screen?.reads ? READS[screen.reads] : null;
-  const key = reads ? reads.key(sub) : null;
-  if (S.session && key && loadedFor !== key) {
+  const key = reads ? reads.key(sub, query) : null;
+  if (S.session && key && (loadedFor !== key || screen.fresh)) {
+    // a screen read again at its entry (`fresh`) keeps what it shows while it reads: no skeleton between two of its steps
+    if (loadedFor !== key) paint(screen.loading ? screen.loading() : loadingView(""));
     loadedFor = key;
-    paint(screen.loading ? screen.loading() : loadingView(""));
-    await reads.load(sub);
+    await reads.load(sub, query);
   }
   paint(resolve() ?? view404(location.hash || "#/"));
 }

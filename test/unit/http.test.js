@@ -140,6 +140,11 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
   assert.ok(j.entries.length >= 4); assert.ok(j.head.hash);
   r = await call("GET", "/api/v0/journal?cursor=abc", { cookie });
   assert.equal((await r.json()).refusal, "cursor-invalid");
+  // the journal's filters (ADR-0037): additive parameters, an unknown value refused by its name
+  r = await call("GET", "/api/v0/journal?kind=confirmations&mission=dropyour&days=7", { cookie });
+  assert.deepEqual((await r.json()).entries.map((e) => e.body.what), ["repository-confirmed"]);
+  r = await call("GET", "/api/v0/journal?kind=nope", { cookie });
+  assert.deepEqual([r.status, (await r.json()).refusal], [400, "journal-filter-invalid"]);
   // another tenant's index is a 404, never a read
   r = await call("GET", "/f/00000000-0000-4000-8000-000000000000/index.json", { cookie });
   assert.equal(r.status, 404);

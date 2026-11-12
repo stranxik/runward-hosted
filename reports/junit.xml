@@ -225,10 +225,17 @@
 	<testcase name="the daily jobs' outcome that cannot be read raises the probe's alert: null with the database ok is not silence" classname="test"/>
 	<testcase name="the note of a daily job that did not run to its end is read by /api/health as a run that did not complete, and raises the probe's alert" classname="test"/>
 	<testcase name="the schedule: each daily job starts after the other's deadline, its kill and its note are over, and the hoster's timeout is above them" classname="test"/>
+	<testcase name="without a filter, the answer is the one it always was: no field added, the same entries" classname="test"/>
+	<testcase name="each kind keeps its entries, and only them" classname="test"/>
+	<testcase name="an application keeps its declaration, its consent, its uploads (refused ones too) and its confirmation, never another's" classname="test"/>
+	<testcase name="a period keeps what the service received in it; filters combine" classname="test"/>
+	<testcase name="a filtered journal pages by the same cursor" classname="test"/>
+	<testcase name="a filter the service does not know is refused, never ignored" classname="test"/>
+	<testcase name="every act the service writes, and every act the lexicon names, belongs to exactly one kind" classname="test"/>
 	<testcase name="Applications: each application awaited says its next step on its row, and its reading's button lands where that step is done" classname="test"/>
 	<testcase name="the next step of a status line: confirm, owner, install, consent, wait" classname="test"/>
 	<testcase name="Accès: a repository whose first upload arrived says so, with its date, its confirmation first; one that has sent nothing says it waits" classname="test"/>
-	<testcase name="Accès opened on a section: the section an address names takes the focus and is shown; the page's index names each one" classname="test"/>
+	<testcase name="Compte opened on a section: the section an address names is shown beside the list and takes the focus; the list names each one" classname="test"/>
 	<testcase name="every link and button of every screen painted leads to a screen that exists; the bare top of Accès is the sidebar's « Accès » only" classname="test"/>
 	<testcase name="no source sends to the bare top of Accès: no go(), data-go or location write names #/acces alone" classname="test"/>
 	<testcase name="a task sends back where it was opened from, never to the top of Accès" classname="test"/>
@@ -307,6 +314,15 @@
 	<testcase name="operator-link: the command printed is a gesture the gateway accepts, with the digest of the link printed, and names no workflow" classname="test"/>
 	<testcase name="operator-link: arguments the gateway would refuse are refused here, before a link is drawn or a command printed" classname="test"/>
 	<testcase name="operator-link: the printed command, run as printed from the repository's root, is answered 200 by a real gateway, which runs the gesture with the digest" classname="test"/>
+	<testcase name="a first check planted after the first read is seen by the next screen of the flow, without a reload" classname="test"/>
+	<testcase name="the waiting screen moves to the confirmation by itself when the live re-read sees the first upload" classname="test"/>
+	<testcase name="the five gestures: where a repository stands, read from the service; « c'est fait » only moves the screen" classname="test"/>
+	<testcase name="step 1: a short form; the consent is never ticked for the member; mission, path, branch and workflow folded with their defaults" classname="test"/>
+	<testcase name="step 5: the first verdict, with the way to its application; a gesture done is read again" classname="test"/>
+	<testcase name="the journal's filters: the address keeps them, a link round-trips, each maps to the service's" classname="test"/>
+	<testcase name="the journal as list and detail: the filters read from the address, the entry shown, the empty and no-result states" classname="test"/>
+	<testcase name="Compte: its sections as a list, each with what it holds now; the one chosen beside it; the tasks open beside the list" classname="test"/>
+	<testcase name="the arrival counts every repository declared, the ones awaiting their first check too" classname="test"/>
 	<testcase name="C40: the vendored tarball passes both modes, and the offline mode says what it did not compare" classname="test"/>
 	<testcase name="C40: the review's tarball (a second root over src/build.js, LICENSE missing, the lock set to its digests) is refused in both modes" classname="test"/>
 	<testcase name="C40: a file of the package missing from the tarball, or a file added to it, is refused; offline only as far as the lock is honest" classname="test"/>
@@ -476,9 +492,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 475 -->
+	<!-- tests 491 -->
 	<!-- suites 0 -->
-	<!-- pass 475 -->
+	<!-- pass 491 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

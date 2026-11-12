@@ -211,6 +211,18 @@ function allScreens() {
     ["declarer confirmer", () => { S.access = { ...T.access, repositories: [{ ...r, state: "pending", pendingSend: { claims: { repository: r.name, repositoryId: "7002", repositoryOwnerId: "2002", runNumber: "11", runAttempt: "1" } } }] }; return screens.declarer(`confirmer/${r.id}`); }],
     ["declarer owner changed", () => { S.access = { ...T.access, repositories: [{ ...r, ownerId: "1", pendingSend: { reason: "owner-changed", claims: { repositoryId: "7002", repositoryOwnerId: "2002" } } }] }; S.failed = `confirm:${r.id}`; return screens.declarer(`confirmer/${r.id}`); }],
     ["declarer modifier", () => screens.declarer(`modifier/${r.id}`)],
+    // the connect flow's five gestures and their variants (ADR-0037), and the journal and Compte in their panes
+    ["declarer nouveau", () => screens.declarer("nouveau")],
+    ["declarer attente merged", () => { localStorage.setItem("rw-flux-fusionne", JSON.stringify([T.pending.id])); try { return screens.declarer(`attente/${T.pending.id}`); } finally { localStorage.removeItem("rw-flux-fusionne"); } }],
+    ["declarer attente refused", () => { S.status = { ...T.status, lines: T.status.lines.map((l) => (l.repositoryRef === T.pending.id ? { ...l, notAcceptedSince: 1, lastRefusal: "workflow-not-pinned", lastRefusalSeq: 9, lastRefusalAt: "2026-11-11T10:00:00.000Z" } : l)) }; return screens.declarer(`attente/${T.pending.id}`); }],
+    ["declarer attente expired", () => { S.access = { ...T.access, repositories: T.access.repositories.map((x) => (x.id === T.pending.id ? { ...x, state: "removed", removedAt: x.expiresAt, restorableUntil: x.expiresAt } : x)) }; return screens.declarer(`attente/${T.pending.id}`); }],
+    ["declarer verdict", () => screens.declarer(`confirmer/${r.id}`)],
+    ["declarer reread", () => { S.fluxVue = { id: r.id, n: 1 }; try { return screens.declarer(`confirmer/${r.id}`); } finally { S.fluxVue = null; } }],
+    ["envois filtered", () => screens.envois("", "app=runward-hosted&quoi=envois-refuses&periode=7j")],
+    ["envois entry", () => screens.envois("", `entree=${T.journal.en.entries[0].seq}`)],
+    ["envois entry not here", () => screens.envois("", "entree=999")],
+    ["envois no result", () => { S.journal = { ...T.journal.en, entries: [], end: true, total: 0 }; return screens.envois("", "quoi=confirmations"); }],
+    ["acces instances", () => screens.acces("instances")],
     ["envois", () => screens.envois()], ["envois error", () => { S.journalError = { requestId: "r-1" }; return screens.envois(); }],
     ["envois empty", () => { S.journal = { ...T.journal.en, entries: [], end: true }; return screens.envois(); }],
     ["acces", () => screens.acces("")], ["acces error", () => { S.accessError = { requestId: "r-1" }; return screens.acces(""); }],
@@ -258,7 +270,7 @@ test("planted control: one screen's string left in French is found in the Englis
   en.lastOwner = Lx.MOTS.fr.acces.membres.lastOwner;
   try {
     state({ lang: "en" });
-    assert.deepEqual(frenchIn(screens.acces("").html), ["Le dernier propriétaire ne se retire pas."]);
+    assert.deepEqual(frenchIn(screens.acces("membres").html), ["Le dernier propriétaire ne se retire pas."]);
   } finally { en.lastOwner = was; }
 });
 

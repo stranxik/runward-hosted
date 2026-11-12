@@ -79,6 +79,7 @@ export const FLOOR = {
   "nothing-to-confirm": { status: 409, fr: ["Aucun envoi n'attend de confirmation pour ce dépôt.", "Attendre le premier envoi de la CI."], en: ["No upload awaits confirmation for this repository.", "Wait for the CI's first upload."] },
   "declaration-expired": { status: 410, fr: ["La déclaration a expiré : 7 jours sans envoi.", "Déclarer le dépôt de nouveau."], en: ["The declaration expired: 7 days without an upload.", "Declare the repository again."] },
   "cursor-invalid": { status: 400, fr: ["Cette page du journal n'existe pas.", "Revenir à la première page."], en: ["This page of the journal does not exist.", "Go back to the first page."] },
+  "journal-filter-invalid": { status: 400, fr: ["Ce filtre du journal n'existe pas.", "Revenir au journal sans filtre."], en: ["This filter of the journal does not exist.", "Go back to the journal without a filter."] },
   "export-too-large": { status: 413, fr: ["L'archive dépasserait 512 Mo.", "Écrire au contact sécurité : l'export par morceaux n'est pas encore là."], en: ["The archive would exceed 512 MB.", "Write to the security contact: chunked export is not there yet."] },
   "reader-not-authorized": { status: 403, fr: ["Ce lecteur n'est pas autorisé pour cette flotte.", "L'autoriser dans Accès."], en: ["This reader is not authorized for this fleet.", "Authorize it in Access."] },
 };

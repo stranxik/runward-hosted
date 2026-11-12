@@ -160,7 +160,8 @@ test("the next step of a status line: confirm, owner, install, consent, wait", (
 
 test("Accès: a repository whose first upload arrived says so, with its date, its confirmation first; one that has sent nothing says it waits", () => {
   state();
-  const v = screens.acces("");
+  // Compte is its sections as a list and the one chosen beside it (ADR-0037 point 3): the repositories' section
+  const v = screens.acces("depots");
   const row = (id) => new RegExp(`<div class="arow" id="depot-${id}">[\\s\\S]*?(?=<div class="arow"|</section>)`).exec(v.html)?.[0] ?? "";
   const d = row(T.ids.dropyour);
   assert.ok(d.includes("premier envoi reçu") && /le <time datetime="[^"]+">[^<]+<\/time>, à confirmer/.test(d), "received, with its date, to confirm");
@@ -188,19 +189,23 @@ test("Accès: a repository whose first upload arrived says so, with its date, it
   assert.equal(old.includes("en attente du premier envoi") && !old.includes("premier envoi reçu"), true);
 });
 
-test("Accès opened on a section: the section an address names takes the focus and is shown; the page's index names each one", () => {
+test("Compte opened on a section: the section an address names is shown beside the list and takes the focus; the list names each one", () => {
   state();
+  // Compte is its sections as a list and the one chosen beside it (ADR-0037 point 3): the list names every section
   const all = screens.acces("");
   for (const [k, id] of Object.entries(L.SECTIONS_ACCES)) {
-    assert.equal((all.html.match(new RegExp(`id="${id}"`, "g")) ?? []).length, 1, `${id}: once on the page`);
-    assert.equal(target(all.html, targets(all.html).find(([, t]) => t === `#/acces/${k}`)?.[0]), `#/acces/${k}`, `${k}: in the page's index`);
+    assert.equal(target(all.html, targets(all.html).find(([, t]) => t === `#/acces/${k}`)?.[0]), `#/acces/${k}`, `${k}: in the list`);
     const v = screens.acces(k);
-    assert.equal(v.cible, `#${id}`);
+    assert.equal((v.html.match(new RegExp(`id="${id}"`, "g")) ?? []).length, 1, `${id}: once, in the detail`);
     assert.equal(v.focus, `#${id}`);
+    assert.equal(v.ecran, "detail", "a phone shows the section, with its way back");
     assert.match(v.html, new RegExp(`id="${id}" tabindex="-1" aria-label`), `${id}: it can take the focus, and is named`);
+    assert.match(v.html, new RegExp(`<a class="row crow" href="#/acces/${k}"[^>]*aria-current="true"`), `${k}: its row is the current one`);
   }
   assert.equal(screens.acces("nowhere"), null, "a section that does not exist leads nowhere");
   assert.equal(all.cible, null, "the bare address opens at the top");
+  assert.equal(all.ecran, "liste", "a phone opens the list");
+  assert.match(all.html, /<a class="row crow choisie" href="#\/acces\/cles"/, "a desk shows the first section beside the list, without saying it is current");
 });
 
 test("every link and button of every screen painted leads to a screen that exists; the bare top of Accès is the sidebar's « Accès » only", () => {
@@ -268,7 +273,8 @@ test("a task sends back where it was opened from, never to the top of Accès", (
   assert.equal(target(open("#/acces/effacer").html, "Revenir à vos données"), "#/acces/donnees");
   assert.equal(target(open(`#/declarer/modifier/${T.ids.dropyour}`).html, "Annuler"), `#/acces/depot/${T.ids.dropyour}`);
   assert.equal(target(open("#/declarer").html, "Annuler"), "#/acces/depots");
-  assert.equal(target(open(`#/declarer/attente/${T.ids.waiting}`).html, "Revenir au dépôt"), `#/acces/depot/${T.ids.waiting}`);
+  // the connect flow (ADR-0037): its list is its way between repositories; the waiting one is current in it
+  assert.match(open(`#/declarer/attente/${T.ids.waiting}`).html, new RegExp(`<a class="row frow" href="#/declarer/attente/${T.ids.waiting}"[^>]*aria-current="true"`));
   state({ origine: "#/" });
   assert.equal(target(open("#/acces/ajout").html, "Revenir aux applications"), "#/", "opened from the portfolio's banner: back there");
   state({ origine: "#/decision/runward-hosted" });
@@ -279,7 +285,7 @@ test("a task sends back where it was opened from, never to the top of Accès", (
   const src = (f) => readFileSync(join(WEB, "views", f), "utf8");
   assert.match(src("events.js"), /location\.hash = retour\(versDepot\(id\)\)/, "a modification saved: its repository");
   assert.match(src("events.js"), /location\.hash = S\.session\.arrivalDone \? retour\("#\/"\) : "#\/arrivee"/, "a new owner confirmed, or nothing published");
-  assert.match(src("events.js"), /if \(S\.session\.arrivalDone && mission && done\.published && !done\.quarantine\) \{ etat\(\)\.premier = mission; location\.hash = `#\/decision\/\$\{encodeURIComponent\(mission\)\}`; return; \}/, "a first check confirmed and published: its first verdict");
+  assert.match(src("events.js"), /if \(S\.session\.arrivalDone && mission && done\.published && !done\.quarantine\) \{ etat\(\)\.premier = mission; S\.fluxVue = null; const to = `#\/declarer\/confirmer\/\$\{encodeURIComponent\(repo\.id\)\}`;/, "a first check confirmed and published: the flow's fifth gesture, its first verdict (ADR-0037)");
   assert.match(src("gestures.js"), /location\.hash = retour\(versSection\("cles"\)\)/, "a passkey added: the passkeys");
   // planted control: an origin that is the top of Accès is never a way back
   assert.notEqual(L.retour("#/acces/donnees", "#/acces"), "#/acces");
@@ -291,8 +297,8 @@ test("in English, the new words are English", () => {
   assert.match(v.html, /First check received on <time/);
   assert.ok(screens.decision("dropyour").html.includes(">Confirm the first check<") && screens.decision("next-one").html.includes(">See what the team adds<"));
   assert.ok(screens.decision("radar").html.includes(">Give consent in Account<"));
-  const a = screens.acces("");
-  assert.ok(a.html.includes("first upload received") && a.html.includes("to be confirmed") && a.html.includes(">On this page<"));
+  const a = screens.acces("depots");
+  assert.ok(a.html.includes("first upload received") && a.html.includes("to be confirmed") && a.html.includes(">Declared repositories<"));
   const d = open(`#/acces/depot/${T.ids.waiting}`);
   assert.ok(d.html.includes("Where this repository stands") && d.html.includes("No upload has arrived yet."));
 });

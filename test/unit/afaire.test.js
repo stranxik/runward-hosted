@@ -212,7 +212,8 @@ test("the menu: four entries, the count of what waits on « Applications », no 
   assert.deepEqual(targets(main).map(([l, h]) => [l.replace(/, \d+ à faire$/, "").replace(/\d+$/, ""), h]), [["Applications", "#/"], ["Brancher une application", "#/declarer"], ["Journal", "#/envois"], ["Compte", "#/acces"]]);
   assert.match(main, /<span class="badge num" aria-hidden="true">3<\/span><span class="vh">, 3 à faire<\/span>/);
   assert.equal(f.lat.includes("#/acces/export"), false, "the export is a section of the account, not an entry");
-  assert.ok(screens.acces("").html.includes("Récupérer vos données") && screens.acces("").html.includes('data-go="#/acces/export"'));
+  // Compte as sections and detail (ADR-0037): « Récupérer vos données » is a row of its list, its section holds the export
+  assert.ok(screens.acces("").html.includes("Récupérer vos données") && screens.acces("donnees").html.includes('data-go="#/acces/export"'));
   // the applications leave the sidebar (ADR-0036): the list of Applications says them, each to its reading
   assert.equal(/#\/decision\/|#\/declarer\/(confirmer|attente)/.test(unesc(f.lat)), false, "no line per application in the sidebar");
   // the phone: the tab bar carries the four entries and the count; the menu keeps the language, the technical views and the sign-out
