@@ -73,11 +73,11 @@
 	<testcase name="every row of every file of src/http/routes is in the route table, once" classname="test"/>
 	<testcase name="the date the service accepted an upload reaches the reading as the export's `at` label (spec §8): no « date non déclarée »" classname="test"/>
 	<testcase name="a later upload, accepted on the send path, dates the reading with its own acceptance; the first one's confirmation is said" classname="test"/>
-	<testcase name="the main screen is runward-fleet's reading, byte for byte, in the index's language and in the other one the viewer chooses" classname="test"/>
+	<testcase name="runward-fleet's reading stays on the screen, byte for byte, folded below the rails, in the index's language and in the other one the viewer chooses" classname="test"/>
 	<testcase name="the five states, the reason, the refusals by kind with their text as written, the documents, the endorsements and the origin are all on the screen" classname="test"/>
 	<testcase name="« Vérifier par vous-même »: the command, built only from values that pass their pattern, never with an extension option" classname="test"/>
-	<testcase name="the checks received: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words" classname="test"/>
-	<testcase name="the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named" classname="test"/>
+	<testcase name="the checked deliveries: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words" classname="test"/>
+	<testcase name="the first run (« la piste »): the empty portfolio, declared applications named while their first check is awaited, each on its row; errors and loading are named" classname="test"/>
 	<testcase name="the grouped reading on the five real exports: refused first, n / N for every state, the refusals by kind then by the check's text, once, folded, none hidden" classname="test"/>
 	<testcase name="the service's lexicon: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
 	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue" classname="test"/>
@@ -307,6 +307,15 @@
 	<testcase name="C43: an index of another archive after one rebuilt here is red, with its cause: a rollback to an earlier pin" classname="test"/>
 	<testcase name="C43, C44: the witness reader's words are same, different and not rebuilt here, with counts; it passes the lock's archives to the replay" classname="test"/>
 	<testcase name="C44: the replay CLI exits 0 when every index rebuilt here is the same, 1 on a difference, 2 when it cannot tell" classname="test"/>
+	<testcase name="the stations come from the index: where the check refuses, where nothing is required, and where the line stops" classname="test"/>
+	<testcase name="the requirements per step are shown only when every row of the record is listed and placed: never a guess" classname="test"/>
+	<testcase name="« Ce qui bloque »: every refusal of the index in exactly one block, with its file and its line, by step" classname="test"/>
+	<testcase name="one sentence per row, and the sentence that says the whole portfolio" classname="test"/>
+	<testcase name="« Ce qui s'est passé » says only what the check and the service recorded" classname="test"/>
+	<testcase name="what moved is computed between two checks the page held, and only then" classname="test"/>
+	<testcase name="the first verdict is said once, on the reading the confirmation opens" classname="test"/>
+	<testcase name="the words of « la piste »: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
+	<testcase name="the deadline of a declaration is read defensively: said when the status carries it, the sentence as before when not" classname="test"/>
 	<testcase name="a gate refused at several steps is said with the phases' names, in French and in English" classname="test"/>
 	<testcase name="the refusal's sentence carries no English and none of the app's banned words" classname="test"/>
 	<testcase name="planted: a gate in neither form is returned as written" classname="test"/>
@@ -449,9 +458,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 448 -->
+	<!-- tests 457 -->
 	<!-- suites 0 -->
-	<!-- pass 448 -->
+	<!-- pass 457 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
