@@ -29,7 +29,7 @@
   "dependencies": {
     "@simplewebauthn/server": "14.0.3",
     "aws4fetch": "1.0.20",
-    "postgres": "3.4.9",
+    "postgres": "4.1.0",
     "runward-fleet": "file:vendor/runward-fleet-0.46.0-c9a886a4.tgz"
   },
   "devDependencies": {
