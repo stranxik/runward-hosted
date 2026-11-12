@@ -202,6 +202,21 @@ const ratified = (L) => new Set((L?.ratification?.byState ?? []).filter((g) => g
 const stepOfRow = (L, row) => { const d = list(L).find((x) => x.relPath === String(row).split(" · ")[0]); return d && ETAPES.includes(d.phaseId) ? d.phaseId : null; };
 
 /**
+ * A station the version passed (ADR-0038, the passing green): it passes, before the step where the check refuses, in an
+ * application whose evidence reaches the level its team requires. A station passed under that level, or after a
+ * refusal, is not said in green.
+ */
+export const passed = (st, x) => x.state === "ok" && st.verdict !== "level-not-met" && (!st.stop || x.n < st.stop);
+
+/**
+ * What moved toward passing (ADR-0038): the verdict became « clean », or, the verdict unchanged, refusals were lifted and
+ * none raised. `d` is what `moved` returns (or null).
+ */
+export const versPasse = (d) => Boolean(d) && !d.raised.length && (d.verdict ? d.verdict[1] === "clean" : d.lifted.length > 0);
+/** The steps where a refusal was lifted and none raised: the steps that moved toward passing. */
+export const stepsVersPasse = (d) => (d ? ETAPES.filter((e) => d.lifted.includes(e) && !d.raised.includes(e)) : []);
+
+/**
  * What moved from one check of an application to the next, both held by this page: the verdict, the refusals lifted
  * and raised, the documents filled or no longer counted, the requirements newly endorsed, each with its step. Null
  * when either check is not there (nothing to compare), or when they are the same upload.

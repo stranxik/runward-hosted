@@ -9,7 +9,7 @@ import { esc } from "../base.js";
 import { mots, lang } from "../lexique.js";
 import { LEXICON } from "../fleet-views.js";
 import { piste } from "./mots.js";
-import { ETAPES, stations, kindsOf } from "./donnees.js";
+import { ETAPES, stations, kindsOf, passed } from "./donnees.js";
 
 /** runward-fleet's words in the reader's language. */
 export const flx = () => LEXICON[lang() === "fr" ? "fr" : "en"];
@@ -28,7 +28,7 @@ export const chip = (v) => `<span class="etq pi-etat" data-state="${esc(v)}"><sp
 /** The line under the stations: dotted, and solid as far as `reach` (0 to 1), across (or standing, on a phone). */
 const ligne = (reach) => { const pct = Math.round(Math.max(0, Math.min(1, reach)) * 1000) / 10; return `<li class="pi-ligne" aria-hidden="true"><span class="pi-rempli" style="width:${pct}%"></span><span class="pi-rempli-v" style="height:${pct}%"></span></li>`; };
 
-const MARK = { ok: "ok", refus: "refus", vide: "vide", attente: "attente", ici: "ici" };
+const MARK = { ok: "ok", passe: "passe", refus: "refus", vide: "vide", attente: "attente", ici: "ici" };
 const dot = (state) => `<span class="pi-mk pi-mk-${MARK[state] ?? "attente"}" aria-hidden="true"></span>`;
 
 /** The sub-line of a station on the large rail: its refusals, its documents, its requirements when known. */
@@ -45,9 +45,11 @@ function sub(x) {
 
 /**
  * The rail of an application. `grand`: the large one, its stations buttons that open their panel (`sel`, the open
- * one); `bouge`: the steps a live check changed (a quiet badge); `id`: the element's id.
+ * one); `bouge`: the steps a live check changed (a quiet badge), `leve` those of them that moved toward passing (a
+ * refusal lifted, none raised: the badge in the passing green); `id`: the element's id. A station the version passed
+ * has the filled dot in the passing green, and the line is green when it runs to the end (ADR-0038).
  */
-export function rail(m, name, { grand = false, sel = null, bouge = [], id = "" } = {}) {
+export function rail(m, name, { grand = false, sel = null, bouge = [], leve = [], id = "" } = {}) {
   const P = piste(), st = stations(m);
   const label = P.stepsOf(name);
   const items = st.stations.map((x) => {
@@ -55,13 +57,14 @@ export function rail(m, name, { grand = false, sel = null, bouge = [], id = "" }
     const after = st.stop && x.n > st.stop;
     const cls = `pi-st s-${x.state}${after ? " apres" : ""}${bouge.includes(x.id) ? " bouge" : ""}${sel === x.n ? " sel" : ""}`;
     const said = P.app.station(x.n, stepName(x.id), word);
-    const badge = bouge.includes(x.id) ? `<span class="pi-bouge">${esc(P.vif.badge)}</span>` : "";
-    if (!grand) return `<li class="${cls}"><span class="pi-pt">${dot(x.state)}</span><span class="pi-nom" aria-hidden="true"><span class="num">${x.n}</span></span><span class="vh">${esc(said)}</span>${badge}</li>`;
+    const badge = bouge.includes(x.id) ? `<span class="pi-bouge"${leve.includes(x.id) ? ' data-sens="passe"' : ""}>${esc(P.vif.badge)}</span>` : "";
+    const mark = dot(passed(st, x) ? "passe" : x.state);
+    if (!grand) return `<li class="${cls}"><span class="pi-pt">${mark}</span><span class="pi-nom" aria-hidden="true"><span class="num">${x.n}</span></span><span class="vh">${esc(said)}</span>${badge}</li>`;
     // the button's name is its visible text (the step, its sub-line), with its number and its state said around it
-    const inner = `<span class="pi-pt">${dot(x.state)}</span><span class="pi-nom"><span class="vh">${x.n}. </span>${esc(stepName(x.id))}<span class="vh">, ${esc(word)}.</span></span><span class="pi-sub">${esc(sub(x))}</span>${badge}`;
+    const inner = `<span class="pi-pt">${mark}</span><span class="pi-nom"><span class="vh">${x.n}. </span>${esc(stepName(x.id))}<span class="vh">, ${esc(word)}.</span></span><span class="pi-sub">${esc(sub(x))}</span>${badge}`;
     return `<li class="${cls}"><button type="button" data-pi-station="${x.n}" aria-pressed="${sel === x.n}" aria-controls="pi-pan-${x.n}">${inner}</button></li>`;
   }).join("");
-  return `<ol class="pi-piste${grand ? " grand" : ""}${st.verdict === "not-observed" || st.verdict === "not-available" ? " vide" : ""}"${id ? ` id="${esc(id)}"` : ""} data-portee="${Math.round(st.reach * 100)}" aria-label="${esc(label)}">${ligne(st.reach)}${items}</ol>`;
+  return `<ol class="pi-piste${grand ? " grand" : ""}${st.verdict === "not-observed" || st.verdict === "not-available" ? " vide" : ""}${st.verdict === "clean" ? " passe" : ""}"${id ? ` id="${esc(id)}"` : ""} data-portee="${Math.round(st.reach * 100)}" aria-label="${esc(label)}">${ligne(st.reach)}${items}</ol>`;
 }
 
 /** The names of the six steps, once, above the rows of the portfolio (hidden from assistive technologies: each station says its own). */
