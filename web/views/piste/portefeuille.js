@@ -63,10 +63,8 @@ export function portfolio({ index, status, waiting, w, reasons, bouge = {}, neuf
   const rank = (l) => { const k = prochainPas(l).kind; return k === "confirm" || k === "owner" ? 0 : 1; };
   const awaited = [...waiting].sort((a, b) => rank(a) - rank(b)).map((l) => {
     const n = prochainPas(l), N = w.next, name = repoShort(l);
-    // the deadline of a declaration nothing reached yet, when the status carries it (an additive field of the
-    // common lot of « la piste », ADR-0034: absent, the sentence is said without it)
-    const due = n.kind === "install" && l.expiresAt ? ` ${P.row.expires(when(l.expiresAt, { sec: false }))}` : "";
-    const said = `${n.kind === "confirm" ? N.confirm(when(n.at, { sec: false })) : esc(N[n.kind])}${due}`;
+    // its deadline is not repeated here: « À faire », painted by the frame above the portfolio (ADR-0034), carries it
+    const said = n.kind === "confirm" ? N.confirm(when(n.at, { sec: false })) : esc(N[n.kind]);
     const state = n.kind === "confirm" || n.kind === "owner" ? mk("half", P.toConfirm) : chip("not-observed");
     return `<li class="pi-rg r-attente" data-mission="${esc(l.mission)}"><div class="pi-qui"><span class="pi-nm" translate="no">${esc(name)}</span>${state}</div>
       ${rail({ id: l.mission, latest: "not-observed" }, name)}

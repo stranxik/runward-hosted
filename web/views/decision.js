@@ -39,8 +39,8 @@ const plural = (n, one, many) => (Number(n) > 1 ? many : one);
 export const WORDS = {
   fr: {
     title: "Avant votre go / no-go", portfolio: "Applications",
-    setAside: (n) => `${esc(n)} ${plural(n, "contrôle mis de côté", "contrôles mis de côté")} : le portefeuille montre le dernier état publié.`,
-    uploads: "Voir les envois", connect: "Brancher une application", retry: "Réessayer",
+    setAside: (n) => `${esc(n)} ${plural(n, "contrôle mis de côté", "contrôles mis de côté")} : vos applications montrent le dernier état publié.`,
+    uploads: "Voir le journal", connect: "Brancher une application", retry: "Réessayer",
     emptyAct: "Brancher une première application",
     waitAct: "Tous les dépôts déclarés",
     // the next step of each application awaited, by its kind (web/views/liens.js#prochainPas), and its button
@@ -51,9 +51,9 @@ export const WORDS = {
       consent: "L'accord sur le contenu n'est pas donné : ses contrôles ne sont pas acceptés.", consentAct: "Donner l'accord",
       wait: "Confirmé : son prochain contrôle arrivera ici.", waitAct: "Voir le dépôt",
     },
-    errorTitle: "Le portefeuille ne s'affiche pas.",
+    errorTitle: "Vos applications ne s'affichent pas.",
     errorText: "Votre session est ouverte, mais la lecture n'a pas pu être chargée. Vos contrôles ne sont pas perdus : ils sont écrits avant toute réponse.",
-    unknownTitle: "Cette application n'est pas dans votre portefeuille.",
+    unknownTitle: "Cette application ne fait pas partie de vos applications.",
     unknownText: "Elle a peut-être été retirée, ou le lien est incomplet.",
     all: "Toutes les applications",
     verify: {
@@ -73,7 +73,7 @@ export const WORDS = {
       what: { "send-accepted": "accepté", "send-historical": "accepté, plus ancien que le courant", "send-pending": "premier contrôle, à confirmer", "repository-confirmed": "premier contrôle confirmé", "send-not-accepted": "non accepté", "send-quarantined": "mis de côté" },
       since: (n) => `${esc(n)} ${plural(n, "contrôle non accepté", "contrôles non acceptés")} depuis le dernier contrôle accepté.`,
       consent: "L'accord n'est pas donné pour cette application : ses contrôles ne sont pas acceptés.",
-      consentAct: "Donner l'accord dans Accès",
+      consentAct: "Donner l'accord dans Compte",
     },
     reasons: {
       "workflow-not-pinned": "envoyé par une autre chaîne que celle déclarée",
@@ -84,7 +84,7 @@ export const WORDS = {
       "private-path": "un chemin personnel serait arrivé dans la lecture",
       "content-not-consented": "l'accord n'est pas donné pour ce dépôt",
       "index-build-refused": "ce contrôle ne se lit pas avec cette version du service",
-      "index-rule-broken": "le portefeuille assemblé casserait une règle de lecture",
+      "index-rule-broken": "la lecture assemblée casserait une de ses règles",
       "rate-limited": "trop d'envois dans l'heure",
       "duplicate-in-run": "un autre envoi de la même exécution est déjà arrivé",
     },
@@ -92,8 +92,8 @@ export const WORDS = {
   },
   en: {
     title: "Before your go / no-go", portfolio: "Applications",
-    setAside: (n) => `${esc(n)} ${plural(n, "check set aside", "checks set aside")}: the portfolio shows the last state published.`,
-    uploads: "See the uploads", connect: "Connect an application", retry: "Try again",
+    setAside: (n) => `${esc(n)} ${plural(n, "check set aside", "checks set aside")}: your applications show the last state published.`,
+    uploads: "See the journal", connect: "Connect an application", retry: "Try again",
     emptyAct: "Connect a first application",
     waitAct: "All declared repositories",
     next: {
@@ -103,9 +103,9 @@ export const WORDS = {
       consent: "Consent to the content is not given: its checks are not accepted.", consentAct: "Give consent",
       wait: "Confirmed: its next check will arrive here.", waitAct: "See the repository",
     },
-    errorTitle: "The portfolio does not show.",
+    errorTitle: "Your applications do not show.",
     errorText: "Your session is open, but the reading could not be loaded. Your checks are not lost: they are written before any answer.",
-    unknownTitle: "This application is not in your portfolio.",
+    unknownTitle: "This application is not one of your applications.",
     unknownText: "It may have been removed, or the link is incomplete.",
     all: "All applications",
     verify: {
@@ -125,7 +125,7 @@ export const WORDS = {
       what: { "send-accepted": "accepted", "send-historical": "accepted, older than the current one", "send-pending": "first check, to be confirmed", "repository-confirmed": "first check confirmed", "send-not-accepted": "not accepted", "send-quarantined": "set aside" },
       since: (n) => `${esc(n)} ${plural(n, "check not accepted", "checks not accepted")} since the last accepted check.`,
       consent: "Consent is not given for this application: its checks are not accepted.",
-      consentAct: "Give consent in Access",
+      consentAct: "Give consent in Account",
     },
     reasons: {
       "workflow-not-pinned": "sent by another chain than the one declared",
@@ -136,7 +136,7 @@ export const WORDS = {
       "private-path": "a personal path would have reached the reading",
       "content-not-consented": "consent is not given for this repository",
       "index-build-refused": "this check cannot be read by this version of the service",
-      "index-rule-broken": "the assembled portfolio would break a reading rule",
+      "index-rule-broken": "the assembled reading would break one of its rules",
       "rate-limited": "too many uploads in the hour",
       "duplicate-in-run": "another upload of the same run already arrived",
     },
@@ -249,12 +249,16 @@ export function viewDecision(sub) {
   if (!S.status) return loadingView(w.portfolio);
   const st = S.status, E = etat();
   const missions = S.index?.missions ?? [];
-  const waiting = st.lines.filter((l) => !missions.some((m) => m.id === l.mission));
+  // the service's control account (ADR-0034): its first upload waits on purpose, the frame's banner says so; no row
+  // awaited, no first run, no « Brancher » here (read defensively: absent, an account as any other)
+  const temoin = Boolean(S.session?.tenant?.witness);
+  const waiting = temoin ? [] : st.lines.filter((l) => !missions.some((m) => m.id === l.mission));
   const F = piste().first;
   if (!missions.length && !id) {
     // nothing to read yet: the first run, drawn as a rail of five gestures. With nothing declared, the first one; with
     // applications declared, where they stand, and each one's row with its next step
     E.premier = null;
+    if (temoin) return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete pi-tete"><h1 class="t1">${esc(w.title)}</h1></div>`, "piste-vide") };
     if (!waiting.length) {
       return { ...base, title: w.portfolio, html: frame(lang, `<div class="tete pi-tete"><h1 class="t1">${esc(F.emptyTitle)}</h1><p class="sous">${esc(F.emptyText)}</p></div>
         ${firstRun(0, `<p>${esc(F.emptyNote)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`)}`, "piste-vide") };
@@ -269,7 +273,7 @@ export function viewDecision(sub) {
     E.premier = null;
     // the portfolio: the rails, then runward-fleet's reading of the portfolio, folded (its five state tiles and its list)
     return { ...base, title: w.portfolio, html: frame(lang, `${setAside}${portfolio({ index: idx, status: st, waiting, w, reasons: reasonText(w), bouge, neuf: E.neuf })}
-      <div class="actions lecture-actions">${waiting.length ? go(versSection("depots"), w.waitAct, { q: true }) : ""}${go("#/declarer", w.connect, { q: true })}</div>
+      <div class="actions lecture-actions">${waiting.length ? go(versSection("depots"), w.waitAct, { q: true }) : ""}${temoin ? "" : go("#/declarer", w.connect, { q: true })}</div>
       <details class="pi-pli" data-pli="detail-port"><summary>${esc(piste().detail.portfolio)}</summary><div class="pi-pli-b">${renderView(idx, "decision")}</div></details>`, "piste-port") };
   }
   const m = missions.find((x) => x.id === id);

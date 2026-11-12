@@ -254,10 +254,10 @@ test("the first run (« la piste »): the empty portfolio, declared applications
   assert.equal(paint("").html.includes("r-attente"), false, "the control: nothing awaited, no such row");
   assert.equal(paint("", { status: null }).html.includes("Chargement"), true, "loading");
   const err = paint("", { fleetError: { status: 503, requestId: "req-1" } });
-  assert.ok(err.html.includes("Le portefeuille ne s&#39;affiche pas.") && err.html.includes('data-do="reload-screen"') && err.html.includes("<code>req-1</code>"));
+  assert.ok(err.html.includes("Vos applications ne s&#39;affichent pas.") && err.html.includes('data-do="reload-screen"') && err.html.includes("<code>req-1</code>"));
   // an application that is not in the portfolio is said, never replaced by the portfolio
   const unknown = paint("no-such-mission");
-  assert.ok(unknown.html.includes("Cette application n&#39;est pas dans votre portefeuille."));
+  assert.ok(unknown.html.includes("Cette application ne fait pas partie de vos applications."));
   assert.equal(unknown.html.includes('data-reading="decision"'), false);
   assert.equal(paint("%E0%A4%A"), null, "an address that does not decode leads nowhere");
 });

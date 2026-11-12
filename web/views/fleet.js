@@ -44,6 +44,14 @@ function fleetHead() {
       <div class="tw" tabindex="0" role="region" aria-label="${esc(F.table)}"><table class="t"><thead><tr>${F.th.map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${lines}</tbody></table></div>
       <p class="small soft">${F.legend}</p>${niveaux(st.lines)}</details></section>` : ""}`;
 }
+/**
+ * A technical view's address before the first check of an application is confirmed: what it waits for, in words,
+ * and the way back to the applications (ADR-0034; it replaces the silent redirect to the arrival).
+ */
+export function viewVuesFermees(route) {
+  const F = mots().frame;
+  return { title: F.technical, key: "fleet", signed: "in", fleetRoute: route, html: `<div class="tete"><h1 class="t1">${esc(F.technicalClosedH1)}</h1><p class="sous">${esc(F.technicalClosed)}</p><div class="actions">${go("#/", mots().common.back.portfolio)}</div></div>` };
+}
 export function viewFleet(route, sub) {
   const W = mots(), F = W.fleet, C = W.common;
   if (S.fleetError) return { title: F.errorTitle, key: "fleet", signed: "in", html: `${head(C.statusHead, "")}<h1 class="v">${F.errorH1}</h1><p class="face">${mk("inv", F.errorMk)} ${F.errorFace}${reqNote(S.fleetError)}</p><div class="actions">${act("reload-screen", C.retry)}${go("#/envois", C.seeUploads, { q: true })}</div>` };

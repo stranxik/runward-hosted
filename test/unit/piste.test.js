@@ -205,15 +205,18 @@ test("the words of « la piste »: the same keys in French and English, none of 
   assert.deepEqual(lexiconProblems(planted).sort(), ["en lacks board", "en read: —", "fr blocks.title: conformité"].sort());
 });
 
-test("the deadline of a declaration is read defensively: said when the status carries it, the sentence as before when not", () => {
-  const line = { mission: "next", repository: "stranxik/next", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] };
-  const status = (l) => ({ ...F.status, lines: [...F.status.lines, l] });
-  const row = (html) => /<li class="pi-rg r-attente" data-mission="next">[\s\S]*?<\/div><\/li>/.exec(html)?.[0] ?? "";
-  const without = row(paint("", { status: status(line) }).html);
-  assert.ok(without.includes("Rien n&#39;est encore arrivé") && !without.includes("expire"), "no field: the sentence as before");
-  const withIt = row(paint("", { status: status({ ...line, expiresAt: "2026-11-18T15:40:00.000Z" }) }).html);
-  assert.match(withIt, /Avant le <time datetime="2026-11-18T15:40:00.000Z">2026-11-18 16:40&nbsp;\+01:00<\/time>, sinon la déclaration expire\./);
-  // a first check received carries no deadline: none is said even if a field were there
-  const received = row(paint("", { status: status({ ...line, expiresAt: "2026-11-18T15:40:00.000Z", activity: [{ seq: 9, what: "send-pending", at: "2026-11-12T00:40:00.000Z" }] }) }).html);
-  assert.equal(received.includes("expire"), false);
+test("the portfolio does not repeat « À faire »: a declaration's deadline is not said on its row, and the control account shows no row awaited", () => {
+  const line = { mission: "next", repository: "stranxik/next", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [], expiresAt: "2026-11-18T15:40:00.000Z" };
+  const status = { ...F.status, lines: [...F.status.lines, line] };
+  const html = paint("", { status }).html;
+  const row = /<li class="pi-rg r-attente" data-mission="next">[\s\S]*?<\/div><\/li>/.exec(html)?.[0] ?? "";
+  assert.ok(row.includes("Rien n&#39;est encore arrivé") && !/expire|2026-11-18/.test(row), "the row says its step, not the deadline « À faire » carries");
+  assert.equal(/class="afaire"/.test(html), false, "the block is the frame's (web/views/shell.js), never painted again here");
+  // the control account: no row awaited, no first run, no « Brancher »
+  kept.set("rw-accueil-lang", "fr");
+  S.index = null; S.status = { lines: [line], quarantined: 0, recent: [], head: null, index: null }; S.session = { ...F.s, tenant: { ...F.s.tenant, witness: true } }; S.piste = undefined;
+  const witness = D.viewDecision("").html;
+  assert.equal(/r-attente|pi-mer|#\/declarer/.test(witness), false);
+  S.session = { ...F.s, tenant: { ...F.s.tenant, witness: false } };
+  assert.match(D.viewDecision("").html, /r-attente/, "the control: any other account shows the row");
 });

@@ -35,7 +35,6 @@ export const PISTE = {
       silent: "Aucun contrôle accepté pour l'instant.",
       lastRefused: (why) => `Le dernier envoi n'a pas été accepté : ${why}.`,
       others: (n) => `Et ${n} autre${s(n)} refus.`,
-      expires: (at) => `Avant le ${at}, sinon la déclaration expire.`,
       missing: (n, list) => `${n} pièce${s(n)} exigée${s(n)} manquante${s(n)} : ${list}.`,
     },
     // a kind of refusal said for its count; the kinds not named here are said with runward-fleet's own sentence
@@ -163,7 +162,6 @@ export const PISTE = {
       silent: "No check accepted yet.",
       lastRefused: (why) => `The last upload was not accepted: ${why}.`,
       others: (n) => `And ${n} other refusal${pl(n)}.`,
-      expires: (at) => `Before ${at}, or the declaration expires.`,
       missing: (n, list) => `${n} required document${pl(n)} missing: ${list}.`,
     },
     kinds: {

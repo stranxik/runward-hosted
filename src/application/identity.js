@@ -228,9 +228,11 @@ export function identityCases(ctx) {
       const added = pks.filter((p) => !p.removedAt && p.id !== s.passkeyId && p.createdAt > s.createdAt && p.addedBySession !== s.id);
       const maintenance = await tx.maintenance();
       const open = arrivalOpen(pks, Boolean(s.member.singlePasskeyAt));
+      // `tenant.witness`: the service's own control account (opened with `open-bootstrap --witness`), which the shell
+      // says in a fixed banner (ADR-0034); additive, nothing else reads it
       return {
         member: { id: s.memberId, role: s.member.role },
-        tenant: { id: s.tenantId, title: tenant.title, lang: tenant.lang },
+        tenant: { id: s.tenantId, title: tenant.title, lang: tenant.lang, witness: Boolean(tenant.witness) },
         fleets: [{ id: s.tenantId, title: tenant.title }],
         passkeys: live.length,
         sameProvider: sameProvider(pks),

@@ -16,47 +16,83 @@ import { MARK, go, act } from "./marks.js";
 import { lang, mots, titreFlotte, appareil, studioUrl, siteUrl } from "./lexique.js";
 import { comptes, triees, verdictOf, nomCourt } from "./lignes.js";
 import { ask, confirmBox } from "./confirm.js";
-import { versSection } from "./liens.js";
+import { versSection, prochainPas } from "./liens.js";
+import { aFaire, blocAFaire, nombreAFaire, compteTemoin } from "./afaire.js";
 
 // The foot's first link is the public site, runward.dev, in the reader's language (ADR-0028): this origin has no
 // public page of its own, and the sign-in is where a visitor of app.runward.dev arrives.
 /** The house's signature in the foot: its name links to the studio's page, whose address is kept beside the lexicon (ADR-0026). */
 const studio = () => `<a href="${esc(studioUrl())}" translate="no">Another Framework</a>`;
 
-// --- the shell: the sidebar (desktop) and the menu (phone), the same links
+// --- the shell: the sidebar (desktop) and the menu (phone), the same links (ADR-0034, which refines ADR-0025 and
+// ADR-0028): four entries (Applications, with the count of what waits for a gesture; Brancher une application;
+// Journal; Compte, which holds the export since « Récupérer vos données » is one of its sections), then one line per
+// application, then the technical views, folded, and closed with their reason until the first check is confirmed
+/** The technical views, by route, in the order of the menu. */
+export const VUES_TECHNIQUES = ["flotte", "vue", "history", "proof", "signatures", "pr", "sources"];
+/** Are the technical views open? Once the first check of an application is confirmed (the router's gate, the same). */
+export const vuesOuvertes = () => Boolean(S.session?.arrivalDone);
 function liensCoque(route, sub) {
   const F = mots().frame;
   const cur = (cond) => (cond ? ' aria-current="page"' : "");
-  const exp = route === "acces" && /^export/.test(sub);
   const N = comptes();
-  const a = (h, w, n, c) => `<a class="it" href="${h}"${cur(c)}>${esc(w)}${n != null ? `<span class="n0 num">${n}</span>` : ""}</a>`;
-  const principaux = [a("#/", F.portfolio, S.index ? N.N : null, route === "decision" && !sub), a("#/envois", F.uploads, S.status?.head?.seq ?? S.journal?.head?.seq ?? null, route === "envois"), a("#/acces", F.access, null, route === "acces" && !exp), a("#/acces/export", F.export, null, exp)].join("");
+  const n = nombreAFaire();
+  const a = (h, w, extra, c) => `<a class="it" href="${h}"${cur(c)}><span>${esc(w)}</span>${extra}</a>`;
+  // the count of what waits, when there is any; else the number of applications in the portfolio
+  const badge = n ? `<span class="badge num" aria-hidden="true">${n}</span><span class="vh">${esc(F.todoBadge(n))}</span>` : S.index ? `<span class="n0 num">${N.N}</span>` : "";
+  const principaux = [
+    a("#/", F.apps, badge, (route === "decision" || route === "") && !sub),
+    compteTemoin() ? "" : a("#/declarer", F.connect, "", route === "declarer" && !sub),
+    a("#/envois", F.journal, "", route === "envois"),
+    a("#/acces", F.account, "", route === "acces"),
+  ].join("");
   // the applications, each opening its decision reading, its state said by the reading's own mark (shape, then hue);
-  // a name of any length wraps inside its line (web/app.css), never past the sidebar or the menu
-  const missions = triees().map((m) => `<a class="it mis" href="#/decision/${esc(m.id)}"${cur((route === "decision" || route === "mission") && sub === m.id)}><span class="etq" data-state="${esc(verdictOf(m))}"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(nomCourt(m))}</span></span></a>`).join("");
-  const vues = ["flotte", "vue", "history", "proof", "signatures", "pr", "sources"].map((r) => a(`#/${r}`, F.views[r], null, route === r)).join("");
-  return { principaux, missions, vues };
+  // then those declared whose first check is awaited, each opening its next step. A name of any length wraps inside
+  // its line (web/app.css), never past the sidebar or the menu
+  const enIndex = triees();
+  const publiees = enIndex.map((m) => `<a class="it mis" href="#/decision/${esc(m.id)}"${cur((route === "decision" || route === "mission") && sub === m.id)}><span class="etq" data-state="${esc(verdictOf(m))}"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(nomCourt(m))}</span></span></a>`).join("");
+  const attendues = (S.status?.lines ?? []).filter((l) => !enIndex.some((m) => m.id === l.mission))
+    .map((l) => `<a class="it mis" href="${esc(prochainPas(l).href)}"><span class="etq" data-state="not-observed"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(l.mission)}</span></span></a>`).join("");
+  const missions = publiees + attendues;
+  const ouvertes = vuesOuvertes();
+  const vues = ouvertes ? VUES_TECHNIQUES.map((r) => a(`#/${r}`, F.views[r], "", route === r)).join("") : "";
+  return { principaux, missions, vues, ouvertes, tech: VUES_TECHNIQUES.includes(route) || route === "mission" };
+}
+/** The technical views' group: folded (open on one of them), or closed and greyed with its reason. */
+function groupeTech(L, F) {
+  return L.ouvertes
+    ? `<details class="tech"${L.tech ? " open" : ""}><summary class="sec">${esc(F.technical)}</summary><nav aria-label="${esc(F.technical)}">${L.vues}</nav></details>`
+    : `<div class="tech ferme"><p class="sec">${esc(F.technical)}</p><p class="tech-note">${esc(F.technicalClosed)}</p></div>`;
 }
 function lat(route, sub) {
   const F = mots().frame, L = liensCoque(route, sub);
   const s = S.session;
   const role = s.member.role === "owner" ? F.owner : s.member.role;
   const out = `<button class="lien" type="button" data-do="logout">${esc(F.signOut)}</button>`;
+  const apps = `<p class="sec">${esc(F.applications)}</p>${L.missions ? `<nav aria-label="${esc(F.navApplications)}">${L.missions}</nav>` : `<p class="sec-vide">${esc(F.appsNone)}</p>`}`;
+  const qui = compteTemoin() ? F.witnessName : titreFlotte(s.tenant.title);
   return {
     lat: `<div class="lat-in"><a class="marque" href="#/" translate="no">${MARK}runward<span>${esc(F.page.brandSuffix)}</span></a>
     <nav aria-label="${esc(F.navService)}">${L.principaux}</nav>
-    ${L.missions ? `<p class="sec">${esc(F.applications)}</p><nav aria-label="${esc(F.navApplications)}">${L.missions}</nav>` : `<p class="sec">${esc(F.applications)}</p><nav aria-label="${esc(F.applications)}"><a class="it" href="#/">${esc(F.inPortfolio)}</a></nav>`}
-    <p class="sec">${esc(F.technical)}</p><nav aria-label="${esc(F.technical)}">${L.vues}</nav>
-    <div class="bas"><span><b>${esc(titreFlotte(s.tenant.title))}</b><br>${esc(F.you(role, s.passkeys))}</span>${out}</div></div>`,
-    mobnav: `${L.principaux}${L.missions ? `<p class="sec">${esc(F.applications)}</p>${L.missions}` : ""}<p class="sec">${esc(F.technical)}</p>${L.vues}${out}`,
+    ${apps}
+    ${groupeTech(L, F)}
+    <div class="bas"><span><b>${esc(qui)}</b><br>${esc(F.you(role, s.passkeys))}</span>${out}</div></div>`,
+    mobnav: `${L.principaux}${apps}${groupeTech(L, F)}${out}`,
   };
 }
 
 // ------------------------------------------------------------- banners and shell
-function bandeaux() {
+function bandeaux(route, sub) {
   const F = mots().frame, b = [], s = S.session;
+  // the service's control account says so on every screen, before anything else (ADR-0034)
+  if (s && compteTemoin()) b.push(`<div class="bandeau temoin" role="note"><p>${esc(F.witness)}</p></div>`);
   if (s?.recovery) b.push(`<div class="bandeau" role="alert"><p>${F.recovery(when(s.recovery.openedAt, { sec: false }), when(s.recovery.usableFrom, { sec: false }))}</p><div class="actions">${ask(`recovery:${s.recovery.id}`, F.recoveryCancel, false)}</div>${confirmBox(`recovery:${s.recovery.id}`)}</div>`);
-  if (s && s.passkeys === 1) b.push(`<div class="bandeau"><p>${F.single}</p><div class="actions">${go(s.arrivalDone ? "#/acces/ajout" : "#/arrivee", F.addPasskey, { q: true })}</div></div>`);
+  // « À faire », the first block of the portfolio (the screen one lands on after the sign-in); it carries the second
+  // passkey when it is missing, so the banner that says it is not repeated there
+  const portefeuille = Boolean(s) && (route === "decision" || route === "") && !sub;
+  const todo = portefeuille ? blocAFaire() : "";
+  if (todo) b.push(todo);
+  if (s && s.passkeys === 1 && !(todo && aFaire().some((i) => i.kind === "passkey"))) b.push(`<div class="bandeau"><p>${F.single}</p><div class="actions">${go(s.arrivalDone ? "#/acces/ajout" : "#/arrivee", F.addPasskey, { q: true })}</div></div>`);
   for (const p of s?.addedElsewhere ?? []) b.push(`<div class="bandeau" role="alert"><p>${F.added(when(p.createdAt, { sec: false }), p.device ? esc(appareil(p.device)) : "", p.provider ? esc(appareil(p.provider)) : "")}</p><div class="actions">${go(versSection("cles"), F.seePasskeys, { q: true })}</div></div>`);
   if (S.newVersion) b.push(`<div class="bandeau"><p>${F.newVersion}</p><div class="actions">${act("reload", F.reload, { q: true })}</div></div>`);
   if (s?.maintenance) b.push(`<div class="bandeau"><p>${F.maintenance(s.maintenance.until ? when(s.maintenance.until, { sec: false }) : "")}</p></div>`);
@@ -83,7 +119,7 @@ export function frame(signedIn, route, sub, v) {
     fil: signedIn ? fil(v) : "",
     langue: langue(),
     pied: `<a href="${esc(siteUrl())}" translate="no">runward.dev</a><a href="#/legal">${esc(F.legal)}</a><a href="#/legal">${esc(F.privacy)}</a><a href="#/legal">${esc(F.security)}</a><span>${esc(F.times)}</span><span class="signe">${F.signature(studio())}</span>`,
-    bandeaux: bandeaux(),
+    bandeaux: bandeaux(signedIn ? route : null, sub),
   };
 }
 /** The page's own elements (web/index.html) that carry a word: data-mot (their text), data-mot-aria (their label). */
@@ -116,6 +152,8 @@ export function closeMenuWhenWide(wide) {
 function shell(signedIn, route, sub, v) {
   const f = frame(signedIn, route, sub, v);
   document.body.classList.toggle("connecte", signedIn);
+  // the control account: a screen may hide what has no use there (web/app.css, [data-hors-temoin])
+  document.body.classList.toggle("temoin", signedIn && compteTemoin());
   // the scene: calm behind a screen of data; the sign-in alone asks for the whole one (v.scene)
   document.body.dataset.scene = v.scene ?? "calme";
   latEl.hidden = !signedIn; menuBtnEl.hidden = !signedIn;

@@ -1,7 +1,7 @@
 # ADR-0033: runward-fleet re-pinned at main@c9a886a, where a repository identity of 2 to 8 segments and a port merged; the bytes do not move, the digest still names the build (refines ADR-0024)
 
 **Date**: 2026-11-12
-**Status**: proposed
+**Status**: accepted 2026-11-12 by the author in chat ("j'accepte les ADR", in answer to a list whose item was "Accepter ou non ADR-0033. Je recommande d'accepter."); written by an agent session
 **Refines**: ADR-0024 (accepted 2026-11-11), which stays in force for everything this record does not change; through it, ADR-0021, ADR-0018 and ADR-0002
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the two commits of runward, the two tarballs, the same inputs built by each pin through the real application, the declaration under each pin, an export replayed, the author's GitLab instance declared and sending), challenge, durable position

@@ -32,8 +32,11 @@ main:focus{ outline:none; }
 /* every relevé in the mono at one size, the fleet views' included (their stylesheet says 11 and 10 px) */
 .rv, .chart text{ font-size:var(--fs-releve); }
 .rv{ text-transform:none; letter-spacing:0; color:var(--text-2); }
-/* the fleet stylesheet sets code at .86em: inside a 12 px relevé it read 10.3 px. Nothing under 12 px */
-code, .hash{ font-size:max(var(--fs-releve), .86em); }
+/* code on the scale, never a fraction of its text (the fleet stylesheet's .86em read 10.3 px in a relevé, and
+   max(12 px, .86em) read 12.04 px in a 14 px line, 12.9 px in the body): 12 px, the relevé's size; 14 px inside the
+   display text of a screen's lede */
+code, .hash{ font-size:var(--fs-releve); }
+.sous code, .face code, .t1 code, .t-hero code{ font-size:var(--fs-ui); }
 /* code inside the service's prose breaks only when a long path must, never in the middle of a short word */
 p code, li code, dd code, .note code, .avert code, .intent code{ word-break:normal; overflow-wrap:anywhere; }
 
@@ -295,6 +298,76 @@ main.hero-g{ grid-template-columns:minmax(0,1fr); gap:40px; align-items:center; 
 .porte .btn{ width:100%; min-height:40px; }
 .porte .explique{ padding-top:14px; border-top:1px solid var(--verre-line); max-width:none; }
 .porte .charge{ max-width:none; }
+
+/* ============================================================================================================
+   5 bis. « La piste », its common part (ADR-0034): the menu's count, « À faire », the technical views folded, the
+   control account's banner, the sign-in's example. The direction's own views have their section elsewhere.
+   ============================================================================================================ */
+/* the count of what waits, on the menu's « Applications »: ink on the sheet, the one filled pill of the menu */
+.it .badge{ display:inline-grid; place-items:center; flex:none; align-self:center; min-width:20px; height:20px; padding:0 6px; border-radius:var(--r-pill); background:var(--text); color:var(--bg); font-family:var(--mono); font-size:var(--fs-releve); font-weight:var(--fw-strong); line-height:1; }
+.sec-vide{ margin:0; padding:2px 10px 4px; font-size:var(--fs-small); color:var(--text-2); }
+/* the technical views: folded under their title; closed, greyed with their reason, no link */
+.tech{ display:block; }
+.tech > summary{ list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; min-height:var(--h-nav); border-radius:var(--r-notice); }
+.tech > summary::-webkit-details-marker{ display:none; }
+.tech > summary::after{ content:""; width:7px; height:7px; margin-right:4px; border-right:1.5px solid currentColor; border-bottom:1.5px solid currentColor; transform:rotate(45deg) translate(-2px,-2px); transition:transform var(--dur-max) var(--ease-productive); }
+.tech[open] > summary::after{ transform:rotate(225deg) translate(-2px,-2px); }
+.tech > summary:hover{ color:var(--text); }
+.tech.ferme .sec{ padding-bottom:2px; }
+.tech-note{ margin:0; padding:0 10px 4px; font-size:var(--fs-small); line-height:1.45; color:var(--text-2); }
+/* the control account: a fixed note, said once at the head of every screen */
+.bandeau.temoin{ border-style:dashed; }
+/* there, the portfolio's waiting block and its « Brancher une application » have no use: its first upload waits on purpose */
+body.temoin [data-hors-temoin], body.temoin .lecture-attendues, body.temoin .lecture-actions, body.temoin .lecture-vide{ display:none !important; }
+/* « À faire »: first on the first screen; what to do, its reason, its deadline, one button */
+.afaire{ display:grid; gap:10px; padding:14px 16px; border:1px solid var(--text); border-radius:var(--r-notice); background:var(--bg); box-shadow:var(--ombre-2); }
+.afaire > *{ margin:0; }
+.af-h{ display:flex; align-items:center; gap:10px; font-size:var(--fs-ui); font-weight:var(--fw-strong); letter-spacing:0; line-height:1.3; }
+.af-n{ display:inline-grid; place-items:center; min-width:22px; height:22px; padding:0 6px; border-radius:var(--r-pill); background:var(--text); color:var(--bg); font-family:var(--mono); font-size:var(--fs-releve); }
+.af-l{ list-style:none; margin:0; padding:0; display:grid; gap:12px; }
+.af-i{ display:grid; gap:10px; align-items:center; min-width:0; }
+.af-i + .af-i{ padding-top:12px; border-top:1px solid var(--line); }
+.af-t{ display:grid; gap:3px; min-width:0; }
+.af-t p{ margin:0; }
+.af-q{ font-size:16px; line-height:1.4; overflow-wrap:anywhere; }
+.af-q b{ font-weight:var(--fw-strong); }
+.af-p{ font-size:var(--fs-ui); line-height:1.5; color:var(--text-2); }
+.af-d{ display:flex; align-items:center; gap:8px; font-size:var(--fs-ui); font-weight:var(--fw-strong); }
+.af-i .actions{ margin:0; }
+.mk-delai{ border-width:1.5px; background:conic-gradient(var(--text) 0 25%, transparent 25% 100%); }
+@media (min-width:760px){ .af-i{ grid-template-columns:minmax(0,1fr) auto; } }
+
+/* the sign-in: the gesture under the title, the example on the right */
+main.entree-d .porte{ width:100%; max-width:440px; }
+.ex-fen .scr-body{ display:grid; gap:20px; padding:20px 20px 22px; container-type:inline-size; }
+.ex-qui{ margin:0; }
+.ex{ display:grid; gap:10px; }
+.ex > *{ margin:0; }
+.ex + .ex{ padding-top:18px; border-top:1px solid var(--verre-line); }
+.ex-t{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:4px 12px; font-size:var(--fs-ui); font-weight:var(--fw-strong); }
+.ex-etat{ display:inline-flex; align-items:center; gap:8px; }
+.ex-p{ font-size:var(--fs-ui); line-height:1.5; color:var(--text-2); }
+.ex-mk{ display:inline-block; flex:none; width:12px; height:12px; border:2px solid var(--text); border-radius:50%; background:var(--text); }
+[data-s="refused"] > .ex-mk, .ex-st[data-s="refus"] .ex-mk{ border:0; border-radius:var(--r-mark); transform:rotate(45deg) scale(.86); background:var(--refus); }
+.ex-st[data-s="vide"] .ex-mk{ width:10px; height:10px; border:1.5px solid var(--bar); background:var(--bg); }
+.ex-piste{ position:relative; list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); min-width:0; }
+.ex-ligne{ position:absolute; left:calc(100% / 12); right:calc(100% / 12); top:9px; height:0; border-top:2px dotted var(--bar); }
+/* the solid line runs to the step that refuses (data-arret, 1 to 6), to the end when none does */
+.ex-rempli{ position:absolute; left:0; top:-2px; height:2px; width:100%; background:var(--text); border-radius:1px; }
+.ex-piste[data-arret="1"] .ex-rempli{ width:0; } .ex-piste[data-arret="2"] .ex-rempli{ width:20%; } .ex-piste[data-arret="3"] .ex-rempli{ width:40%; }
+.ex-piste[data-arret="4"] .ex-rempli{ width:60%; } .ex-piste[data-arret="5"] .ex-rempli{ width:80%; }
+.ex-st{ position:relative; z-index:1; display:grid; justify-items:center; align-content:start; gap:5px; min-width:0; text-align:center; }
+.ex-pt{ display:grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--bg); }
+.ex-st[data-s="refus"] .ex-mk{ width:13px; height:13px; box-shadow:0 0 0 4px color-mix(in srgb, var(--refus) 22%, transparent); }
+.ex-st[data-apres] .ex-pt{ opacity:.6; }
+.ex-nom{ font-size:var(--fs-releve); line-height:1.35; color:var(--text-2); overflow-wrap:anywhere; }
+.ex-st[data-s="refus"] .ex-nom{ color:var(--text); font-weight:var(--fw-strong); }
+.ex-n{ display:none; font-family:var(--mono); }
+/* six names do not fit a narrow window: their numbers, the names said to a screen reader */
+@container (max-width:469px){
+  .ex-n{ display:inline; }
+  .ex-l{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+}
 
 /* ============================================================================================================
    6. The screens of the shell
