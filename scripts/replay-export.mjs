@@ -4,7 +4,7 @@
 // `runward-fleet build fleet.json` would, and compare the sha256 of the bytes it writes.
 // Usage: node scripts/replay-export.mjs <archive.tar> [--json]
 //
-// A version does not name one build (ADR-0021: 0.46.0 is three archives, whose indexes differ), so an index
+// A version does not name one build (ADR-0021: 0.46.0 is four archives, and two of them can build different indexes from the same inputs), so an index
 // is rebuilt only by the archive that built it, named by the digest recorded on it. That digest is
 // declared by the service whose export is replayed: it takes an index out of the comparison only when
 //   - the lock knows it (vendor/runward-fleet.lock.json: the pinned archive and its `previous` chain), and
