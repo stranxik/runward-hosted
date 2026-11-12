@@ -12,7 +12,7 @@ import {
 } from "../helpers.js";
 import { readClaims, check, definitionMatches, placeUpload } from "../../src/domain/gitlab.js";
 import { levelCode, scopedKey, pinDigest, confirmObject, sendAudience, GITHUB_ISSUER_KEY, GITLAB_COM_ISSUER, PUBLIC_ISSUERS, RESERVED_ISSUER_HOSTS } from "../../src/domain/forge.js";
-import { readIssuer, readKeyInput, keyFault, jwkThumbprint, keyState, KEY_LIFE, MAX_LIVE_KEYS, MAX_REGISTRATIONS } from "../../src/domain/issuer.js";
+import { readIssuer, readKeyInput, keyFault, jwkThumbprint, keyState, indexNameOf, KEY_LIFE, MAX_LIVE_KEYS, MAX_REGISTRATIONS } from "../../src/domain/issuer.js";
 import { REFUSALS, refusal } from "../../src/domain/refusals/index.js";
 import { FORGE } from "../../src/domain/refusals/forge.js";
 import { GESTURES, DAY, MIN } from "../../src/domain/identity.js";
@@ -654,20 +654,65 @@ test("a name the pinned runward-fleet cannot carry is refused at declaration wit
   assert.equal(await declare({ name: "a/b/c/d/e/f/g/h" }), "pending", "eight segments, the most the pinned library reads");
   assert.equal(await declare({ name: "a/b/c/d/e/f/g/h/i" }), "repository-path-unsupported", "nine segments: GitLab admits them, the view cannot name them");
   const port = await registerIssuer(h, f, { issuer: "http://gitlab-temoin.local:8929" });
-  const address = await registerIssuer(h, f, { issuer: "http://10.0.0.7:8929" });
   await gesture(h, f.session, null, null);
   assert.equal(await declare({ issuer: port.id, name: "temoin/demo" }), "pending", "an instance whose host carries a port");
   assert.equal(await declare({ issuer: port.id, name: "temoin/sub/demo" }), "pending");
-  assert.equal(await declare({ issuer: address.id, name: "temoin/demo" }), "repository-path-unsupported", "an instance registered by its address: the library names hosts, never addresses");
   assert.equal((await h.store.tx(f.tenant, (tx) => tx.list("forge_repository"))).length, 5, "nothing was declared under a shortened name");
-  assert.match(refusal("repository-path-unsupported", "en").message, /more than eight segments, or its instance's host is an IP address, not a name/);
-  assert.match(refusal("repository-path-unsupported", "fr").message, /plus de huit segments, ou l'hôte de son instance est une adresse IP et non un nom/);
+  assert.match(refusal("repository-path-unsupported", "en").message, /its path has more than eight segments\.$/);
+  assert.match(refusal("repository-path-unsupported", "fr").message, /son chemin a plus de huit segments\.$/);
   // the answer is the pinned library's own: what it admits is declared; the control names what it refuses
   assert.deepEqual(["github.com/a/b", "gitlab.com/g/p", "gitlab.com/g/s/p", "gitlab-temoin.local:8929/temoin/demo", "gitlab.com/a/b/c/d/e/f/g/h"].map((n) => h.assembler.admits(n)), [true, true, true, true, true]);
   assert.deepEqual(["gitlab.com/a/b/c/d/e/f/g/h/i", "10.0.0.7:8929/temoin/demo", "gitlab.internal:0/g/p", "gitlab.internal:65536/g/p"].map((n) => h.assembler.admits(n)), [false, false, false, false]);
   for (const name of ["project", "group/", "/group/project", "group//project", "group/pro ject", "group/..", "group/pro@ject"]) assert.equal(await declare({ name }), "repository-malformed", name);
   assert.match(refusal("repository-malformed", "en", { forge: "gitlab" }).message, /group\/project/);
   assert.equal(await declare({ forge: "bitbucket", name: "a/b" }), "body-invalid");
+});
+
+// The review of PR #31, finding 1: the pinned library names hosts and ports by its own grammar (runward's ADR-0130),
+// which refuses some issuers readIssuer reads. Such an instance is refused at registration, asked of the library,
+// so that no repository is declared on it and no tenant's whole assembly is refused after a re-pin.
+test("an instance the pinned runward-fleet cannot name is refused at registration (issuer-malformed), asked of the library; a nameable one is registered", async () => {
+  const h = harness();
+  const f = await founder(h);
+  const s = () => h.app.identity.sessionFrom(f.token);
+  const key = gitlabKey();
+  const preview = async (issuer) => { try { await h.app.issuers.preview(await s(), { issuer, keys: { keys: [key.jwk] }, kid: key.kid }); return "shown"; } catch (e) { return e.code; } };
+  // readIssuer reads every one of them: the refusal is the library's
+  for (const issuer of ["http://10.0.0.7", "http://10.0.0.7:8929", "https://gitlab.1corp", "https://1gitlab", "https://gitlab.example.test:0", "https://gitlab.example.test:08443", `https://${"a".repeat(64)}.example.test`]) {
+    assert.doesNotThrow(() => readIssuer(issuer, { serviceHosts: ["app.runward.dev"] }), issuer);
+    assert.equal(await preview(issuer), "issuer-malformed", issuer);
+  }
+  assert.match(refusal("issuer-malformed", "en").message, /cannot be read/);
+  for (const issuer of ["http://gitlab-temoin.local:8929", "https://gitlab.example.test", "https://gitlab.example.test:443", "https://gitlab.c0rp", "https://1a.gitlab.example.test"]) assert.equal(await preview(issuer), "shown", issuer);
+  // the control: the registration that passes is a name the library admits, the one refused is not
+  assert.deepEqual([indexNameOf("http://10.0.0.7", "g/p"), indexNameOf("https://1gitlab", "g/p")].map((n) => h.assembler.admits(n)), [false, false]);
+  await assert.rejects(registerIssuer(h, f, { issuer: "http://10.0.0.7" }), { code: "issuer-malformed" });
+  assert.equal((await h.store.tx(f.tenant, (tx) => tx.list("issuer"))).length, 0, "nothing registered");
+});
+
+// The review of PR #31, finding 3: the library drops `:443`; the app names the instance the same way in the inventory
+// it writes, and the registration keeps its issuer string as given (compared with `iss` by exact equality).
+test("an instance registered with :443 is named without it, in fleet.json and in the index alike; its issuer string is kept as given", async () => {
+  assert.equal(indexNameOf("https://gitlab.example.test:443", "temoin/demo"), "gitlab.example.test/temoin/demo");
+  assert.equal(indexNameOf("http://gitlab.example.test:443", "temoin/demo"), "gitlab.example.test/temoin/demo", "the library drops :443 whatever the scheme");
+  assert.equal(indexNameOf("https://gitlab.example.test:8443", "temoin/demo"), "gitlab.example.test:8443/temoin/demo");
+  const h = harness();
+  const f = await founder(h);
+  const issuer = "https://gitlab.example.test:443";
+  const reg = await registerIssuer(h, f, { issuer });
+  assert.equal(reg.issuer ?? reg.shown.issuer, issuer, "the string stored is the one given");
+  await gesture(h, f.session, null, null);
+  const manifests = [];
+  const assemble = h.assembler.assemble;
+  h.assembler.assemble = (input) => { const r = assemble(input); if (r.ok) manifests.push(JSON.parse(r.manifest.toString("utf8"))); return r; };
+  const repo = await pinnedGitlab(h, f, { issuer: reg.id, sign: reg.key.sign, claims: { issuer, audience: reg.audience } });
+  assert.ok(repo.confirm.published);
+  const index = JSON.parse((await h.app.reading.index(f.tenant)).bytes.toString("utf8"));
+  assert.equal(index.missions[0].repository, "gitlab.example.test/temoin/demo");
+  assert.equal(manifests.at(-1).missions[0].repository, "gitlab.example.test/temoin/demo", "the inventory the app writes says it the way the index does");
+  // a token of that instance still carries the string as given: anything else is not this registration
+  const other = await sendToken(h, reg.key.sign(gitlabClaims(h.clock, { issuer: "https://gitlab.example.test", audience: reg.audience, pipeline: "11", job: "110" })));
+  assert.equal(other.refusal, "token-unreadable", "iss compared by exact equality: https://h is not https://h:443");
 });
 
 // ADR-0029 section 5, step b: an index with a path of three levels, on an instance whose host carries a port,

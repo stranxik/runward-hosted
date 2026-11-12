@@ -139,10 +139,15 @@ export function checkRegistrable(issuers) {
   if (issuers.filter((i) => !i.removedAt).length >= MAX_REGISTRATIONS) throw new Refusal("issuer-limit");
 }
 
-/** The address a registered repository is named by in the index: host[:port]/full/path (section 1). */
+/**
+ * The address a registered repository is named by in the index: host[:port]/full/path (section 1), spelled as the
+ * pinned runward-fleet spells it: `:443` is dropped (its src/repository.js does, whatever the scheme), so the
+ * inventory and the index name the instance the same way. The registration keeps its issuer string unchanged:
+ * `https://h` and `https://h:443` stay two registrations, compared with `iss` by exact equality (section 4).
+ */
 export function indexNameOf(issuerString, path) {
   const m = splitIssuer(issuerString);
   if (!m) throw new TypeError("indexNameOf: not a registered issuer's string");
   const host = m.host.toLowerCase();
-  return `${m.port ? `${host}:${m.port}` : host}/${path}`;
+  return `${m.port && m.port !== "443" ? `${host}:${m.port}` : host}/${path}`;
 }

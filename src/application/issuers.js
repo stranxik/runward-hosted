@@ -6,7 +6,7 @@
 // The service never calls the instance: the member pastes its key set, and one key is kept.
 import { randomBytes } from "node:crypto";
 import { Refusal } from "../domain/refusals/index.js";
-import { readIssuer, readKeyInput, checkKeyAddable, checkRegistrable, keyState, keyExpiresAt, keyWarned } from "../domain/issuer.js";
+import { readIssuer, readKeyInput, checkKeyAddable, checkRegistrable, keyState, keyExpiresAt, keyWarned, indexNameOf } from "../domain/issuer.js";
 import { registrationDigest, sendAudience, REGISTRATION_ID } from "../domain/forge.js";
 import { REMOVED_KEEP } from "../domain/repository.js";
 import { StoreConflict } from "../ports/errors.js";
@@ -32,6 +32,11 @@ export function issuerCases(ctx, identity) {
   /** What the screen shows before the gesture, and the digest the gesture is bound to. Writes nothing. */
   function readRegistration(input) {
     const i = readIssuer(input?.issuer, { serviceHosts });
+    // The index names the instance's repositories host[:port]/path (ADR-0029 section 1): an instance whose
+    // host or port the pinned runward-fleet cannot name (an IP address, a last label that starts with a digit,
+    // port 0, a port with a leading zero) is refused here, asked of the library itself, so that no repository
+    // is ever declared on it and no tenant's assembly is refused later because of it (ADR-0033).
+    if (!ctx.ports.assembler.admits(indexNameOf(i.issuer, "group/project"))) throw new Refusal("issuer-malformed", { why: "the host is not a name the fleet view can write (no IP address, a last label that starts with a letter), and the port is 1 to 65535 without a leading zero" });
     const k = readKeyInput(input?.keys, input?.kid);
     return { issuer: i.issuer, ...k, digest: registrationDigest("issuer-register", [i.issuer, k.thumbprint]) };
   }
