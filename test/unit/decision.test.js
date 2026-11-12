@@ -4,7 +4,7 @@
 // the real application from real `check --strict --json` exports.
 //
 // The fixtures (test/fixtures/decision/) are runward's own, copied byte for byte from
-// test/fixtures/fleet/decision/ at runward main@d05b597 (PR #499), the same bytes at main@d052814, the commit
+// test/fixtures/fleet/decision/ at runward main@d05b597 (PR #499), the same bytes at main@d052814 and main@c9a886a, the commit
 // runward-fleet is pinned at: real
 // exports of real runs (demo-renamed, demo-repaired: runward 0.46.0 in CI on stranxik/runward-demo-renaming;
 // hosted-proposed: runward 0.46.0 from npm on this repository at a4ede14; agent-ratified: `init --example`
