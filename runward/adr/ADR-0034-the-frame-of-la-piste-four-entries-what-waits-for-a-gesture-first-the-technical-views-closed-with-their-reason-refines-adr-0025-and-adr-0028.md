@@ -1,7 +1,7 @@
 # ADR-0034: The frame of « La piste »: four entries, what waits for a gesture first, the technical views closed with their reason, the control account said (refines ADR-0025 and ADR-0028)
 
 **Date**: 2026-11-12
-**Status**: proposed (written by an agent session; the author chose the direction « A · La piste » on 2026-11-12 on a playable mock-up; this record awaits his acceptance)
+**Status**: accepted 2026-11-12 by the author in chat ("et j'accepte", in answer to a list whose item was "Accepter ou non l'ADR-0034 (le cadre « La piste » : quatre entrées, « À faire » d'abord, vues techniques fermées avec leur raison). Je recommande d'accepter."); written by an agent session
 **Refines**: ADR-0025 (the shell in the grammar of its public site, proposed), which stays in force for the scene, the windows, the one header and the loops of the stylesheet; ADR-0028 (accepted 2026-11-11), which stays in force: the app's origin carries the app only, a signed-out visitor lands on the sign-in
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: the audit of how the app is understood (2026-11-12, its section 5: the structure proposed for 2026-11-18), the three playable directions and the author's choice of the first, the code read for every date the screen says (`src/application/operator.js#retention`, `src/domain/repository.js#repositoryState`), the same frame witnessed on the real service (the in-memory store, a headless browser) at 1440 and 390 px, light and dark, reduced motion

@@ -9,6 +9,7 @@ import { confirmBox } from "./confirm.js";
 import { snippet } from "./workflow.js";
 import { claimsTable, pinsTable, niveau } from "./claims.js";
 import { depotDe, decode, retour, retourMot, versDepot, versSection } from "./liens.js";
+import { firstRun } from "./piste/rail.js";
 
 /** Back where the member came from, else to `home`, said by where it leads. */
 const back = (home, label = null) => { const to = retour(home); return go(to, label ?? retourMot(to), { q: true }); };
@@ -65,6 +66,7 @@ export function viewDeclarer(sub) {
   const gitlab = repo?.forge === "gitlab";
   if (what === "attente" && repo) return { title: D.pending.title, key: "declarer", signed: "in", focus: "h1", html: `${head(D.head, C.waitingFirst)}
     <h1 class="v" tabindex="-1">${D.pending.h1(name)}</h1>
+    ${repo.state === "pending" ? firstRun(repo.pendingSend ? 3 : 1) : ""}
     <p class="face lede">${mk("half", C.waitingFirst)} ${gitlab ? G.declare.pendingLede(esc(repo.workflow), esc(repo.defaultBranch)) : D.pending.lede}</p>
     <p class="small">${D.pending.expires(when(repo.expiresAt, { sec: false }))}</p>
     ${repo.level ? levelAtDeclaration(repo.level) : ""}
@@ -87,6 +89,7 @@ export function viewDeclarer(sub) {
     const failed = S.failed === k ? `<p class="erreur" role="alert">${mk("inv", C.notVerified)} ${esc(S.stale === repo.id ? P.stale : S.failedText ?? C.verifyFailed)}</p>` : "";
     return { title: owner ? K.titleOwner : definition ? P.titleDefinition : K.title, key: "declarer", signed: "in", html: `${head(D.nothing.head, C.gestureCheck)}
       <h1 class="v">${owner ? K.h1Owner(name) : definition ? P.h1Definition(name) : K.h1(name)}</h1>
+      ${owner || definition ? "" : firstRun(3)}
       <p class="face lede">${lede}</p>
       ${pins}
       ${claimsTable(c)}
