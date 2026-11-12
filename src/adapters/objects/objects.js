@@ -80,7 +80,8 @@ export const PING_TTL_MS = 30_000;
 export const PING_RETRY_MS = 5_000;
 
 /** S3 path-style on any compatible endpoint. `fetch` is the egress-bound fetch (system/egress.js). */
-export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch, now = () => Date.now() }) {
+/** `onPingFault(why)`: told why a check of the witness failed (an error, or a sentence without data), for the log. */
+export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessKey, fetch, now = () => Date.now(), onPingFault = () => {} }) {
   let last = null; // { ok, at }
   let checking = null;
   const aws = new AwsClient({ accessKeyId, secretAccessKey, service: "s3", region });
@@ -110,10 +111,13 @@ export function s3Objects({ endpoint, region, bucket, accessKeyId, secretAccessK
       if (last && now() - last.at < (last.ok ? PING_TTL_MS : PING_RETRY_MS)) return last.ok;
       checking ??= (async () => {
         const put = await call("PUT", WITNESS_KEY, WITNESS, "text/plain");
-        if (!put.ok) return false;
+        if (!put.ok) { onPingFault(`witness PUT ${put.status}`); return false; }
         const got = await call("GET", WITNESS_KEY);
-        return got.ok && Buffer.from(await got.arrayBuffer()).equals(WITNESS);
-      })().then((ok) => ok, () => false).then((ok) => { last = { ok, at: now() }; checking = null; return ok; });
+        if (!got.ok) { onPingFault(`witness GET ${got.status}`); return false; }
+        const same = Buffer.from(await got.arrayBuffer()).equals(WITNESS);
+        if (!same) onPingFault("witness read back differs");
+        return same;
+      })().then((ok) => ok, (e) => { onPingFault(e); return false; }).then((ok) => { last = { ok, at: now() }; checking = null; return ok; });
       return checking;
     },
   });

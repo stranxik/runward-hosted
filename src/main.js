@@ -23,6 +23,59 @@ const LOCK = new URL("../vendor/runward-fleet.lock.json", import.meta.url).pathn
 const SHA40 = /^[0-9a-f]{40}$/;
 const DAILY_JOBS = ["retention", "verify-chains"];
 
+/** What a failed call is called in a log line: the error's code or class, never its message (a connection
+ *  error's message carries the address it dialled); a sentence an adapter wrote itself is kept as written. */
+export const faultName = (e) => String(typeof e === "string" ? e : (e?.why ?? e?.code ?? e?.name ?? "error")).slice(0, 120);
+
+// The warm-up (deploys of 2026-11-11 and 2026-11-12, rolled back on a health 503 seconds after the new
+// revision was ready). The hoster calls a container ready once its port is bound, and says of its region
+// that a new instance attached to a private network can fail to reach that network's resources in its
+// first seconds (failed ARP requests, routes not yet propagated: "No route to host", "Connection
+// timeout"), to be answered by retries (its pages container-private-network-connectivity and
+// container-transient-connection-errors, read 2026-11-12). The service opened its first database
+// connection and made its first call to the object store when the first request asked for them, so that
+// request, the deploy's own health check, met the failure. Both are now asked BEFORE the port is bound,
+// and asked again until each answers or the budget is spent.
+//   - Bounded: WARM_DEFAULTS.budgetMs in all, the two dependencies in parallel, a call still in flight
+//     at the end of the budget is not waited for. The pause between two tries doubles up to pauseMaxMs.
+//   - The port is bound whatever the outcome: a dependency still down is /api/health's 503 and each
+//     route's own refusal (runbook §2: degrade reading, never acting), never a container that does not
+//     start, which the hoster would restart in a loop while nothing says why.
+//   - One line says the outcome, `warm`: for each dependency ok, tries, ms and, when it failed, the last
+//     fault by its code.
+// The object store's ping keeps a failed verdict PING_RETRY_MS (objects.js): a try inside that period
+// reads the kept verdict, so the store itself is asked about once every 5 s, below the egress circuit's
+// 5 consecutive failures.
+export const WARM_DEFAULTS = { budgetMs: 30_000, pauseMs: 500, pauseMaxMs: 2_000 };
+
+export async function warm({ store, objects, log, clock }, { budgetMs = WARM_DEFAULTS.budgetMs, pauseMs = WARM_DEFAULTS.pauseMs, pauseMaxMs = WARM_DEFAULTS.pauseMaxMs } = {}) {
+  const started = clock.now();
+  const left = () => budgetMs - (clock.now() - started);
+  const OVER = Symbol("over");
+  const timers = new Set();
+  // a timer of our own, cleared when the warm-up ends: nothing of it outlives it
+  const wait = (ms, value) => new Promise((r) => { const t = setTimeout(() => { timers.delete(t); r(value); }, Math.max(0, ms)); timers.add(t); });
+  const one = async (ask) => {
+    let tries = 0, why = null, pause = pauseMs;
+    while (left() > 0) {
+      tries++;
+      const fault = await Promise.race([Promise.resolve().then(ask).then((ok) => (ok ? null : "answered down"), faultName), wait(left(), OVER)]);
+      if (fault === null) return { ok: true, tries, ms: clock.now() - started };
+      if (fault === OVER) { why = "no answer within the budget"; break; }
+      why = fault;
+      if (left() <= 0) break;
+      await wait(Math.min(pause, left()));
+      pause = Math.min(pause * 2, pauseMaxMs);
+    }
+    return { ok: false, tries, ms: clock.now() - started, why: why ?? "no budget" };
+  };
+  const [db, objectStore] = await Promise.all([one(() => store.ping()), one(() => objects.ping())]);
+  for (const t of timers) clearTimeout(t);
+  const ok = db.ok && objectStore.ok;
+  log[ok ? "info" : "warn"]("warm", { ms: clock.now() - started, detail: { db, objectStore, budgetMs } });
+  return { ok, db, objectStore };
+}
+
 /** An origin: http or https, a lower-case host, an optional port, nothing else (parsed, not matched). */
 const isOrigin = (o) => { try { const u = new URL(o); return (u.protocol === "https:" || u.protocol === "http:") && u.origin === o && /^[a-z0-9.-]+$/.test(u.hostname); } catch { return false; } };
 
@@ -71,7 +124,9 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
   // every call out has a deadline and each host a circuit breaker (egress.js, EGRESS_DEFAULTS)
   const egress = boundFetch([issuerHost, ...(s3Host ? [s3Host] : [])], fetchImpl, { now: () => clock.now(), ...egressOptions });
   const store = givenStore ?? (config.store === "postgres" ? postgresStore({ url: config.databaseUrl, ssl: databaseTls(config.databaseUrl, config.databaseTls) }) : memoryStore({ clock }));
-  const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress }) : memoryObjects());
+  // why the object store's last check failed, by its code: said once in the log when health turns down
+  let objectFault = null;
+  const objects = givenObjects ?? (config.objects === "s3" ? s3Objects({ ...config.s3, fetch: egress, onPingFault: (e) => { objectFault = faultName(e); } }) : memoryObjects());
   const pin = fleetPin({ lockFile: LOCK });
   const ports = {
     store, objects, clock, log, ulid,
@@ -87,6 +142,17 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
     views: { runwardFleet: pin.version, runwardFleetCommit: pin.commit, runwardFleetArchiveSha256: pin.archiveSha256, viewsSha256: assets.viewsSha256 },
     apiContract: apiContract(routes(app)), indexFormat: INDEX_FORMAT, sendWorkflow: config.sendWorkflow.published,
   };
+  // A dependency that turns down, or comes back, is one log line with the fault's code (deploys of
+  // 2026-11-11 and 2026-11-12: /api/health answered 503 and nothing kept why). Written on a change only:
+  // /api/health is public, a line per call would be a line per request.
+  const said = { db: null, objectStore: null };
+  const say = (dependency, state, why) => {
+    if (said[dependency] === state) return;
+    const first = said[dependency] === null;
+    said[dependency] = state;
+    if (state === "down") log.warn("health.dependency", { detail: { dependency, state, why: why ?? "unknown" } });
+    else if (!first) log.info("health.dependency", { detail: { dependency, state } });
+  };
   const health = {
     async maintenance() { try { return await store.tx(null, (tx) => tx.maintenance()); } catch { return null; } },
     // the last run of each daily job and whether it completed (review finding of 2026-11-10: a failure was
@@ -99,7 +165,12 @@ export function compose(config, { clock = systemClock, log = jsonLog({ clock }),
       } catch { return null; }
     },
     async body() {
-      const [db, obj] = await Promise.all([store.ping().then(() => "ok", () => "down"), objects.ping().then((x) => (x ? "ok" : "down"), () => "down")]);
+      let dbFault = null;
+      const [db, obj] = await Promise.all([
+        store.ping().then(() => "ok", (e) => { dbFault = faultName(e); return "down"; }),
+        objects.ping().then((x) => (x ? "ok" : "down"), (e) => { objectFault = faultName(e); return "down"; }),
+      ]);
+      say("db", db, dbFault); say("objectStore", obj, objectFault);
       return { status: db === "ok" && obj === "ok" ? 200 : 503, body: { ok: db === "ok" && obj === "ok", store: store.kind, objects: objects.kind, db, objectStore: obj, maintenance: db === "ok" ? await this.maintenance() : null, dailyJobs: db === "ok" ? await this.dailyJobs() : null } };
     },
   };
@@ -114,7 +185,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const log = c.ports.log;
   log.info("start", { detail: { store: c.store.kind, objects: c.objects.kind, origin: config.origin, commit: config.commit, runwardFleet: c.version.views.runwardFleet, egress: c.egress.allowed, sendWorkflow: config.sendWorkflow.published.length } });
   if (c.store.kind === "memory") log.warn("store.memory", { detail: "in-memory store: nothing survives a restart (local witness only)" });
-  c.http.server.listen(config.port, process.env.RW_BIND ?? "0.0.0.0");
   const stop = () => { c.http.server.close(() => c.store.close().finally(() => process.exit(0))); setTimeout(() => process.exit(0), 5000).unref(); };
   process.on("SIGTERM", stop); process.on("SIGINT", stop);
+  // the dependencies are asked before the port is bound: the hoster sends requests as soon as it is (warm, above)
+  await warm({ store: c.store, objects: c.objects, log, clock: c.ports.clock });
+  c.http.server.listen(config.port, process.env.RW_BIND ?? "0.0.0.0");
 }
