@@ -210,6 +210,14 @@
 	<testcase name="the daily jobs' outcome that cannot be read raises the probe's alert: null with the database ok is not silence" classname="test"/>
 	<testcase name="the note of a daily job that did not run to its end is read by /api/health as a run that did not complete, and raises the probe's alert" classname="test"/>
 	<testcase name="the schedule: each daily job starts after the other's deadline, its kill and its note are over, and the hoster's timeout is above them" classname="test"/>
+	<testcase name="the portfolio: each application awaited says its next step, and its button lands where that step is done" classname="test"/>
+	<testcase name="the next step of a status line: confirm, owner, install, consent, wait" classname="test"/>
+	<testcase name="Accès: a repository whose first upload arrived says so, with its date, its confirmation first; one that has sent nothing says it waits" classname="test"/>
+	<testcase name="Accès opened on a section: the section an address names takes the focus and is shown; the page's index names each one" classname="test"/>
+	<testcase name="every link and button of every screen painted leads to a screen that exists; the bare top of Accès is the sidebar's « Accès » only" classname="test"/>
+	<testcase name="no source sends to the bare top of Accès: no go(), data-go or location write names #/acces alone" classname="test"/>
+	<testcase name="a task sends back where it was opened from, never to the top of Accès" classname="test"/>
+	<testcase name="in English, the new words are English" classname="test"/>
 	<testcase name="public routes: past the limit per address, 429 too-many-requests with Retry-After; the next minute opens again" classname="test"/>
 	<testcase name="public routes: the instance-wide limit holds whatever the addresses; behind the proxy, the address is the one it appended" classname="test"/>
 	<testcase name="public routes: without the proxy setting, X-Forwarded-For is ignored (a client cannot pick a fresh counter)" classname="test"/>
@@ -418,9 +426,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 417 -->
+	<!-- tests 425 -->
 	<!-- suites 0 -->
-	<!-- pass 417 -->
+	<!-- pass 425 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

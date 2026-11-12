@@ -5,6 +5,7 @@ import { when } from "./time.js";
 import { mk, etq, go } from "./marks.js";
 import { renderView } from "./fleet-views.js";
 import { lang, mots } from "./lexique.js";
+import { versAccord } from "./liens.js";
 import { verdictOf, ligne, sourceDe, jLigne, nomCourt, nomLong, chipOf, cause, sourceLigne } from "./lignes.js";
 import { niveauLigne, ordre } from "./claims.js";
 
@@ -28,7 +29,7 @@ export function viewMissionDetail(id) {
   let suivant = "";
   if (v === "gaps" && l?.next?.command) suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${M.nextGaps}</p>${l.next.text ? `<p class="small soft" lang="en">${M.says}${esc(l.next.text)}</p>` : ""}</div><code class="cmd" translate="no">${esc(l.next.command)}</code></div>`;
   if (v === "level-not-met") suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${M.nextLevel}</p></div>${go("#/proof", M.openProof, { q: true })}</div>`;
-  if (v === "not-observed") suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${st?.consent ? M.nextConsented : M.nextConsent}</p></div>${st?.consent ? etq("full", C.consented) : go("#/acces", W.lines.consentInAccess, { q: true })}</div>`;
+  if (v === "not-observed") suivant = `<div class="suivant"><div><h3>${M.next}</h3><p>${st?.consent ? M.nextConsented : M.nextConsent}</p></div>${st?.consent ? etq("full", C.consented) : go(versAccord(st), W.lines.consentInAccess, { q: true })}</div>`;
   const a = st?.accepted;
   // a GitLab upload is ordered by its pipeline, then its job; what the declaration names is the pipeline definition
   const gitlab = st?.forge === "gitlab", G = W.forge;

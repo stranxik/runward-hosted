@@ -1,12 +1,14 @@
 // Access, sections: the declared repositories, their consent and their content, on the forge each lives on; and the
-// GitLab instances this fleet registered, with their keys (ADR-0029 section 4). The sub-screen that registers an
-// instance, or adds a key to one, is here too (#/acces/instance, #/acces/instance/<id>).
+// GitLab instances this fleet registered, with their keys (ADR-0029 section 4). Each repository's name opens its own
+// screen (#/acces/depot/<id>, web/views/acces/depot.js), where a link from elsewhere lands. The sub-screen that
+// registers an instance, or adds a key to one, is here too (#/acces/instance, #/acces/instance/<id>).
 import { S, esc } from "../base.js";
 import { when } from "../time.js";
 import { mk, go, act, head, reqNote, loadingView } from "../marks.js";
 import { mots } from "../lexique.js";
 import { ask, confirmBox } from "../confirm.js";
 import { niveau } from "../claims.js";
+import { ancre, titreAncre, versDepot, versConfirmer, versAttente, versModifier, versSection } from "../liens.js";
 
 /** A value to copy as it is written (an audience): the value, and its button. */
 const copied = (id, value, label) => `<code translate="no" id="${esc(id)}">${esc(value)}</code> <button class="lien-btn" type="button" data-do="copy" data-copy-target="${esc(id)}" data-copy-plain data-copy-audience data-label="${esc(label)}">${esc(label)}</button>`;
@@ -21,27 +23,41 @@ function gitlabLines(r) {
   return { issuer: `<span class="k">${esc(G.issuer)}</span>${issuer}`, audience: r.audience ? `<span class="k">${esc(G.audience)}</span>${copied(`aud-r-${r.id}`, r.audience, G.copyAudience)}` : "", protection };
 }
 
+/**
+ * Where a repository stands, as its mark and its next gesture: removed; its first upload arrived, to confirm (the
+ * service keeps it, `pendingSend`, src/application/ingest.js), said with its date; a new owner to confirm; waiting
+ * for its first upload, with the date its declaration expires; confirmed, with its date.
+ */
+export function etatDepot(r) {
+  const W = mots(), D = W.acces.depots, C = W.common;
+  if (r.state === "removed") return { kind: "removed", mark: mk("void", D.removed), next: "" };
+  if (r.pendingSend?.reason === "owner-changed") return { kind: "owner", mark: mk("inv", D.ownerChanged), next: go(versConfirmer(r.id), D.confirmOwner) };
+  if (r.pendingSend?.reason === "definition-not-pinned") return { kind: "definition", mark: mk("inv", W.forge.depots.unpinnedMark), next: go(versConfirmer(r.id), W.forge.depots.confirmDefinition) };
+  if (r.state === "pending" && r.pendingSend) return { kind: "received", mark: `${mk("half", C.firstReceived)} <span class="soft">${C.toConfirm(when(r.pendingSend.receivedAt, { sec: false }))}</span>`, next: go(versConfirmer(r.id), D.confirmFirst), at: r.pendingSend.receivedAt };
+  if (r.state === "pending") return { kind: "pending", mark: `${mk("half", C.waitingFirst)} <span class="soft">· ${D.expires(when(r.expiresAt, { sec: false }))}</span>`, next: go(versAttente(r.id), D.seeSnippet, { q: true }) };
+  return { kind: "pinned", mark: `${mk("full", D.confirmed)} <span class="soft">· ${D.dated(when(r.confirmedAt, { sec: false }))}</span>`, next: "" };
+}
+
 /** The declared repositories. */
 export function sectionDepots(a) {
   const W = mots(), D = W.acces.depots, C = W.common, F = W.forge;
   const rp = a.repositories.map((r) => {
     const removed = r.state === "removed", gitlab = r.forge === "gitlab";
     const g = gitlab && !removed ? gitlabLines(r) : { issuer: "", audience: "", protection: "" };
+    const e = etatDepot(r);
     const missions = r.missions.map((m) => `<code>${esc(m.id)}</code> <span class="soft">${esc(m.path)}</span>`).join(", ");
     const consentBtn = removed ? "" : r.consent ? ask(`consent:${r.id}`, D.withdraw, false) : ask(`consentir:${r.id}`, D.consent, false);
-    const again = r.pendingSend?.reason === "owner-changed" ? `${mk("inv", "owner-changed")} · <a href="#/declarer/confirmer/${esc(r.id)}">${D.confirmOwner}</a><br>`
-      : r.pendingSend?.reason === "definition-not-pinned" ? `${mk("inv", "definition-not-pinned")} · <a href="#/declarer/confirmer/${esc(r.id)}">${esc(F.depots.confirmDefinition)}</a><br>` : "";
-    const state = removed ? "" : r.state === "pending" ? `${mk("half", C.waitingFirst)}${r.pendingSend ? ` · <a href="#/declarer/confirmer/${esc(r.id)}">${D.confirmFirst}</a>` : ""}<br>` : again;
+    const state = removed ? "" : `${e.mark}${e.next ? `<div class="actions etat-geste">${e.next}</div>` : "<br>"}`;
     // the declared file or branch changed: every upload is refused until a new confirmation, said with its remedy
     const unpinned = !removed && gitlab && r.definitionPinned === false ? `<p class="avert" data-unpinned>${mk("inv", F.depots.unpinnedMark)} ${esc(F.depots.unpinned)}</p>` : "";
     const level = !removed && r.level ? `<details class="prov"><summary>${esc(F.level.summary)}</summary>${niveau(r.level)}</details>` : "";
-    return `<div class="arow"><div><div class="nm" data-verbatim translate="no">${esc(r.name)}</div><span class="k">${D.missions}</span>${missions}${r.repositoryId ? `<span class="k">${D.pinnedId}</span><code>${esc(r.repositoryId)}</code>` : ""}${g.issuer}</div>
-      <div class="small">${state}<span class="k">${gitlab ? esc(F.definition) : D.workflow}</span><code>${esc(r.workflow)}</code>${D.on}<code>${gitlab ? esc(r.defaultBranch) : "main"}</code>${g.audience}<br>${removed ? "" : r.consent ? mk("full", C.consented) : mk("void", D.notConsented)}${g.protection}<br>${consentBtn}${removed ? "" : ` · ${ask(`purge:${r.id}`, D.erase, false)} · <button class="lien-btn" type="button" data-go="#/declarer/modifier/${esc(r.id)}">${D.modify}</button>`}</div>
+    return `<div class="arow" id="depot-${esc(r.id)}"><div><div class="nm" data-verbatim translate="no"><a href="${esc(versDepot(r.id))}">${esc(r.name)}</a></div><span class="k">${D.missions}</span>${missions}${r.repositoryId ? `<span class="k">${D.pinnedId}</span><code>${esc(r.repositoryId)}</code>` : ""}${g.issuer}</div>
+      <div class="small">${state}<span class="k">${gitlab ? esc(F.definition) : D.workflow}</span><code>${esc(r.workflow)}</code>${D.on}<code>${gitlab ? esc(r.defaultBranch) : "main"}</code>${g.audience}<br>${removed ? "" : r.consent ? mk("full", C.consented) : mk("void", D.notConsented)}${g.protection}<br>${consentBtn}${removed ? "" : ` · ${ask(`purge:${r.id}`, D.erase, false)} · <button class="lien-btn" type="button" data-go="${esc(versModifier(r.id))}">${D.modify}</button>`}</div>
       ${removed ? `<div>${mk("void", D.removed)} ${ask(`restorerepo:${r.id}`, C.restore)}<div class="small soft">${C.until(when(r.restorableUntil, { sec: false }))}</div></div>` : `<div>${ask(`repo:${r.id}`, C.remove)}</div>`}
       ${unpinned}${level}
       ${confirmBox(`repo:${r.id}`)}${confirmBox(`restorerepo:${r.id}`)}${confirmBox(`consent:${r.id}`)}${confirmBox(`consentir:${r.id}`)}${confirmBox(`purge:${r.id}`)}${confirmBox(`liftprot:${r.id}`)}${confirmBox(`restoreprot:${r.id}`)}</div>`;
   }).join("") || `<p class="small soft">${D.none}</p>`;
-  return `<section class="blk"><h2>${D.h2}</h2>${rp}<div class="actions" style="margin-top:12px">${go("#/declarer", C.declare, { q: true })}</div></section>`;
+  return `<section class="blk"${ancre("depots")}><h2${titreAncre("depots")}>${D.h2}</h2>${rp}<div class="actions" style="margin-top:12px">${go("#/declarer", C.declare, { q: true })}</div></section>`;
 }
 
 /**
@@ -65,7 +81,7 @@ export function sectionInstances(a) {
       <div class="cles">${keys}</div>${confirmBox(`issuerremove:${i.id}`)}</div>`;
   }).join("") || `<p class="small soft">${esc(I.none)}</p>`;
   const more = list.length < max ? `<div class="actions" style="margin-top:12px">${go("#/acces/instance", I.register, { q: true })}</div>` : `<p class="small soft">${I.limit(esc(max))}</p>`;
-  return `<section class="blk"><h2>${esc(I.h2)}</h2><p class="small soft">${esc(I.lede)}</p>${rows}${more}</section>`;
+  return `<section class="blk"${ancre("instances")}><h2${titreAncre("instances")}>${esc(I.h2)}</h2><p class="small soft">${esc(I.lede)}</p>${rows}${more}</section>`;
 }
 
 /**
@@ -100,7 +116,7 @@ export function viewInstance(id) {
       <p class="small soft">${I.keysNote}</p>
       <label class="f"><span class="k">${esc(I.kid)}</span><input class="in" name="kid" value="${esc(v.kid)}" autocomplete="off" spellcheck="false" translate="no"></label>
       <p class="small soft">${esc(I.kidNote)}</p>
-      <div class="actions"><button class="btn" type="submit">${esc(I.preview)}</button>${go("#/acces", C.cancel, { q: true })}</div>
+      <div class="actions"><button class="btn" type="submit">${esc(I.preview)}</button>${go(versSection("instances"), C.cancel, { q: true })}</div>
       <p class="note">${I.after}</p></form>`;
   return { title: id ? I.titleKey : I.title, key: "acces", signed: "in", focus: err ? (err.field ? `#e-${err.field}` : "#e-top") : null, html: `${head(I.head, C.gestureCheck)}
     <h1 class="v">${id ? I.h1Key(name) : esc(I.h1)}</h1>

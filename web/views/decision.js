@@ -19,6 +19,7 @@ import { renderView } from "./fleet-views.js";
 import { lang, setLang, mots } from "./lexique.js";
 import { ligne } from "./lignes.js";
 import { niveauLigne, ordre } from "./claims.js";
+import { prochainPas, versAccord, versSection } from "./liens.js";
 
 // ------------------------------------------------------------- the language of the reading
 // The reader's language is the app's, one for the reading and its frame (web/views/lexique.js): the choice kept under
@@ -38,7 +39,15 @@ export const WORDS = {
     emptyTitle: "Aucune application dans votre portefeuille.",
     emptyText: "Branchez une application : son prochain contrôle arrivera ici, avec une phrase et de quoi le vérifier.",
     emptyAct: "Brancher une première application",
-    waitTitle: "En attente du premier contrôle.", waitAct: "Voir dans Accès",
+    waitTitle: "En attente du premier contrôle.", waitAct: "Tous les dépôts déclarés",
+    // the next step of each application awaited, by its kind (web/views/liens.js#prochainPas), and its button
+    next: {
+      confirm: (at) => `Premier envoi reçu le ${at} : il attend votre confirmation, rien n'est publié avant.`, confirmAct: "Confirmer le premier envoi",
+      owner: "Le dépôt arrive sous un autre propriétaire : confirmez-le, ou retirez le dépôt.", ownerAct: "Confirmer le nouveau propriétaire",
+      install: "Rien n'est encore arrivé : l'équipe ajoute l'envoi à sa chaîne de livraison, puis fusionne.", installAct: "Voir ce que l'équipe ajoute",
+      consent: "L'accord sur le contenu n'est pas donné : ses contrôles ne sont pas acceptés.", consentAct: "Donner l'accord",
+      wait: "Confirmé : son prochain contrôle arrivera ici.", waitAct: "Voir le dépôt",
+    },
     waitText: "Ces applications sont déclarées. Leur premier contrôle arrivera ici, à confirmer, avec une phrase et de quoi le vérifier.",
     errorTitle: "Le portefeuille ne s'affiche pas.",
     errorText: "Votre session est ouverte, mais la lecture n'a pas pu être chargée. Vos contrôles ne sont pas perdus : ils sont écrits avant toute réponse.",
@@ -97,7 +106,14 @@ export const WORDS = {
     emptyTitle: "No application in your portfolio.",
     emptyText: "Connect an application: its next check will arrive here, with one sentence and what you need to check it yourself.",
     emptyAct: "Connect a first application",
-    waitTitle: "Waiting for the first check.", waitAct: "See in Access",
+    waitTitle: "Waiting for the first check.", waitAct: "All declared repositories",
+    next: {
+      confirm: (at) => `First upload received on ${at}: it waits for your confirmation, nothing is published before.`, confirmAct: "Confirm the first upload",
+      owner: "The repository arrives under another owner: confirm it, or remove the repository.", ownerAct: "Confirm the new owner",
+      install: "Nothing has arrived yet: the team adds the upload to its delivery chain, then merges.", installAct: "See what the team adds",
+      consent: "Consent to the content is not given: its checks are not accepted.", consentAct: "Give consent",
+      wait: "Confirmed: its next check will arrive here.", waitAct: "See the repository",
+    },
     waitText: "These applications are declared. Their first check will arrive here, to be confirmed, with one sentence and what you need to check it yourself.",
     errorTitle: "The portfolio does not show.",
     errorText: "Your session is open, but the reading could not be loaded. Your checks are not lost: they are written before any answer.",
@@ -235,7 +251,7 @@ function receivedPanel(w, lang, m) {
     const meta = [e.commit ? `${esc(R.commit)} <code translate="no">${esc(String(e.commit).slice(0, 12))}</code>` : "", e.runNumber ? (e.forge === "gitlab" ? `pipeline ${esc(e.runNumber)}` : R.run(e.runNumber)) : ""].filter(Boolean).join(" · ");
     return `<li>${when(e.at, { sec: false })} · ${esc(word)}${e.refusal ? reasonOf(w, lang, e.refusal) : ""}${meta ? `<span class="sub">${meta}</span>` : ""}</li>`;
   }).join("");
-  const consent = st && st.consent === false ? `<p>${esc(R.consent)}</p><div class="actions">${go("#/acces", R.consentAct, { q: true })}</div>` : "";
+  const consent = st && st.consent === false ? `<p>${esc(R.consent)}</p><div class="actions">${go(versAccord(st), R.consentAct, { q: true })}</div>` : "";
   const since = st?.notAcceptedSince ? `<p>${R.since(st.notAcceptedSince)}</p>` : "";
   return fenetre(esc(R.title), `${items ? `<ul class="lecture-recus">${items}</ul>` : `<p class="note">${esc(R.none)}</p>`}${since}${consent}
     <p class="note">${esc(R.note)} <a href="#/envois">${esc(R.journal)}</a></p>`, { plat: true, cls: "c-bar lecture-recu", attrs: ` aria-label="${esc(R.title)}"` });
@@ -251,10 +267,18 @@ const frame = (lang, html, vue = "") => `<div class="lecture" lang="${lang}"${vu
 const tete = (h1, p = "") => `<div class="tete"><h1 class="t1">${esc(h1)}</h1>${p}</div>`;
 
 // ------------------------------------------------------------- the screen
-/** The missions the service knows as declared and the index does not carry yet: their first check is awaited. */
+/**
+ * The missions the service knows as declared and the index does not carry yet: their first check is awaited. Each
+ * one says its next step and carries its button, to the place where that step is done (web/views/liens.js).
+ */
 function awaited(w, lines) {
   if (!lines.length) return "";
-  return `<ul class="lecture-attente">${lines.map((l) => `<li><span class="etq" data-state="not-observed"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(l.repository)}${l.path && l.path !== "." ? ` · ${esc(l.path)}` : ""}</span></span></li>`).join("")}</ul>`;
+  return `<ul class="lecture-attente">${lines.map((l) => {
+    const n = prochainPas(l), N = w.next;
+    const said = n.kind === "confirm" ? N.confirm(when(n.at, { sec: false })) : esc(N[n.kind]);
+    return `<li><span class="etq" data-state="not-observed"><span data-role="mark" aria-hidden="true"></span><span translate="no">${esc(l.repository)}${l.path && l.path !== "." ? ` · ${esc(l.path)}` : ""}</span></span>
+      <p class="attente-pas">${said}</p><div class="actions">${go(n.href, N[`${n.kind}Act`], { q: n.kind === "install" || n.kind === "wait" })}</div></li>`;
+  }).join("")}</ul>`;
 }
 
 export function viewDecision(sub) {
@@ -271,7 +295,7 @@ export function viewDecision(sub) {
     // nothing to read: no index yet, or every application removed. The mock-up's empty state, in a window whose bar
     // says where one is; the declared ones, if any, are named while their first check is awaited
     const body = waiting.length
-      ? `<h2 class="h2">${esc(w.waitTitle)}</h2><p class="sous">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct)}${go("#/declarer", w.connect, { q: true })}</div>`
+      ? `<h2 class="h2">${esc(w.waitTitle)}</h2><p class="sous">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go(versSection("depots"), w.waitAct, { q: true })}${go("#/declarer", w.connect, { q: true })}</div>`
       : `<h2 class="h2">${esc(w.emptyTitle)}</h2><p class="sous">${esc(w.emptyText)}</p><div class="actions">${go("#/declarer", w.emptyAct)}</div>`;
     return { ...base, title: w.portfolio, html: frame(lang, `${tete(w.title)}${fenetre(esc(w.portfolio), body, { tag: "div", h: "p", cls: "lecture-vide" })}`) };
   }
@@ -281,7 +305,7 @@ export function viewDecision(sub) {
     // the portfolio: runward-fleet's reading, whose parts the layer lays out (web/app.css): the title and its lede,
     // the tiles in a glass window whose bar is the line « Mis à jour le… », the applications on a sheet
     const updated = st.index ? `<p class="lecture-maj scr-bar num">${w.updated(when(st.index.publishedAt, { sec: false }))}</p>` : `<p class="lecture-maj scr-bar">${esc(w.portfolio)}</p>`;
-    const pending = waiting.length ? `<section class="bandeau lecture-attendues" aria-labelledby="h-attente"><h2 class="h2" id="h-attente">${esc(w.waitTitle)}</h2><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go("#/acces", w.waitAct, { q: true })}</div></section>` : "";
+    const pending = waiting.length ? `<section class="bandeau lecture-attendues" aria-labelledby="h-attente"><h2 class="h2" id="h-attente">${esc(w.waitTitle)}</h2><p class="soft">${esc(w.waitText)}</p>${awaited(w, waiting)}<div class="actions">${go(versSection("depots"), w.waitAct, { q: true })}</div></section>` : "";
     return { ...base, title: w.portfolio, html: frame(lang, `${setAside}${updated}${renderView(idx, "decision")}${pending}
       <div class="actions lecture-actions">${go("#/declarer", w.connect, { q: true })}</div>`, "port") };
   }

@@ -7,6 +7,7 @@ import { KINDS } from "./confirm.js";
 import { mots } from "./lexique.js";
 import { say } from "./shell.js";
 import { forgetReads, refreshScreen, rerender } from "./router.js";
+import { retour, versSection, versDepot } from "./liens.js";
 
 export async function signIn(mode) {
   location.hash = "#/entree/attente";
@@ -58,7 +59,7 @@ async function refreshAfterAdd() {
   const onArrival = parts().route === "arrivee";
   await refreshScreen();
   if (onArrival && S.addError) location.hash = S.addError === "exists" ? "#/arrivee/seconde-existe" : "#/arrivee/seconde-annulee";
-  else if (!onArrival && !S.addError) location.hash = "#/acces";
+  else if (!onArrival && !S.addError) location.hash = retour(versSection("cles"));
   else rerender();
 }
 
@@ -113,6 +114,8 @@ export async function confirmGesture(k) {
   if ((kind === "passkey" && r.data?.closedCurrent) || (kind === "session" && r.data?.closedCurrent)) { S.session = null; S.closedBy = "passkey"; location.hash = "#/entree/session-fermee"; return; }
   S.focusKey = k;
   await refreshScreen();
+  // a repository removed from its confirmation (« ce n'est pas mon dépôt »): that screen has nothing left to do
+  if (kind === "repo" && parts().route === "declarer") location.hash = retour(versDepot(id));
 }
 
 // ------------------------------------------------------------- the forge port (ADR-0029)
@@ -129,10 +132,11 @@ export async function confirmRepository(id) {
   if (!r.ok) {
     S.failed = k; S.failedText = r.message ? `${r.message} ${r.action ?? ""}` : null;
     if (r.refusal === "confirmation-stale") { S.stale = id; await loadAccess(); }
-    return rerender();
+    rerender();
+    return false;
   }
   say(r.data?.quarantine ? mots().done.confirmedQuarantine : mots().done.confirmed);
-  await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? "#/" : "#/arrivee";
+  return true;
 }
 
 /** Where a refusal of a registration or of a key is shown: under its field, else above the form. */
@@ -171,5 +175,5 @@ export async function issuerWrite() {
   S.issuer = null;
   const done = mots().done;
   say(!f.id ? done.issuerRegistered : r.data?.confirmed ? done.keyConfirmed : done.keyAdded);
-  await refreshScreen(); location.hash = "#/acces";
+  await refreshScreen(); location.hash = versSection("instances");
 }

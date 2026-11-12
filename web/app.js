@@ -14,6 +14,7 @@
 import { S, parts } from "./views/base.js";
 import { loadSession, api } from "./views/api.js";
 import { show } from "./views/router.js";
+import { origineApres, hashOf } from "./views/liens.js";
 import "./views/events.js";
 import "./views/theme.js";
 
@@ -29,7 +30,8 @@ import "./views/theme.js";
     await loadSession();
     if (S.link) { const r = await api("POST", "/api/v0/links/inspect", { token: S.link }); S.linkInfo = r.ok ? r.data : { state: "link-invalid" }; }
   }
-  window.addEventListener("hashchange", () => { S.confirming = null; S.failed = null; show(); });
+  // each change of address notes where a task was opened from, so that it sends back there (web/views/liens.js)
+  window.addEventListener("hashchange", (e) => { S.origine = origineApres(S.origine, hashOf(e.oldURL), location.hash || "#/"); S.cibleVue = null; S.confirming = null; S.failed = null; show(); });
   window.addEventListener("online", () => { if (parts().route === "panne") show(); });
   await show();
 })();

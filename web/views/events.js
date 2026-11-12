@@ -1,12 +1,13 @@
 // What the page listens to: one click handler for every button of the shell (data-go opens an address,
 // data-do names a gesture), and the two forms.
 import { S, main, parts, colonneEl } from "./base.js";
-import { api } from "./api.js";
+import { api, loadSession } from "./api.js";
 import { say, menu, closeMenuWhenWide } from "./shell.js";
 import { FIELD_OF, DEFAULT_FILE } from "./declarer.js";
 import { setLang, mots } from "./lexique.js";
 import { show, forgetReads, rerender, refreshScreen } from "./router.js";
 import { signIn, redeem, addPasskey, confirmGesture, write, confirmRepository, issuerPreview, issuerWrite } from "./gestures.js";
+import { retour, versDepot } from "./liens.js";
 
 document.addEventListener("click", async (e) => {
   const g = e.target.closest("[data-go]");
@@ -45,7 +46,10 @@ document.addEventListener("click", async (e) => {
     await refreshScreen(); location.hash = "#/arrivee"; return;
   }
   // a repository confirmed: bound to the values the screen showed (web/views/gestures.js)
-  if (what === "gesture" && k.startsWith("confirm:")) return confirmRepository(k.slice(8));
+  if (what === "gesture" && k.startsWith("confirm:")) {
+    if (!(await confirmRepository(k.slice(8)))) return;
+    await loadSession(); forgetReads(); location.hash = S.session.arrivalDone ? retour("#/") : "#/arrivee"; return;
+  }
   // a GitLab instance registered, or a key added to one: the gesture on what the preview showed
   if (what === "gesture" && k === "issuer") return issuerWrite();
   if (what === "issuer-edit") { S.issuer = { ...S.issuer, preview: null, error: null }; return rerender(); }
@@ -88,7 +92,7 @@ main.addEventListener("submit", async (e) => {
     const body = { workflow: val("wf"), defaultBranch: val("branch") || "main", addMissions: val("mission") ? [{ id: val("mission"), path: val("path") || "." }] : [], removeMissions: remove, knowingSendsStay: remove.length > 0 };
     const r = await write("PATCH", `/api/v0/repositories/${id}`, body);
     if (!r.ok) { const x = r.data ? r : { message: mots().common.verifyFailed, action: "" }; S.formError = { message: x.message, action: x.action }; return rerender(); }
-    S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = "#/acces";
+    S.formError = null; say(mots().done.modified); await refreshScreen(); location.hash = retour(versDepot(id));
   }
 });
 
