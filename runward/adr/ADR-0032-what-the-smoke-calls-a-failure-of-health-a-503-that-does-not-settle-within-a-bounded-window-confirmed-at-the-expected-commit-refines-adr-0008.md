@@ -1,7 +1,7 @@
 # ADR-0032: What the smoke calls a failure of health: a 503 that does not settle within a bounded window, confirmed, at the expected commit (refines ADR-0008)
 
 **Date**: 2026-11-12
-**Status**: proposed
+**Status**: accepted 2026-11-12 by the author in chat ("j'accepte 2", in answer to a list whose item 2 was "Accepter ou non ADR-0032 … Je recommande d'accepter"); written by an agent session
 **Refines**: ADR-0008 (the deployment chain), which stays in force for everything this record does not change
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: reality-check (the logs of the two failed runs, the hoster's container logs of both instances, the deadlines read in the code, the hoster's documentation), challenge (an adversarial review of the first implementation, `4f46dd3`), durable position

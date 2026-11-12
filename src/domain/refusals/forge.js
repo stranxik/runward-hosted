@@ -21,7 +21,7 @@ export const FORGE = {
 
   // ---- the declaration on another forge
   "issuer-unknown": { status: 404, fr: ["Cette instance n'est pas enregistrée dans cette flotte, ou ce service ne reçoit pas encore d'elle.", "Enregistrer l'instance dans Accès."], en: ["This instance is not registered in this fleet, or this service does not receive from it yet.", "Register the instance in Access."] },
-  "repository-path-unsupported": { status: 400, fr: ["La vue ne sait pas encore nommer ce dépôt : son chemin a plus de deux segments, ou l'hôte de son instance porte un port.", "Rien pour l'instant : il se déclarera quand le service aura épinglé une version de runward-fleet qui lit ces noms."], en: ["The view cannot name this repository yet: its path has more than two segments, or its instance's host carries a port.", "Nothing for now: it can be declared once the service pins a runward-fleet version that reads such names."] },
+  "repository-path-unsupported": { status: 400, fr: ["La vue ne sait pas nommer ce dépôt : son chemin a plus de huit segments.", "Rien pour l'instant : il se déclarera quand le service aura épinglé une version de runward-fleet qui lit ces noms."], en: ["The view cannot name this repository: its path has more than eight segments.", "Nothing for now: it can be declared once the service pins a runward-fleet version that reads such names."] },
 
   // ---- a registered instance (section 4)
   "issuer-malformed": { status: 400, fr: ["L'adresse de l'émetteur n'est pas lisible.", "L'écrire comme le champ iss des jetons de l'instance : http ou https, l'hôte, le port s'il y en a un."], en: ["The issuer's address cannot be read.", "Write it as the iss claim of the instance's tokens reads: http or https, the host, the port if there is one."] },

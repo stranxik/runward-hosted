@@ -8,12 +8,21 @@
 // The passkey ceremony is a stand-in here (it checks the challenge and the credential, as the unit suites
 // do): the WebAuthn library is witnessed by scripts/witness-local.mjs, in a browser.
 //   node scripts/witness-gitlab.mjs --ip <address the runner reaches> --issuer <iss> --jwks <file> --kid <kid> --out <dir>
-// Control: a file dropped in <out>/ctl/ is a command, run once: `declare` (try to declare --project),
-// `retire` (retire the instance's key), `forged` (send a token under the key's kid with a bad signature),
-// `stop`. Every event is a line of <out>/events.jsonl.
+// Control: a file dropped in <out>/ctl/ is a command, run once; its content, when it is JSON, is the command's
+// arguments: `declare` (declare a project with consent, by the real gestures: {"project", "mission", "branch"},
+// --project, mission demo and branch main by default), `confirm` (confirm the first send of a declared project as
+// the shell does: the values to pin and their digest read on the access view, the gesture bound to them:
+// {"project"}), `reading` (the application's screen as the shell paints it, web/views/decision.js over the
+// tenant's real index and status: its level panel, the sentence first, and the repository the index names:
+// {"mission"}), `retire` (retire the instance's key), `forged` (send a token under the key's kid with a bad
+// signature), `stop`. Every event is a line of <out>/events.jsonl.
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { mkdirSync, appendFileSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, appendFileSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { MODULES } from "../src/http/assets.js";
+import { confirmObject } from "../src/domain/forge.js";
 import { readConfig, compose } from "../src/main.js";
 import { memoryStore } from "../src/adapters/store/memory.js";
 import { memoryObjects } from "../src/adapters/objects/objects.js";
@@ -99,11 +108,50 @@ const regB = await register(B, { issuer: ISSUER, keys: { keys: [own.jwk] }, kid:
 record({ event: "registered", origin: ORIGIN, issuer: ISSUER, a: { audience: regA.audience, kid: regA.kid, thumbprint: regA.thumbprint, bits: regA.bits }, b: { audience: regB.audience, kid: regB.kid, note: "the same issuer string, registered by another tenant with a key of its own" } });
 writeFileSync(join(OUT, "audiences.json"), `${JSON.stringify({ origin: ORIGIN, a: regA.audience, b: regB.audience }, null, 2)}\n`);
 
+// The shell's screen, painted here as in a browser (the modules as src/http/assets.js serves them, the slot of the
+// pinned views filled), over what the real routes answer: the decision reading of one application and its level.
+const WEB = new URL("../web/", import.meta.url).pathname;
+const VIEWS = new URL("../node_modules/runward-fleet/ui/views.js", import.meta.url);
+globalThis.window = globalThis;
+globalThis.document = { querySelector: () => null, getElementById: () => ({}) };
+globalThis.localStorage = { getItem: (k) => (k === "rw-accueil-lang" ? "fr" : null), setItem() {}, removeItem() {} };
+const served = mkdtempSync(join(tmpdir(), "rw-witness-shell-"));
+for (const f of MODULES) {
+  const p = join(served, f);
+  mkdirSync(dirname(p), { recursive: true });
+  writeFileSync(p, readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(VIEWS.href)));
+}
+const shell = { D: await import(pathToFileURL(join(served, "views/decision.js")).href), S: (await import(pathToFileURL(join(served, "views/base.js")).href)).S };
+const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&nbsp;|\u00a0/g, " ").replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+const args = (f) => { try { return JSON.parse(readFileSync(join(OUT, "ctl", f), "utf8") || "{}"); } catch { return {}; } };
+
 const commands = {
-  async declare() {
-    await A.verify(null);
-    const r = await call("POST", "/api/v0/repositories", { body: { forge: "gitlab", issuer: regA.id, name: PROJECT, missions: [{ id: "demo" }] }, cookie: A.cookie });
-    record({ event: "declare", project: PROJECT, status: r.status, refusal: r.body.refusal ?? null, message: r.body.message ?? null });
+  async declare({ project = PROJECT, mission = "demo", branch = "main" } = {}) {
+    await A.verify("declare-with-consent", `gitlab:${regA.id}:${project.toLowerCase()}`);
+    const r = await call("POST", "/api/v0/repositories", { body: { forge: "gitlab", issuer: regA.id, name: project, defaultBranch: branch, consent: true, missions: [{ id: mission, path: "." }] }, cookie: A.cookie });
+    record({ event: "declare", project, mission, branch, status: r.status, state: r.body.state ?? null, refusal: r.body.refusal ?? null, message: r.body.message ?? null });
+  },
+  async confirm({ project = PROJECT } = {}) {
+    const access = await call("GET", "/api/v0/access", { cookie: A.cookie });
+    const repo = (access.body.repositories ?? []).find((x) => x.name === project);
+    if (!repo?.pending) return record({ event: "confirm", project, status: null, refusal: "nothing pending to confirm", state: repo?.state ?? null });
+    await A.verify("repository-confirm", confirmObject(repo.id, repo.pending.digest));
+    const r = await call("POST", `/api/v0/repositories/${repo.id}/confirm`, { body: { digest: repo.pending.digest }, cookie: A.cookie });
+    record({ event: "confirm", project, shown: { values: repo.pending.values ?? null, digest: repo.pending.digest, confirmable: repo.pending.confirmable ?? null }, status: r.status, published: r.body.published ?? null, refusal: r.body.refusal ?? null });
+  },
+  async reading({ mission = "demo" } = {}) {
+    const status = await call("GET", "/api/v0/fleet/status", { cookie: A.cookie });
+    const idx = await fetch(`http://127.0.0.1:${PORT}/f/${A.tenant}/index.json`, { headers: { cookie: A.cookie } });
+    const index = idx.status === 200 ? await idx.json() : null;
+    const session = await call("GET", "/api/v0/session", { cookie: A.cookie });
+    Object.assign(shell.S, { index, status: status.body, fleetError: null, session: session.body });
+    const painted = shell.D.viewDecision(mission);
+    const html = typeof painted === "string" ? painted : painted?.html ?? "";
+    const panel = html.match(/<section[^>]*lecture-niveau[\s\S]*?<\/section>|<[a-z]+[^>]*class="[^"]*lecture-niveau[^"]*"[\s\S]*?data-level-code[^<]*<\/p>/)?.[0] ?? "";
+    const line = (status.body.lines ?? []).find((l) => l.mission === mission) ?? null;
+    record({ event: "reading", mission, index: index ? { repository: index.missions.find((m) => m.id === mission)?.repository ?? null, verdict: index.missions.find((m) => m.id === mission)?.latest?.verdict ?? null } : { status: idx.status },
+      line: line ? { state: line.state, forge: line.forge, level: line.level, accepted: line.accepted ? { runNumber: line.accepted.runNumber, runAttempt: line.accepted.runAttempt, commit: line.accepted.commit } : null, firstConfirmed: html.includes("premier contrôle confirmé") } : null,
+      levelPanel: text(panel) });
   },
   async retire() {
     const access = await call("GET", "/api/v0/access", { cookie: A.cookie });
@@ -122,11 +170,13 @@ const commands = {
 let stopped = false;
 while (!stopped) {
   for (const f of readdirSync(join(OUT, "ctl"))) {
+    if (f === "stop") { rmSync(join(OUT, "ctl", f)); stopped = true; break; }
+    const given = args(f);
     rmSync(join(OUT, "ctl", f));
-    if (f === "stop") { stopped = true; break; }
-    try { if (commands[f]) await commands[f](); else record({ event: "unknown-command", command: f }); } catch (e) { record({ event: "command-failed", command: f, error: String(e.message).slice(0, 200) }); }
+    try { if (commands[f]) await commands[f](given); else record({ event: "unknown-command", command: f }); } catch (e) { record({ event: "command-failed", command: f, error: String(e.message).slice(0, 200) }); }
   }
   await new Promise((r) => setTimeout(r, 500));
 }
 record({ event: "stopped", journals: await journals() });
+rmSync(served, { recursive: true, force: true });
 c.http.server.close();

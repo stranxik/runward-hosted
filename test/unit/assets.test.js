@@ -127,7 +127,7 @@ test("the modules' folder is named by every name and every byte: one byte or one
   assert.notEqual(modulesFolder([["app.js", Buffer.from("import \"./views/base.js\";\nviews/base.js")], ["", Buffer.from("export const x = 1;\n")]]), name, "bytes moved across the boundary of two files");
 });
 
-// ADR-0024: the archive pinned at main@d052814 ships two modules the app does not show yet (ui/mission.js, the
+// ADR-0024: the archive pinned at main@d052814 (and at main@c9a886a, ADR-0033) ships two modules the app does not show yet (ui/mission.js, the
 // path, the portfolio by step and the series; ui/documents.js, the documents). Their screens are a later lot:
 // until then nothing of them is served, and the two files the app does take from the package ask for nothing more.
 /** What a served file of the pinned package would make a browser fetch: an import, a url(), an @import. */
