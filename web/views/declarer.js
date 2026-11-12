@@ -229,7 +229,7 @@ function flux(what, repo) {
   const prog = `<span class="prog" aria-hidden="true">${[1, 2, 3, 4, 5].map((n) => `<i class="${n < e.step ? "ok" : n === e.step ? "ici" : ""}"></i>`).join("")}</span>`;
   const meta = `${prog}<span class="soft">${esc(F.stepOf(vue))}</span>${repo ? `<span class="soft" translate="no">${esc(repo.name)}</span>` : ""}`;
   // on a phone the step's one action stays at the bottom, under the thumb (web/parcours.css)
-  const bas = asked ? "" : e.step === 2 ? act("flux-fait", F.s2.done, { k: repo.id }) : e.step === 4 && repo.pending?.confirmable ? act("gesture", W.declarer.confirm.confirmRepo, { k: `confirm:${repo.id}` })
+  const bas = asked ? "" : e.step === 2 ? act("flux-fait", F.s2.done, { k: repo.id }) : e.step === 4 && repo.pending?.confirmable ? act("gesture", e.variant === "owner" ? W.declarer.confirm.confirmOwner : e.variant === "definition" ? W.forge.pins.confirmDefinition : W.declarer.confirm.confirmRepo, { k: `confirm:${repo.id}` })
     : e.step === 5 && e.mission ? `<a class="btn" href="#/decision/${esc(encodeURIComponent(e.mission))}" data-flux-premier="${esc(e.mission)}">${esc(F.s5.open)}</a>` : "";
   const [stHtml, stKind] = repo ? statut(repo, e) : ["", ""];
   const detail = `${entete({ meta, titre: esc(P.steps[vue - 1]) })}${corps(`${feuille({ cls: "sheet-rail", label: P.rail, corps: railFlux(e.step, repo, vue) })}${feuille({ corps: panel, cls: "sheet-step" })}`)}${bas ? `<div class="d-bas">${bas}</div>` : ""}`;
