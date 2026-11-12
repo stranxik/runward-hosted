@@ -6,7 +6,7 @@
       "tool": {
         "driver": {
           "name": "eslint",
-          "version": "10.13.0",
+          "version": "10.14.0",
           "informationUri": "https://eslint.org",
           "rules": [
             {
@@ -79,7 +79,7 @@
           "properties": {
             "config": "eslint.security.config.js",
             "plugins": {
-              "eslint-plugin-security": "4.2.0"
+              "eslint-plugin-security": "4.2.1"
             },
             "files": 54
           }
