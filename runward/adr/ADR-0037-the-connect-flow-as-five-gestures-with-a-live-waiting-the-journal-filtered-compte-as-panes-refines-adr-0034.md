@@ -1,7 +1,7 @@
 # ADR-0037: The connect flow as five gestures with a live waiting, the journal filtered by application, kind and period, Compte as sections and detail (refines ADR-0034)
 
 **Date**: 2026-11-12
-**Status**: proposed; written by an agent session
+**Status**: accepted 2026-11-12 by the author in chat ("j'accepte les adr", in answer to a list whose item was "Accepter ou non les ADR-0036 (structure fixe et Applications en volets) et ADR-0037 (Brancher guidé, journal filtré, Compte en volets). Je recommande d'accepter les deux."); written by an agent session
 **Refines**: ADR-0034 (accepted 2026-11-12), which stays in force for the four entries, « À faire », the technical views and the control account; ADR-0035 (accepted 2026-11-12) on its point 4 only, where a first check confirmed leads (below, point 1.5)
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: the playable mock-up of the fixed shell the author validated on 2026-11-12 (« ok pour la maquette »), the code of today's declaration and confirmation read for every rule it holds (`web/views/declarer.js`, `web/views/gestures.js#confirmRepository`, `src/application/repositories.js#declare` and `#confirm`, ADR-0029 sections 1 and 2, ADR-0031), the defect seen in production the same day (below), the journal's route and its store read for what a filter can cost (`src/application/reading.js#journal`, `#status`), the same screens witnessed on the real service on the in-memory store

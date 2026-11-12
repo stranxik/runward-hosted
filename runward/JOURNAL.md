@@ -538,3 +538,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: test/unit/parcours.test.js plants the first check after the first read and sees it on the next screen without a reload, with its control; test/unit/journal-filter.test.js holds the answer without a filter unchanged, each kind, an application, a period, the paging and every act classed.
 - Decided: ADR-0037 (proposed): the waiting is live, « c'est fait » is a marker of the screen only, the journal's filters are the service's, Compte is its sections as panes; the consent stays unticked by default.
 - Next: the author's decision on ADR-0037; the witness of the three screens on the real service once lot 1 (ADR-0036) and this lot are merged.
+
+## 2026-11-12 - ADR-0036 and ADR-0037 accepted
+
+- Done: ADR-0036 and ADR-0037 record the author's acceptance; their rows of the architecture note are decided.
+- Evidence: the author in chat, 2026-11-12: "j'accepte les adr", in answer to a list whose item was "Accepter ou non les ADR-0036 (structure fixe et Applications en volets) et ADR-0037 (Brancher guidé, journal filtré, Compte en volets). Je recommande d'accepter les deux."
+- Decided: ADR-0036 accepted (the author): the fixed shell, the page never scrolls on a desk, Applications as a list and a detail in panes, the applications leave the sidebar. ADR-0037 accepted (the author): the connect flow as five gestures with a live waiting, « c'est fait » a marker of the screen only, the journal filtered by application, kind and period, Compte as panes, the consent unticked by default.
+- Next: the production witness of the three screens on desk and phone, and the three-minute demo rehearsed end to end.
