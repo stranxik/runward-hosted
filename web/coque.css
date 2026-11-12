@@ -95,6 +95,8 @@
 .chip[aria-pressed="true"]{ background:var(--text); color:var(--bg); border-color:var(--text); }
 .chip[aria-pressed="true"] [data-role="mark"], .chip[aria-pressed="true"] .mk{ color:var(--bg); border-color:var(--bg); }
 .chip .mk, .chip [data-role="mark"]{ width:10px; height:10px; }
+/* the filter « où rien ne bloque » says its count and its word in the passing green beside its dot (ADR-0038); pressed, it inverts in ink */
+.chip[data-k="clean"]:not([aria-pressed="true"]){ color:var(--passe); }
 .direct{ margin-left:auto; display:inline-flex; align-items:center; gap:8px; font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
 .direct i{ flex:none; width:8px; height:8px; border-radius:50%; background:var(--direct); box-shadow:0 0 0 3px color-mix(in srgb, var(--direct) 22%, transparent); }
 .direct.perime i{ background:transparent; border:1.5px dotted var(--bar); box-shadow:none; }
@@ -142,6 +144,7 @@ main a:is(.row, .pas-b, .retour):not(.btn){ text-decoration:none; color:var(--te
 .r-nm{ grid-row:1; grid-column:2; display:flex; flex-wrap:wrap; align-items:center; gap:4px 8px; min-width:0; font-size:var(--fs-ui); font-weight:var(--fw-strong); overflow-wrap:anywhere; }
 .r-t{ grid-row:1; grid-column:3; font-family:var(--mono); font-size:var(--fs-releve); color:var(--text-2); white-space:nowrap; }
 .r-st{ grid-row:2; grid-column:2; font-size:var(--fs-small); color:var(--text-2); }
+.r-st[data-state="clean"]{ color:var(--passe); font-weight:var(--fw-strong); }
 .row > .mini{ grid-row:2; grid-column:3; justify-self:end; }
 .r-why{ grid-row:3; grid-column:2 / 4; font-size:var(--fs-small); line-height:1.45; color:var(--text); overflow-wrap:anywhere; }
 /* runward-fleet's reading of the portfolio, folded at the end of the list */
@@ -149,6 +152,9 @@ main a:is(.row, .pas-b, .retour):not(.btn){ text-decoration:none; color:var(--te
 .l-brut .pi-pli-b [data-view="portfolio"]{ padding:14px 12px; }
 .r-bouge{ display:inline-flex; align-items:center; gap:5px; min-height:20px; padding:0 7px; border-radius:var(--r-pill); border:1px solid var(--direct); color:var(--text); font-size:var(--fs-releve); font-weight:var(--fw-text); white-space:nowrap; }
 .r-bouge::before{ content:""; width:6px; height:6px; border-radius:50%; background:var(--direct); }
+/* what moved toward passing (a refusal lifted, none raised; or the verdict now « Rien ne bloque »): the green, its tint */
+.r-bouge[data-sens="passe"]{ border-color:var(--passe); background:var(--passe-fond); }
+.r-bouge[data-sens="passe"]::before{ background:var(--passe); }
 @media (max-width:1023px){ .row{ min-height:64px; padding:12px var(--gut) 13px; } .row[aria-current="true"], .row.choisie{ background:transparent; } .row[aria-current="true"]::before, .row.choisie::before{ display:none; } .l-h{ position:static; padding:10px var(--gut) 8px; } }
 
 /* the six stations in small: the solid line as far as the check lets the version go, the refused mark where it refuses */
@@ -157,6 +163,8 @@ main a:is(.row, .pas-b, .retour):not(.btn){ text-decoration:none; color:var(--te
 .mini-f{ position:absolute; left:7px; top:5px; height:1.5px; max-width:70px; background:var(--text); }
 .mini.vide .mini-f{ display:none; }
 .mini i{ position:relative; z-index:1; justify-self:center; width:7px; height:7px; border-radius:50%; background:var(--text); }
+.mini.passe .mini-f{ background:var(--passe); }
+.mini i.m-passe{ background:var(--passe); }
 .mini i.m-refus{ width:8px; height:8px; border-radius:var(--r-mark); background:var(--refus); transform:rotate(45deg); }
 .mini i.m-vide{ width:6px; height:6px; background:var(--bg); border:1.5px solid var(--bar); }
 .mini i.m-attente{ background:var(--bg); border:1.5px dotted var(--bar); }
@@ -216,6 +224,8 @@ span.pas-b{ opacity:.4; }
 .pi-bouge-f{ border-color:var(--direct); }
 .pi-bouge-f .sh-h h2{ display:flex; align-items:center; gap:8px; }
 .pi-bouge-f .sh-h h2::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--direct); }
+.pi-bouge-f.vers-passe{ border-color:var(--passe); }
+.pi-bouge-f.vers-passe .sh-h h2::before{ background:var(--passe); }
 .d-body > .avert, .d-body > .bandeau, .d-body > .pi-premier{ max-width:none; }
 
 /* ============================================================================================================

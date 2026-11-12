@@ -92,7 +92,7 @@
 	<testcase name="the first run (« la piste »): the empty portfolio, declared applications named while their first check is awaited, each on its row with its reading; errors and loading are named" classname="test"/>
 	<testcase name="the grouped reading on the five real exports: refused first, n / N for every state, the refusals by kind then by the check's text, once, folded, none hidden" classname="test"/>
 	<testcase name="the service's lexicon: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
-	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue" classname="test"/>
+	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue, the passing green on « Rien ne bloque » only" classname="test"/>
 	<testcase name="canonical encoding: sorted keys, no whitespace, non-negative integers only" classname="test"/>
 	<testcase name="the chain detects a changed entry, a gap and a reordering" classname="test"/>
 	<testcase name="the current upload: the highest run_number, then run_attempt; a regression of run_number opens an epoch" classname="test"/>
@@ -345,6 +345,9 @@
 	<testcase name="the words of « la piste »: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
 	<testcase name="the list does not repeat « À faire »: a declaration's deadline is said by the strip, not on its row, and the control account shows no row awaited" classname="test"/>
 	<testcase name="Applications in panes: the list and the reading at the same addresses, the first shown by default on a desk, previous and next, the filters" classname="test"/>
+	<testcase name="the passing green (ADR-0038): « Rien ne bloque » and the stations passed, each with its mark and its word, nothing else" classname="test"/>
+	<testcase name="what moved toward passing is marked in green, and only that move" classname="test"/>
+	<testcase name="the sign-in's example says « Rien ne bloque » with its dot and its word, the passing green held by the stylesheet on that state only" classname="test"/>
 	<testcase name="a gate refused at several steps is said with the phases' names, in French and in English" classname="test"/>
 	<testcase name="the refusal's sentence carries no English and none of the app's banned words" classname="test"/>
 	<testcase name="planted: a gate in neither form is returned as written" classname="test"/>
@@ -467,9 +470,10 @@
 	<testcase name="every custom property the public site uses is defined by the family's structure, the layer, the site's stylesheet, or set by its pages and its script" classname="test"/>
 	<testcase name="planted control: a literal colour is seen" classname="test"/>
 	<testcase name="every custom property used is defined by the family structure or the app's layer" classname="test"/>
-	<testcase name="the layer fills the family's contract in both themes, with the contrasts measured, no banned value and no green" classname="test"/>
+	<testcase name="the layer fills the family's contract in both themes, with the contrasts measured, no banned value, and a green only as --passe" classname="test"/>
 	<testcase name="light is the default theme: the page starts light and the layer does not follow the system's dark preference" classname="test"/>
 	<testcase name="planted controls: the audit refuses a layer broken on purpose, for the reason planted" classname="test"/>
+	<testcase name="the passing green stands only on a passing state: every rule that takes it names one, no script sets it" classname="test"/>
 	<testcase name="planted control: the contrast measure is the WCAG one" classname="test"/>
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app's stylesheet; two loops only, the loading line and the drift of the haze behind the sign-in (ADR-0025), both stopped under reduced motion" classname="test"/>
@@ -492,9 +496,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 491 -->
+	<!-- tests 495 -->
 	<!-- suites 0 -->
-	<!-- pass 491 -->
+	<!-- pass 495 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

@@ -11,7 +11,7 @@ import { when } from "../time.js";
 import { mots } from "../lexique.js";
 import { piste } from "./mots.js";
 import { rail, chip, stepName, pieceName, flx, stateWord, firstRail } from "./rail.js";
-import { ETAPES, stations, blockTable, renamed, history, verdictOf } from "./donnees.js";
+import { ETAPES, stations, blockTable, renamed, history, verdictOf, versPasse, stepsVersPasse } from "./donnees.js";
 import { rowSentence, shortName } from "./portefeuille.js";
 import { entete, corps, colonnes, feuille, pli, pas } from "../volets.js";
 
@@ -49,7 +49,7 @@ function missingGroup(x, d) {
 /** What blocks, for the whole application (n = 0) or at one station (n = 1 to 6): the table, or what stands instead of it. */
 function blocksPanel(m, n) {
   const B = piste().blocks, A = piste().app, st = stations(m), v = st.verdict;
-  if (v === "clean") return `<p class="pi-pan-t">${dot("ok")}<span>${esc(B.none)}</span></p>`;
+  if (v === "clean") return `<p class="pi-pan-t">${dot("passe")}<span>${esc(B.none)}</span></p>`;
   if (v === "level-not-met") return `<p class="pi-pan-t">${dot("ok")}<span>${esc(B.level)}</span></p>`;
   if (v !== "gaps") return `<p class="pi-pan-t">${dot("attente")}<span>${esc(B.silent)}</span></p>`;
   const only = n ? ETAPES[n - 1] : null;
@@ -95,7 +95,7 @@ function told(m, line) {
   const nRef = Array.isArray(L.conformance) ? L.conformance.length : 0;
   if (st.verdict === "gaps") items.push([dot("refus"), esc(nRef ? T.refusedAt(stepsSaid(red), nRef) : T.refusedGate(stepsSaid(red)))]);
   else if (st.verdict === "level-not-met") items.push([dot("ok"), esc(T.level)]);
-  else items.push([dot("ok"), esc(T.nothing)]);
+  else items.push([dot(st.verdict === "clean" ? "passe" : "ok"), esc(T.nothing)]);
   const conf = (line?.activity ?? []).find((e) => e.what === "repository-confirmed");
   if (conf) items.push([dot("ok"), T.confirmed(when(conf.at, { sec: false }))]);
   return feuille({ titre: esc(T.title), cls: "pi-recit-f", corps: `<div class="sh-b"><p class="note">${esc(T.lead)}</p><ol class="pi-recit">${items.map(([d, t]) => `<li>${d}<p>${t}</p></li>`).join("")}</ol></div>` });
@@ -119,15 +119,20 @@ export function timeline(m, line, { reasonOf, received, fresh }) {
     ${earlier ? `<p class="note">${esc(H.verdictKept)}</p>` : ""}<p class="note"><a class="lien" href="#/envois">${esc(H.journal)}</a></p></div>` });
 }
 
-/** What moved, when a live read brought a new check of this application (vif.js). HTML-safe. */
+/**
+ * What moved, when a live read brought a new check of this application (vif.js). HTML-safe. Each line has its mark: the
+ * passing green for a refusal lifted and for a verdict now « clean », the refused mark for a refusal raised and for a
+ * verdict now refused, ink for the rest; the sheet is green when the whole move goes toward passing (ADR-0038).
+ */
 export function movedSection(d) {
   if (!d) return "";
   const V = piste().vif;
   const lines = [];
-  if (d.verdict) lines.push(esc(V.verdict(stateWord(d.verdict[0]), stateWord(d.verdict[1]))));
-  for (const [k, f] of [["lifted", V.lifted], ["raised", V.raised], ["filled", V.filled], ["emptied", V.emptied], ["decided", V.decided]]) if (d[k].length) lines.push(esc(f(d[k].length, stepsSaid(d[k]))));
-  if (!lines.length) lines.push(esc(V.same));
-  return feuille({ titre: esc(V.moved), cls: "pi-bouge-f neuf", corps: `<div class="sh-b" role="status"><ul class="pi-recit">${lines.map((t) => `<li>${dot("ok")}<p>${t}</p></li>`).join("")}</ul><p class="note">${esc(V.movedLead)}</p></div>` });
+  const toward = (v) => (v === "clean" ? "passe" : v === "gaps" ? "refus" : "ok");
+  if (d.verdict) lines.push([toward(d.verdict[1]), esc(V.verdict(stateWord(d.verdict[0]), stateWord(d.verdict[1])))]);
+  for (const [k, f, mark] of [["lifted", V.lifted, "passe"], ["raised", V.raised, "refus"], ["filled", V.filled, "ok"], ["emptied", V.emptied, "ok"], ["decided", V.decided, "ok"]]) if (d[k].length) lines.push([mark, esc(f(d[k].length, stepsSaid(d[k])))]);
+  if (!lines.length) lines.push(["ok", esc(V.same)]);
+  return feuille({ titre: esc(V.moved), cls: `pi-bouge-f neuf${versPasse(d) ? " vers-passe" : ""}`, corps: `<div class="sh-b" role="status"><ul class="pi-recit">${lines.map(([mark, t]) => `<li>${dot(mark)}<p>${t}</p></li>`).join("")}</ul><p class="note">${esc(V.movedLead)}</p></div>` });
 }
 
 /** The meta line of a head: when the check in force was received, its run, its commit. HTML-safe. */
@@ -153,7 +158,7 @@ export function reading(m, line, { sel = null, verify, level, detail, ctx, bouge
     actions: `<button class="btn btn-q" type="button" data-do="verifier" data-focus-key="verifier">${esc(ctx.verifyTitle)}</button>`,
     pas: pos ? pas({ ...pos, mots: C }) : "",
   });
-  const railSheet = feuille({ titre: esc(A.rail), corps: rail(m, name, { grand: true, sel, bouge: bouge?.steps ?? [], id: "pi-grand" }), cls: "pi-lect" });
+  const railSheet = feuille({ titre: esc(A.rail), corps: rail(m, name, { grand: true, sel, bouge: bouge?.steps ?? [], leve: stepsVersPasse(bouge), id: "pi-grand" }), cls: "pi-lect" });
   const side = [
     told(m, line),
     timeline(m, line, { ...ctx, fresh: Boolean(bouge) }),

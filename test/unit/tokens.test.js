@@ -3,9 +3,11 @@
 // serves, the fleet stylesheet as served included, and fails on a literal colour anywhere else. It audits
 // the layer itself against the family's contract (jetons-famille) in both themes, light by default and dark
 // as an option: every role defined, the banned values absent (indigo, #241CC4, the tech black #0A0A0A, the
-// cold paper #FAFAFA, the violet #7B74FF), no green at all, the secondary inks at 4.5:1 at least and the
-// strokes at 3:1 at least on both surfaces. Each audit is proven by a planted control: a layer broken on
-// purpose must be refused, for the reason planted.
+// cold paper #FAFAFA, the violet #7B74FF), the secondary inks at 4.5:1 at least and the strokes at 3:1 at least
+// on both surfaces. Green is the passing state's alone (ADR-0038): the layer holds a green only as --passe and its
+// tint --passe-fond, the passing word at 4.5:1 on both surfaces; the stylesheets take them only on a selector that
+// names a passing state (its shape and its word are held by test/unit/piste.test.js#greenFaults). Each audit is
+// proven by a planted control: a layer or a stylesheet broken on purpose must be refused, for the reason planted.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -79,7 +81,8 @@ function hueSat(h) {
 // the contract of a product's layer (jetons-famille, SKILL.md), and what this app adds
 const COLOUR_ROLES = ["--bg", "--bg-2", "--line", "--line-2", "--text", "--text-2", "--text-3", "--bar", "--beat", "--hit"];
 const OTHER_ROLES = ["--sans", "--mono", "--ls-h1", "--ls-h2", "--ls-h3", "--r-pill", "--r-panel", "--r-thumb", "--r-notice", "--r-win"];
-const STATES = ["--refus", "--niveau", "--direct"]; // refused by the check, required level not met, the live state
+const STATES = ["--refus", "--niveau", "--direct", "--passe"]; // refused by the check, level not met, the live state, passing
+const PASSE = ["--passe", "--passe-fond"]; // the only names a green may have (ADR-0038)
 const THEMES = { light: ":root", dark: ':root[data-theme="dark"]' };
 const BANNED = /241CC4|indigo|#0A0A0A|#FAFAFA|#7B74FF/i;
 
@@ -91,11 +94,11 @@ export function auditLayer(css) {
   if (!base) return ["no :root block (the light theme, the default)"];
   if (!dark) return ['no :root[data-theme="dark"] block (the dark option)'];
   const themes = { light: base, dark: { ...base, ...dark } };
-  for (const r of [...COLOUR_ROLES, ...STATES]) if (!(r in dark)) faults.push(`dark: ${r} is not set, the dark theme would show the light value`);
+  for (const r of [...COLOUR_ROLES, ...STATES, "--passe-fond"]) if (!(r in dark)) faults.push(`dark: ${r} is not set, the dark theme would show the light value`);
   for (const [name, vars] of Object.entries(themes)) {
     const v = (r) => resolve(vars[r], vars);
-    for (const r of [...COLOUR_ROLES, ...OTHER_ROLES, ...STATES]) if (!vars[r]) faults.push(`${name}: the role ${r} is missing`);
-    for (const r of [...COLOUR_ROLES, ...STATES]) if (vars[r] && !hex(v(r))) faults.push(`${name}: ${r} is not a #rrggbb value (${v(r)})`);
+    for (const r of [...COLOUR_ROLES, ...OTHER_ROLES, ...STATES, "--passe-fond"]) if (!vars[r]) faults.push(`${name}: the role ${r} is missing`);
+    for (const r of [...COLOUR_ROLES, ...STATES, "--passe-fond"]) if (vars[r] && !hex(v(r))) faults.push(`${name}: ${r} is not a #rrggbb value (${v(r)})`);
     if (faults.length) continue;
     for (const surface of ["--bg", "--bg-2"]) {
       const need = (r, min) => { const c = contrast(v(r), v(surface)); if (c < min) faults.push(`${name}: ${r} on ${surface} is ${c.toFixed(2)}:1, under ${min}:1`); };
@@ -103,12 +106,20 @@ export function auditLayer(css) {
       need("--text-2", 4.5); need("--text-3", 4.5);
       need("--bar", 3); need("--hit", 3);
       for (const s of STATES) need(s, 3);
+      need("--passe", 4.5); // the passing word is said in it (ADR-0038)
     }
+    // the tint of the passing green: the ink and the green read on it
+    const onTint = (r, min) => { const c = contrast(v(r), v("--passe-fond")); if (c < min) faults.push(`${name}: ${r} on --passe-fond is ${c.toFixed(2)}:1, under ${min}:1`); };
+    onTint("--text", 7); onTint("--passe", 4.5);
   }
   for (const m of css.matchAll(new RegExp(BANNED, "gi"))) faults.push(`a banned value: ${m[0]}`); // comments included, as the grep of the identity rule
-  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/#([0-9a-f]{6})\b/gi)) {
+  // a green only as the passing state's own two names (ADR-0038), in either theme
+  const flat = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const m of flat.matchAll(/#([0-9a-f]{6})\b/gi)) {
     const { hue, sat } = hueSat(m[1]);
-    if (sat > 0.2 && hue >= 75 && hue <= 165) faults.push(`a green: #${m[1]} (hue ${Math.round(hue)})`);
+    if (!(sat > 0.2 && hue >= 75 && hue <= 165)) continue;
+    const prop = /([-a-z0-9]+)\s*:[^;{}:]*$/i.exec(flat.slice(0, m.index))?.[1] ?? "?";
+    if (!PASSE.includes(prop)) faults.push(`a green outside --passe: #${m[1]} on ${prop} (hue ${Math.round(hue)})`);
   }
   if (/\bgreen\b|\blime\b|\bolive\b|\bteal\b/i.test(css.replace(/\/\*[\s\S]*?\*\//g, ""))) faults.push("a green keyword");
   return faults;
@@ -151,7 +162,7 @@ test("every custom property used is defined by the family structure or the app's
   assert.deepEqual([...used].filter((v) => !defs.has(v)), []);
 });
 
-test("the layer fills the family's contract in both themes, with the contrasts measured, no banned value and no green", () => {
+test("the layer fills the family's contract in both themes, with the contrasts measured, no banned value, and a green only as --passe", () => {
   assert.deepEqual(auditLayer(layer()), []);
 });
 
@@ -182,10 +193,47 @@ test("planted controls: the audit refuses a layer broken on purpose, for the rea
   assert.ok(has(swap("--direct:#1a84b6", "--direct:#241CC4"), /banned value: 241CC4/));
   assert.ok(has(`${good}\n.x{ --x:indigo; }`, /banned value: indigo/));
   assert.ok(has(`${good}\n.x{ --x:#7B74FF; }`, /banned value: #7B74FF/));
-  assert.ok(has(swap("--direct:#3c9cd0", "--direct:#2f9e44"), /a green: #2f9e44/));
+  assert.ok(has(swap("--direct:#3c9cd0", "--direct:#2f9e44"), /a green outside --passe: #2f9e44 on --direct/));
+  assert.ok(has(swap("--direct:#1a84b6", "--direct:#007752"), /a green outside --passe: #007752 on --direct/), "the passing value itself, under another name");
+  assert.ok(has(`${good}\n.x{ --ok:#00a370; }`, /a green outside --passe: #00a370 on --ok/));
+  // the passing green too pale for its word, its tint too deep, its dark step missing
+  assert.ok(has(swap("--passe:#007752", "--passe:#3fb58c"), /^light: --passe on --bg is .* under 4\.5:1/));
+  assert.ok(has(swap("--passe-fond:#e8f5f0", "--passe-fond:#9fd6c2"), /^light: --passe on --passe-fond is .* under 4\.5:1/));
+  assert.ok(has(swap(" --passe:#00a370;", ""), /^dark: --passe is not set/));
   assert.ok(has(`${good}\n.x{ --ok:green; }`, /a green keyword/));
   // and the real layer is not refused by any of these audits
   assert.deepEqual(auditLayer(good), []);
+});
+
+// ---- where the passing green may stand (ADR-0038): a rule that takes --passe or --passe-fond names a passing state
+const PASSING = /\[data-state="clean"\]|\[data-s="clean"\]|\[data-s="ok"\]:not\(\[data-apres\]\)|\[data-k="clean"\]|\[data-sens="passe"\]|\.pi-mk-passe\b|\.m-passe\b|\.vers-passe\b|\.pi-piste\.passe\b|\.mini\.passe\b|\.ex-piste:not\(\[data-arret\]\)/;
+/** Every use of the passing green in a stylesheet or a script whose selector names no passing state; [] when it holds. */
+export function greenUses(files) {
+  const out = [];
+  for (const [f, text] of Object.entries(files)) {
+    const t = text.replace(/\/\*[\s\S]*?\*\//g, "");
+    if (!f.endsWith(".css")) { if (/var\(--passe/.test(t)) out.push(`${f}: the passing green set by a script`); continue; }
+    for (const m of t.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      if (!/var\(--passe(?:-fond)?\)/.test(m[2])) continue;
+      for (const sel of m[1].split(",").map((x) => x.trim())) if (!PASSING.test(sel)) out.push(`${f}: the passing green on « ${sel} », which names no passing state`);
+    }
+  }
+  return out;
+}
+const stylesheets = () => Object.fromEntries(["app.css", "coque.css", "parcours.css", "famille.css"].map((f) => [`web/${f}`, readFileSync(`${WEB}${f}`, "utf8")]));
+
+test("the passing green stands only on a passing state: every rule that takes it names one, no script sets it", () => {
+  const files = { ...stylesheets(), ...scripts() };
+  const uses = Object.values(stylesheets()).join("\n").match(/var\(--passe(?:-fond)?\)/g) ?? [];
+  assert.ok(uses.length >= 14, `the guard must see the real uses (${uses.length})`);
+  assert.deepEqual(greenUses(files), []);
+  // planted controls: a row's time in green, the live dot in green, a script that paints in green
+  assert.deepEqual(greenUses({ "web/coque.css": ".r-t{ color:var(--passe); }" }), ["web/coque.css: the passing green on « .r-t », which names no passing state"]);
+  assert.deepEqual(greenUses({ "web/coque.css": ".direct i, .pi-mk-passe{ background:var(--passe-fond); }" }), ["web/coque.css: the passing green on « .direct i », which names no passing state"]);
+  assert.deepEqual(greenUses({ "web/views/x.js": 'el.style.color = "var(--passe)";' }), ["web/views/x.js: the passing green set by a script"]);
+  // the blue stays the live state's: no rule takes both
+  const both = [...Object.values(stylesheets()).join("\n").replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) => /var\(--passe/.test(m[2]) && /var\(--direct\)/.test(m[2]));
+  assert.deepEqual(both.map((m) => m[1].trim()), []);
 });
 
 test("planted control: the contrast measure is the WCAG one", () => {

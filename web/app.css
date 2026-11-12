@@ -347,6 +347,10 @@ main.entree-d .porte{ width:100%; max-width:440px; }
 .ex-etat{ display:inline-flex; align-items:center; gap:8px; }
 .ex-p{ font-size:var(--fs-ui); line-height:1.5; color:var(--text-2); }
 .ex-mk{ display:inline-block; flex:none; width:12px; height:12px; border:2px solid var(--text); border-radius:50%; background:var(--text); }
+/* the passing green (ADR-0038): « Rien ne bloque », its dot and its word; a step the version passed; the line to the end */
+.ex-etat[data-s="clean"]{ color:var(--passe); }
+[data-s="clean"] > .ex-mk, .ex-st[data-s="ok"]:not([data-apres]) .ex-mk{ border-color:var(--passe); background:var(--passe); }
+.ex-piste:not([data-arret]) .ex-rempli{ background:var(--passe); }
 [data-s="refused"] > .ex-mk, .ex-st[data-s="refus"] .ex-mk{ border:0; border-radius:var(--r-mark); transform:rotate(45deg) scale(.86); background:var(--refus); }
 .ex-st[data-s="vide"] .ex-mk{ width:10px; height:10px; border:1.5px solid var(--bar); background:var(--bg); }
 .ex-piste{ position:relative; list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); min-width:0; }
@@ -550,8 +554,10 @@ nav.views{ position:relative; }
    An application is a line of six stations, Cadrer to Transmettre. The line is solid as far as the check lets the
    version go, then dotted; the station where it refuses carries the refused mark, the reading's own vermilion
    diamond (--refus), never a new accent; a station where nothing is required is a small ring in the bar's grey; an
-   application with no check received is dotted from end to end. Ink for what passes, the bar's grey for what is not
-   there, vermilion for the refusal: no green, no blue. The one motion is the line drawn on arrival and what a live read
+   application with no check received is dotted from end to end. The passing green (--passe, ADR-0038) for a station
+   the version passed (a filled dot, said « passe ») and for the solid line when it runs to the end (nothing blocks);
+   ink for a station passed under the level the team requires and after a refusal, the bar's grey for what is not
+   there, vermilion for the refusal; the blue is the live state's, not the rail's. The one motion is the line drawn on arrival and what a live read
    brings, both transitions that end (web/views/piste/vif.js takes their classes off) and that reduced motion removes
    (web/famille.css). Nothing under 12 px. Kept before section 7, which holds runward-fleet's roles alone.
    ============================================================================================================ */
@@ -566,6 +572,8 @@ nav.views{ position:relative; }
 .pi-mk-vide{ width:10px; height:10px; border:1.5px solid var(--bar); background:var(--bg); }
 .pi-mk-attente{ border:2px dotted var(--bar); background:var(--bg); }
 .pi-mk-ici{ border:2px solid var(--text); background:var(--bg); box-shadow:0 0 0 4px color-mix(in srgb, var(--text) 14%, transparent); }
+/* a station the version passed, and what says nothing blocks: the filled dot in the passing green (ADR-0038) */
+.pi-mk-passe{ border-color:var(--passe); background:var(--passe); }
 
 /* ---- the rail: the stations on a grid, the line under them from the first station's centre to the last's */
 .pi-piste{ position:relative; list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(6, minmax(0,1fr)); min-width:0; }
@@ -576,6 +584,7 @@ nav.views{ position:relative; }
 .pi-rempli{ position:absolute; left:0; top:-2px; height:2px; background:var(--text); border-radius:1px; }
 .pi-rempli-v{ display:none; }
 .pi-piste.vide .pi-rempli{ display:none; }
+.pi-piste.passe .pi-ligne .pi-rempli, .pi-piste.passe .pi-ligne .pi-rempli-v{ background:var(--passe); }
 .pi-piste.trace .pi-rempli{ transition:width 900ms var(--ease-expressive); }
 .pi-piste.trace:not(.go) .pi-rempli{ width:0 !important; }
 .pi-st{ position:relative; z-index:1; display:grid; justify-items:center; align-content:start; gap:4px; min-width:0; text-align:center; }
@@ -585,6 +594,7 @@ nav.views{ position:relative; }
 .pi-nom .num{ font-family:var(--mono); }
 .pi-st.s-refus .pi-nom{ color:var(--text); font-weight:var(--fw-strong); }
 .pi-bouge{ font-family:var(--mono); font-size:var(--fs-releve); line-height:1.3; color:var(--text); border-bottom:1px solid var(--text); }
+.pi-bouge[data-sens="passe"]{ border-bottom:2px solid var(--passe); }
 
 /* the large rail: each station a button that opens its panel */
 .pi-piste.grand .pi-ligne{ top:24px; }
@@ -610,6 +620,8 @@ nav.views{ position:relative; }
 main a.pi-nm{ text-decoration:none; }
 main a.pi-nm:hover{ text-decoration:underline; }
 .pi-etat, .pi-qui .st{ font-size:var(--fs-ui); align-items:center; }
+/* the passing state's word, beside its filled dot: the one text in a state colour (ADR-0038, 5.2:1 at least) */
+.pi-etat[data-state="clean"]{ color:var(--passe); }
 .pi-dit{ display:grid; gap:6px; justify-items:start; min-width:0; }
 .pi-dit p{ margin:0; font-size:var(--fs-ui); line-height:1.5; overflow-wrap:anywhere; }
 .pi-rg.r-attente .pi-piste{ opacity:.85; }
@@ -729,15 +741,14 @@ main a.pi-nm:hover{ text-decoration:underline; }
    Kept last and apart: everything from here to the end of the file maps the roles of runward-fleet's own HTML
    (data-role, data-state, never a look) onto the app's layer (ADR-0019) and lays its parts out as the public site's
    windows (ADR-0025); nothing below belongs to another screen. A state is said by its shape, then its word, then its
-   hue (vermilion for a refusal, orange for the level, the bar's grey for what was not received, ink for nothing
-   blocking); never a coloured text, never an inverted ground, no green, no red and green pair, and the live blue is
-   not used here. Light and dark come from the layer alone. Nothing under 12 px. The layout is CSS over the HTML as
+   hue (vermilion for a refusal, orange for the level, the bar's grey for what was not received, the passing green for
+   nothing blocking, ADR-0038); the text in ink, never an inverted ground, and the live blue is not used here. Light and dark come from the layer alone. Nothing under 12 px. The layout is CSS over the HTML as
    runward-fleet writes it: the shell changes neither a byte nor an attribute of it.
    ============================================================================================================ */
 
 /* ---- the marks of the five states, wherever a state is said (the reading, the sidebar, the empty state) */
 [data-role="mark"]{ display:inline-block; flex:none; width:12px; height:12px; border:2px solid currentColor; border-radius:50%; background:transparent; color:var(--bar); transform:none; }
-[data-state="clean"] > [data-role="mark"]{ color:var(--text); background:currentColor; }
+[data-state="clean"] > [data-role="mark"]{ color:var(--passe); background:currentColor; }
 [data-state="gaps"] > [data-role="mark"]{ color:var(--refus); background:currentColor; border-radius:var(--r-mark); transform:rotate(45deg) scale(.82); }
 [data-state="level-not-met"] > [data-role="mark"]{ color:var(--niveau); background:transparent; border-radius:var(--r-mark); transform:rotate(45deg) scale(.82); }
 [data-state="not-observed"] > [data-role="mark"]{ color:var(--bar); border-style:dotted; }

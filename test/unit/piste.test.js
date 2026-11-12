@@ -278,3 +278,86 @@ test("Applications in panes: the list and the reading at the same addresses, the
   const en = paint("", { lang: "en" }).html;
   assert.ok(en.includes("Your applications") && en.includes("those refused by the check first") && en.includes('aria-label="Filter the applications by state"'));
 });
+
+// ---- the passing green (ADR-0038): on what passes only, always with its shape and its word
+/** Every place the passing green is hooked, read in painted HTML; [] when each one has its mark and its word. */
+export function greenFaults(html) {
+  const faults = [];
+  for (const row of html.match(/<a class="row[\s\S]*?<\/a>/g) ?? []) {
+    const word = /<span class="r-st" data-state="clean">([^<]*)<\/span>/.exec(row);
+    if (!word) continue;
+    if (!/<span class="etq" data-state="clean"><span data-role="mark" aria-hidden="true"><\/span><\/span>/.test(row)) faults.push("a row said in green without the passing mark");
+    if (!/^(Rien ne bloque|Nothing is blocking)$/.test(word[1])) faults.push(`a row in green says « ${word[1]} »`);
+  }
+  for (const li of html.match(/<li class="pi-st[^"]*">[\s\S]*?<\/li>/g) ?? []) {
+    if (li.includes("pi-mk-passe") && !/(: |, )(passe|passes)\.?<\/span>/.test(li)) faults.push("a station in green that does not say it passes");
+  }
+  for (const c of html.match(/<span class="etq pi-etat" data-state="clean">[\s\S]*?<\/span>[^<]*<\/span>/g) ?? []) {
+    if (!c.includes('<span data-role="mark" aria-hidden="true"></span>') || !/(Rien ne bloque|Nothing is blocking)<\/span>$/.test(c)) faults.push("a verdict in green without its mark or its word");
+  }
+  for (const b of html.match(/<button class="chip" [^>]*data-k="clean"[\s\S]*?<\/button>/g) ?? []) {
+    if (!b.includes('data-state="clean"><span data-role="mark"') || !/<span>(où rien ne bloque|with nothing blocking)<\/span>/.test(b)) faults.push("the filter of what passes without its mark or its word");
+  }
+  return faults;
+}
+
+test("the passing green (ADR-0038): « Rien ne bloque » and the stations passed, each with its mark and its word, nothing else", () => {
+  const top = paint("").html;
+  assert.deepEqual(greenFaults(top), []);
+  // the rows said in green are the two applications where nothing blocks, their mini rails green to the end
+  const greenRows = [...top.matchAll(/<a class="row[^"]*" href="#\/decision\/([^"]+)"[\s\S]*?<\/a>/g)].filter((m) => m[0].includes('class="r-st" data-state="clean"')).map((m) => m[1]);
+  assert.deepEqual(greenRows, ["agent-ratified", "demo-repaired"]);
+  assert.equal((top.match(/<span class="mini passe"/g) ?? []).length, 2);
+  assert.match(top, /<button class="chip" type="button" data-do="filtre" data-k="clean"/);
+  const rowOf = (id) => new RegExp(`<a class="row[^"]*" href="#/decision/${id}"[\\s\\S]*?</a>`).exec(top)[0];
+  assert.equal((rowOf("demo-renamed").match(/m-passe/g) ?? []).length, 2, "refused at step 3: the two stations before it passed");
+  assert.equal(/m-passe|data-state="clean"/.test(rowOf("level-not-met")), false, "under the required level: no green");
+  // the reading: the head's verdict, the large rail green to the end, the five stations that pass
+  const clean = paint("demo-repaired").html;
+  assert.deepEqual(greenFaults(clean), []);
+  const grand = (h) => /<ol class="pi-piste grand[^"]*" id="pi-grand"[\s\S]*?<\/ol>/.exec(h)[0];
+  assert.match(clean, /<div class="d-meta"><span class="etq pi-etat" data-state="clean"><span data-role="mark" aria-hidden="true"><\/span>Rien ne bloque<\/span>/);
+  assert.match(grand(clean), /^<ol class="pi-piste grand passe"/);
+  assert.equal((grand(clean).match(/pi-mk-passe/g) ?? []).length, 5);
+  const refused = paint("demo-renamed").html;
+  assert.equal((grand(refused).match(/pi-mk-passe/g) ?? []).length, 2, "station 6 passes after the refusal: not green");
+  assert.equal(/class="pi-piste grand passe"/.test(refused), false, "the line stops at the refusal: not green");
+  assert.equal(/pi-mk-passe|class="pi-piste grand passe"/.test(grand(paint("level-not-met").html)), false);
+  assert.deepEqual(greenFaults(paint("", { lang: "en" }).html), [], "in English too");
+  // planted controls: a row in green without its mark, a refused station in green, the filter without its word
+  assert.deepEqual(greenFaults(top.replace('<span class="r-mk"><span class="etq" data-state="clean"><span data-role="mark" aria-hidden="true"></span></span></span>', '<span class="r-mk"></span>')), ["a row said in green without the passing mark"]);
+  assert.deepEqual(greenFaults(refused.replace(/(<li class="pi-st s-refus[^"]*"><button[^>]*><span class="pi-pt"><span class="pi-mk pi-mk)-refus/, "$1-passe")), ["a station in green that does not say it passes"]);
+  assert.deepEqual(greenFaults(top.replace("<span>où rien ne bloque</span>", "<span>x</span>")), ["the filter of what passes without its mark or its word"]);
+});
+
+test("what moved toward passing is marked in green, and only that move", () => {
+  const up = Dn.moved(mission("demo-renamed"), mission("demo-repaired")), down = Dn.moved(mission("demo-repaired"), mission("demo-renamed"));
+  assert.equal(Dn.versPasse(up), true);
+  assert.deepEqual(Dn.stepsVersPasse(up), ["floor", "govern"]);
+  assert.equal(Dn.versPasse(down), false, "the control: two refusals raised");
+  assert.deepEqual(Dn.stepsVersPasse(down), []);
+  assert.equal(Dn.versPasse(Dn.moved(mission("demo-repaired"), mission("demo-repaired"))), false, "nothing moved: no green");
+  paint("demo-renamed");
+  S.piste = { moved: { "demo-renamed": up }, neuf: {}, sel: null, premier: null, open: [] };
+  const html = D.viewDecision("demo-renamed").html;
+  assert.match(html, /<span class="r-bouge" data-sens="passe">a bougé<\/span>/);
+  assert.equal((html.match(/<span class="pi-bouge" data-sens="passe">/g) ?? []).length, 2);
+  assert.match(html, /<section class="sheet pi-bouge-f neuf vers-passe">/);
+  S.piste = { moved: { "demo-renamed": down }, neuf: {}, sel: null, premier: null, open: [] };
+  const back = D.viewDecision("demo-renamed").html;
+  assert.equal(/data-sens="passe"|vers-passe/.test(back), false, "refusals raised: the live mark keeps its blue");
+  assert.match(back, /<span class="r-bouge">a bougé<\/span>/);
+  const sheet = /<section class="sheet pi-bouge-f[\s\S]*?<\/section>/.exec(back)[0];
+  assert.equal((sheet.match(/<li><span class="pi-mk pi-mk-refus" aria-hidden="true"><\/span><p>/g) ?? []).length, 2, "the verdict refused and the refusals raised, each with the refused mark");
+  S.piste = undefined;
+});
+
+test("the sign-in's example says « Rien ne bloque » with its dot and its word, the passing green held by the stylesheet on that state only", async () => {
+  const E = await mod("views/entree.js");
+  const html = E.viewEntree("connexion").html;
+  assert.match(html, /<span class="ex-etat" data-s="clean"><span class="ex-mk" aria-hidden="true"><\/span>Rien ne bloque<\/span>/);
+  assert.match(html, /<span class="ex-etat" data-s="refused"><span class="ex-mk" aria-hidden="true"><\/span>Refusée par le contrôle<\/span>/);
+  const css = readFileSync(join(WEB, "app.css"), "utf8");
+  assert.match(css, /\.ex-etat\[data-s="clean"\]\{ color:var\(--passe\); \}/);
+  assert.match(css, /\[data-s="clean"\] > \.ex-mk, \.ex-st\[data-s="ok"\]:not\(\[data-apres\]\) \.ex-mk\{ border-color:var\(--passe\); background:var\(--passe\); \}/);
+});

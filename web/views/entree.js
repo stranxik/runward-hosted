@@ -1,7 +1,8 @@
 // Entry (signed out): the sign-in and its states, as a page of the public site (ADR-0025). The sign-in itself speaks
 // to the one who decides (ADR-0034): the display title says what the app is for, the gesture stands under it, and on
 // the right a glass window shows a real example, the public demo's two checks drawn as « La piste » draws an
-// application (the six steps, the line as far as the check lets the version go, the step that refuses marked). The
+// application (the six steps, the line as far as the check lets the version go, the step that refuses marked; « Rien ne
+// bloque », the steps passed and the line to the end in the passing green, web/app.css, ADR-0038). The
 // example is the public demo repository's, written here as its two checks said it (run 15 refused, run 16 after the
 // repair), never a tenant's data. The secondary states (unknown passkey, expired request, a browser without
 // passkeys, no account, signed out, session closed or ended) keep their window with its relevé « par passkey ». The

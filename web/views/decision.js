@@ -279,7 +279,7 @@ export function viewDecision(sub) {
   }
   const idx = S.index && S.index.lang !== lang ? { ...S.index, lang } : S.index;
   const setAside = st.quarantined ? `<p class="avert">${w.setAside(st.quarantined)} <a href="#/envois">${esc(w.uploads)}</a></p>` : "";
-  const bouge = Object.fromEntries(Object.entries(E.moved).map(([k, d]) => [k, d.steps]));
+  const bouge = E.moved;
   const filtre = S.coqueFiltre ?? null;
   const shown = list.filter((e) => !filtre || categorie(e) === filtre);
   // the one shown: the one the address names; on a desk with no address naming one, the first of the list

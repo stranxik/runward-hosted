@@ -437,7 +437,7 @@ export function mappingProblems(css, html) {
   const out = [];
   const roles = new Set([...html.matchAll(/data-role="([^"]+)"/g)].map((m) => m[1]));
   for (const r of roles) if (!rules.some((x) => x.sel.includes(`[data-role="${r}"]`))) out.push(`role ${r} not styled by the layer`);
-  const hue = { clean: "--text", gaps: "--refus", "level-not-met": "--niveau", "not-observed": "--bar", "not-available": "--bar" };
+  const hue = { clean: "--passe", gaps: "--refus", "level-not-met": "--niveau", "not-observed": "--bar", "not-available": "--bar" };
   for (const [state, token] of Object.entries(hue)) {
     const r = rules.find((x) => x.sel.split(",").some((s) => s.trim() === `[data-state="${state}"] > [data-role="mark"]`));
     if (!r) { out.push(`state ${state}: no mark`); continue; }
@@ -448,9 +448,13 @@ export function mappingProblems(css, html) {
   const decision = css.slice(css.indexOf('[data-role="mark"]'));
   if (/var\(--direct\)/.test(decision)) out.push("the live blue is used by the reading");
   if (/green|#0[0-9a-f]{2}[89a-f][0-9a-f]{2}\b/i.test(decision)) out.push("a green");
+  // the passing green (ADR-0038) on « Rien ne bloque » alone: every rule of the reading that takes it names the clean state
+  const reading = css.slice(css.search(/\n\[data-role="mark"\]\{/)); // section 7 of web/app.css, its first rule the marks
+  const greens = rulesOf(reading).filter((x) => /var\(--passe(?:-fond)?\)/.test(x.body));
+  if (greens.some((x) => x.sel.split(",").some((s) => !s.includes('[data-state="clean"]')))) out.push("the passing green on something that is not passing");
   return out;
 }
-test("every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue", () => {
+test("every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue, the passing green on « Rien ne bloque » only", () => {
   const all = [paint("").html, ...P.index.missions.map((m) => paint(m.id).html), views.renderView(P.index, "decision", "agent-ratified"),
     paint("", { index: F.index, status: F.status }).html, ...F.index.missions.map((m) => paint(m.id, { index: F.index, status: F.status }).html)].join("\n");
   for (const role of ["refusal-kinds", "refusal-kind", "refusal-text", "where", "where-label", "refusals", "problem", "detail", "detail-label", "verbatim"]) assert.ok(all.includes(`data-role="${role}"`), `the screens read here carry the role ${role}`);
@@ -461,4 +465,6 @@ test("every role and state the reading carries is styled by the app's layer: a s
   assert.deepEqual(mappingProblems(CSS.replace('[data-state="gaps"] > [data-role="mark"]{ color:var(--refus);', '[data-state="gaps"] > [data-role="mark"]{ color:var(--niveau);'), html.replace(/<p data-role="planted-role">y<\/p>/, "")), ["state gaps: not in --refus"]);
   assert.deepEqual(mappingProblems(CSS.replace(/(\.lecture \[data-role="state"\]\{[^}]*)background:none;/, "$1background:var(--text);"), ""), ["the state's word is not in ink on the page's ground"]);
   assert.deepEqual(mappingProblems(`${CSS}\n.lecture [data-role="date"]{ color:var(--direct); }`, ""), ["the live blue is used by the reading"]);
+  assert.deepEqual(mappingProblems(`${CSS}\n.lecture [data-role="date"]{ color:var(--passe); }`, ""), ["the passing green on something that is not passing"]);
+  assert.deepEqual(mappingProblems(CSS.replace('[data-state="clean"] > [data-role="mark"]{ color:var(--passe);', '[data-state="clean"] > [data-role="mark"]{ color:var(--text);'), ""), ["state clean: not in --passe"]);
 });

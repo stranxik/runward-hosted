@@ -12,7 +12,7 @@ import { decide } from "../fleet-views.js";
 import { prochainPas } from "../liens.js";
 import { piste } from "./mots.js";
 import { chip, stepName, pieceName, kindsSentence, stateWord } from "./rail.js";
-import { stations, verdictOf } from "./donnees.js";
+import { stations, verdictOf, passed, versPasse } from "./donnees.js";
 import { barre, rangee, liste, tete, etat } from "../volets.js";
 
 /** A repository's name without its owner (« owner/name » → « name »), as the sidebar says it. */
@@ -71,11 +71,14 @@ const wordOf = (e) => (categorie(e) === "confirm" ? piste().toConfirm : stateWor
 /** The time of an entry: when its check in force was received, or its first upload that waits. */
 export const timeOf = (e) => (e.m ? e.line?.accepted?.receivedAt ?? null : e.next.at ?? null);
 
-/** The six stations in small: where the line stops, the refused mark where the check refuses. */
+/**
+ * The six stations in small: where the line stops, the refused mark where the check refuses, the passing green on the
+ * stations the version passed and on the line when it runs to the end (ADR-0038).
+ */
 export function mini(e) {
   const st = stations(e.m ?? { id: e.id, latest: "not-observed" });
   const pct = Math.round(st.reach * 1000) / 10;
-  return `<span class="mini${st.verdict === "not-observed" || st.verdict === "not-available" ? " vide" : ""}" aria-hidden="true"><span class="mini-f" style="width:${pct}%"></span>${st.stations.map((x) => `<i class="m-${x.state}"></i>`).join("")}</span>`;
+  return `<span class="mini${st.verdict === "not-observed" || st.verdict === "not-available" ? " vide" : ""}${st.verdict === "clean" ? " passe" : ""}" aria-hidden="true"><span class="mini-f" style="width:${pct}%"></span>${st.stations.map((x) => `<i class="m-${passed(st, x) ? "passe" : x.state}"></i>`).join("")}</span>`;
 }
 
 /** The short reason of a row (HTML-safe): where it stops and how many refusals, or what it waits for. */
@@ -120,18 +123,19 @@ export function barreApps(list, status, filtre) {
 /**
  * The list pane: « À faire » first when something waits (`afaire`, its compact strip), then the rows. `sel` the id the
  * address names, `choisie` the one shown by default on a desk, `filtre` the filter kept, `bouge` what a live read moved
- * and `neuf` the applications it brought, by id; `detail` runward-fleet's reading of the portfolio, folded last.
+ * (donnees.js#moved, its mark in the passing green when it moved toward passing) and `neuf` the applications it
+ * brought, by id; `detail` runward-fleet's reading of the portfolio, folded last.
  */
 export function listeApps(list, { w, sel = null, choisie = null, filtre = null, bouge = {}, neuf = {}, afaire = "", detail = "" }) {
   const C = mots().coque, V = piste().vif;
   const shown = list.filter((e) => !filtre || categorie(e) === filtre);
   const rows = shown.map((e) => {
     const t = timeOf(e);
-    const moved = bouge[e.id] ? `<span class="r-bouge">${esc(V.badge)}</span>` : "";
+    const moved = bouge[e.id] ? `<span class="r-bouge"${versPasse(bouge[e.id]) ? ' data-sens="passe"' : ""}>${esc(V.badge)}</span>` : "";
     return rangee({
       href: `#/decision/${encodeURIComponent(e.id)}`, cle: e.id, courant: sel === e.id, choisie: !sel && choisie === e.id, cls: neuf[e.id] ? "neuf" : "",
       html: `<span class="r-mk">${markOf(e)}</span><span class="r-nm"><span translate="no">${esc(e.name)}</span>${moved}</span><span class="r-t">${t ? hm(t) : ""}</span>
-        <span class="r-st">${esc(wordOf(e))}</span>${mini(e)}<span class="r-why">${raison(e, w)}</span>`,
+        <span class="r-st"${categorie(e) === "clean" ? ' data-state="clean"' : ""}>${esc(wordOf(e))}</span>${mini(e)}<span class="r-why">${raison(e, w)}</span>`,
     });
   }).join("");
   const vide = shown.length ? "" : etat({ texte: esc(C.states.noneInFilter), actions: `<button class="btn btn-q" type="button" data-do="filtre" data-k="" data-focus-key="filtre:">${esc(C.allApps)}</button>` });
