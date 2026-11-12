@@ -3,7 +3,7 @@
 // PADR-0020).
 import { Refusal } from "../domain/refusals/index.js";
 import { verifyChain } from "../domain/ledger.js";
-import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE } from "../domain/repository.js";
+import { ARCHIVE_MAX_BYTES, ARCHIVE_LIFE, PENDING_LIFE } from "../domain/repository.js";
 import { GITLAB_COM_ISSUER, levelCode, forgeOfWorkload } from "../domain/forge.js";
 import { iso, sha256, manifestExports } from "./context.js";
 
@@ -81,8 +81,16 @@ export function readingCases(ctx, identity) {
         const since = entries.filter((e) => ["send-not-accepted", "send-quarantined"].includes(e.body.what) && e.body.detail?.mission === m.id && e.seq > (cur?.seq ?? 0));
         const last = since[since.length - 1];
         const mine = entries.filter((e) => e.body.detail?.mission === m.id || (e.body.object === r.id && e.body.who.type === "human"));
+        // what the to-do of the first screen reads (additive fields, ADR-0034): the repository's own id, so a link lands
+        // on it by id; when it was declared; when the declaration expires if nothing arrives (the rule of the daily pass,
+        // operator.js#retention: a declaration still pending with no upload received, 7 days after it; once an upload
+        // arrived it waits for the member's confirmation and never expires, so the date is none); when the upload that
+        // waits for a confirmation (a first upload, or one under a new owner) was received
+        const pendingFor = f?.state === "pending" && !r.removedAt && !r.pendingSend;
         lines.push({
           mission: m.id, repository: r.name, path: m.path, state: f?.state ?? "pending", consent: r.consent,
+          repositoryRef: r.id, declaredAt: iso(r.declaredAt), expiresAt: pendingFor ? iso(r.declaredAt + PENDING_LIFE) : null,
+          pendingReceivedAt: r.pendingSend?.receivedAt ? iso(r.pendingSend.receivedAt) : null,
           forge: f?.forgeName ?? "github", level: levelOfLine(r, f, cur), orderSignal: orderSignal(r, m, cur),
           accepted: cur ? {
             entry: cur.id, seq: cur.seq, runId: cur.runId, runNumber: cur.runNumber, runAttempt: cur.runAttempt, commit: cur.commit,

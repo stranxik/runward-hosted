@@ -103,6 +103,7 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
   const cookie = sc.split(";")[0];
   const s = await (await call("GET", "/api/v0/session", { cookie })).json();
   assert.equal(s.tenant.id, tenant); assert.equal(s.passkeys, 1); assert.equal(s.arrivalOpen, false);
+  assert.equal(s.tenant.witness, false, "the session's tenant view says whether it is the service's control account (ADR-0034)");
   assert.deepEqual(s.sendWorkflow, [SEND_SHA]);
   // declare with consent: per gesture
   const fo = await (await call("POST", "/api/v0/auth/fresh/options", { body: { gesture: "declare-with-consent", object: "stranxik/dropyour" }, headers: H, cookie })).json();
@@ -116,6 +117,9 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
   assert.equal(r.status, 202);
   const pend = await r.json();
   assert.equal(pend.refusal, "repository-pending"); assert.ok(pend.message && pend.action && pend.requestId);
+  // what the to-do reads in the status line (additive fields, ADR-0034): the repository's id, its dates, the upload that waits
+  const waits = (await (await call("GET", "/api/v0/fleet/status", { cookie })).json()).lines[0];
+  assert.deepEqual([waits.repositoryRef, waits.expiresAt, typeof waits.declaredAt, typeof waits.pendingReceivedAt], [repo.id, null, "string", "string"]);
   // the confirmation is bound to the repository and to the digest of the values the screen shows (ADR-0029 section 1)
   const shown = (await (await call("GET", "/api/v0/access", { cookie })).json()).repositories.find((x) => x.id === repo.id).pending;
   assert.deepEqual(shown.values, { forge: "github", repositoryId: claims.repository_id, ownerId: claims.repository_owner_id });
@@ -128,7 +132,9 @@ test("the whole path over HTTP: bootstrap link, passkey, cookie, declare, upload
   const idx = await r.json();
   assert.equal(idx.missions[0].id, "dropyour");
   r = await call("GET", "/api/v0/fleet/status", { cookie });
-  assert.equal((await r.json()).lines[0].accepted.runNumber, "12");
+  const done = (await r.json()).lines[0];
+  assert.equal(done.accepted.runNumber, "12");
+  assert.deepEqual([done.repositoryRef, done.expiresAt, done.pendingReceivedAt], [repo.id, null, null], "confirmed: nothing waits, no date");
   r = await call("GET", "/api/v0/journal", { cookie });
   const j = await r.json();
   assert.ok(j.entries.length >= 4); assert.ok(j.head.hash);

@@ -10,8 +10,8 @@
 // hosted-proposed: runward 0.46.0 from npm on this repository at a4ede14; agent-ratified: `init --example`
 // with two rows ratified by `ratify --agent`; level-not-met: `--require attested` by the CLI at 5a9cdf0).
 //
-// What is held here: the screen is the reading of runward-fleet, byte for byte, never rewritten (and in either
-// language, chosen per viewer); the date the service accepted each upload reaches the reading as the export's
+// What is held here: runward-fleet's reading is on the screen, byte for byte, never rewritten, folded below the rails
+// of « la piste » (ADR-0035; the rails themselves: test/unit/piste.test.js), in either language, chosen per viewer; the date the service accepted each upload reaches the reading as the export's
 // `at` label; « Vérifier par vous-même » builds its command only from values that pass strict patterns and
 // never with an extension option; what only the service knows is said in its own closed lexicon, the same keys
 // in French and in English, with none of the words runward never says; the empty portfolio is the mock-up's;
@@ -112,22 +112,26 @@ test("a later upload, accepted on the send path, dates the reading with its own 
   const status = JSON.parse(JSON.stringify(await h.app.reading.status(s)));
   const html = paint("demo", { index, status }).html;
   assert.ok(html.includes("Dernier contrôle reçu\u00a0: <span data-verbatim>2026-11-06 16:17 +01:00</span>"));
-  assert.match(html, /· accepté<span class="sub">commit <code translate="no">0b56196b9c82<\/code> · exécution n° 12<\/span>/);
-  assert.match(html, /· premier contrôle confirmé<\/li>/);
+  // the checked deliveries (« la piste », ADR-0035): the upload in force with the verdict of the index, the earlier one without
+  assert.match(html, /<span>accepté, en vigueur : Rien ne bloque<\/span><span class="soft small">commit <code translate="no">0b56196<\/code> · exécution n° 12<\/span>/);
+  assert.match(html, /<span>premier contrôle confirmé<\/span><\/li>/);
+  assert.match(html, /<span>accepté, remplacé par un contrôle plus récent<\/span>|<span>premier contrôle reçu<\/span>/);
+  assert.ok(html.includes("Le verdict d&#39;un contrôle remplacé n&#39;est pas gardé dans cette lecture"), "an earlier verdict is said not kept, never guessed");
   // planted control: a service that would not write the label leaves the reading undated
   const unlabelled = JSON.parse(JSON.stringify(index));
   for (const x of unlabelled.sources) x.at = null;
   assert.ok(views.renderView(unlabelled, "decision", "demo").includes("date non déclarée"));
 });
 
-test("the main screen is runward-fleet's reading, byte for byte, in the index's language and in the other one the viewer chooses", () => {
+test("runward-fleet's reading stays on the screen, byte for byte, folded below the rails, in the index's language and in the other one the viewer chooses", () => {
   const fr = paint("");
   assert.equal(fr.fleetRoute, "decision");
-  assert.ok(fr.html.includes(views.renderView(P.index, "decision")), "the portfolio as runward-fleet writes it for this index");
-  assert.ok(fr.html.startsWith('<div class="lecture" lang="fr" data-vue="port">'));
+  assert.ok(fr.html.includes(`<details class="pi-pli" data-pli="detail-port"><summary>Le détail par état, tel que runward-fleet l&#39;écrit</summary><div class="pi-pli-b">${views.renderView(P.index, "decision")}</div></details>`), "the portfolio as runward-fleet writes it for this index, folded below the rails");
+  assert.ok(fr.html.indexOf('class="pi-board"') < fr.html.indexOf('data-reading="decision"'), "the rails first, the five state tiles below them");
+  assert.ok(fr.html.startsWith('<div class="lecture" lang="fr" data-vue="piste-port">'));
   const en = paint("", { lang: "en" });
   assert.ok(en.html.includes(views.renderView({ ...P.index, lang: "en" }, "decision")), "the same index, read in English");
-  assert.ok(en.html.startsWith('<div class="lecture" lang="en" data-vue="port">'));
+  assert.ok(en.html.startsWith('<div class="lecture" lang="en" data-vue="piste-port">'));
   assert.ok(en.html.includes("Before your go / no-go") && !en.html.includes("Avant votre go"));
   // the choice is the viewer's, kept under the key of the public site's switch
   D.setReadingLang("en");
@@ -137,7 +141,7 @@ test("the main screen is runward-fleet's reading, byte for byte, in the index's 
   // one application, at a stable address
   for (const id of ["runward-hosted", "runward-demo-renaming", "agent-ratified", "silent"]) {
     const v = paint(id);
-    assert.ok(v.html.includes(views.renderView(P.index, "decision", id)), `${id}: its reading as runward-fleet writes it`);
+    assert.ok(v.html.includes(`<details class="pi-pli" data-pli="detail-app"><summary>Le détail technique, tel que runward-fleet l&#39;écrit</summary><div class="pi-pli-b">${views.renderView(P.index, "decision", id)}</div></details>`), `${id}: its reading as runward-fleet writes it, folded`);
     assert.equal(v.decision, id);
   }
   // planted control: a reading the app had touched (one word changed) is not the pinned one
@@ -207,9 +211,9 @@ test("« Vérifier par vous-même »: the command, built only from values that p
   assert.equal(/npx --yes/.test(r), false);
 });
 
-test("the checks received: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words", () => {
+test("the checked deliveries: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words", () => {
   const html = paint("runward-hosted").html;
-  assert.match(html, /<h2 class="scr-bar">Contrôles reçus<\/h2>/, "the panel's title is the bar of its window");
+  assert.match(html, /<h2 class="scr-bar">les livraisons contrôlées<\/h2>/, "the timeline's title is the bar of its window");
   assert.match(html, /non accepté : <code translate="no">workflow-not-pinned<\/code>, envoyé par une autre chaîne que celle déclarée/);
   assert.match(html, /1 contrôle non accepté depuis le dernier contrôle accepté\./);
   assert.match(paint("runward-hosted", { lang: "en" }).html, /not accepted: <code translate="no">workflow-not-pinned<\/code>, sent by another chain than the one declared/);
@@ -222,31 +226,38 @@ test("the checks received: accepted and not accepted, by date, each refusal with
   assert.equal(odd.includes("<img"), false);
 });
 
-test("the empty portfolio is the mock-up's; declared applications are named while their first check is awaited; errors and loading are named", () => {
+test("the first run (« la piste »): the empty portfolio, declared applications named while their first check is awaited, each on its row; errors and loading are named", () => {
   const empty = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null } });
-  assert.ok(empty.html.includes('<h2 class="h2">Aucune application dans votre portefeuille.</h2>'));
-  assert.ok(empty.html.includes("Branchez une application : son prochain contrôle arrivera ici, avec une phrase et de quoi le vérifier."));
+  assert.ok(empty.html.includes('<h1 class="t1">Votre première application.</h1>'));
+  assert.ok(empty.html.includes("Branchez-en une : à sa prochaine livraison, son verdict arrive ici, étape par étape."));
   assert.ok(empty.html.includes('data-go="#/declarer">Brancher une première application</button>'));
+  assert.match(empty.html, /<ol class="pi-piste grand mer" data-portee="0" aria-label="la mise en route, cinq gestes">/, "the five gestures, the first one current");
+  assert.match(empty.html, /<li class="pi-st s-ici" aria-current="step">[\s\S]*?Brancher l&#39;application/);
   const emptyEn = paint("", { index: null, status: { lines: [], quarantined: 0, recent: [], head: null, index: null }, lang: "en" });
-  assert.ok(emptyEn.html.includes('<h2 class="h2">No application in your portfolio.</h2>'));
+  assert.ok(emptyEn.html.includes('<h1 class="t1">Your first application.</h1>'));
   const waiting = paint("", { index: null, status: { lines: [{ mission: "m", repository: "stranxik/<b>x</b>", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] }], quarantined: 0, recent: [], head: null, index: null } });
-  assert.ok(waiting.html.includes("En attente du premier contrôle."));
-  assert.ok(waiting.html.includes("stranxik/&lt;b&gt;x&lt;/b&gt;"), "a name is data, escaped");
+  assert.match(waiting.html, /<li class="pi-st s-ici" aria-current="step">[\s\S]*?Ajouter l&#39;étape à sa chaîne/, "declared, nothing received: the step to add is current");
+  assert.ok(waiting.html.includes("1 application : 1 sans contrôle reçu."));
+  assert.ok(waiting.html.includes("&lt;b&gt;x&lt;/b&gt;") && !waiting.html.includes("<b>x</b>"), "a name is data, escaped");
+  const received = paint("", { index: null, status: { lines: [{ mission: "m", repository: "stranxik/x", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [{ seq: 3, what: "send-pending", at: "2026-11-12T00:40:00.000Z" }] }], quarantined: 0, recent: [], head: null, index: null } });
+  assert.match(received.html, /<li class="pi-st s-ici" aria-current="step">[\s\S]*?Confirmer le premier contrôle/, "a first check received: to confirm");
+  assert.match(received.html, /Premier contrôle reçu le <time datetime="2026-11-12T00:40:00.000Z">[^<]+<\/time>, à confirmer\. Rien n'est publié avant\./);
+  assert.ok(received.html.includes("1 application : 1 à confirmer."));
   // every application removed: the index carries no mission, and the screen says the same as before the first one
   const none = paint("", { index: { ...P.index, missions: [] }, status: { lines: [], quarantined: 0, recent: [], head: null, index: P.status.index } });
-  assert.ok(none.html.includes('<h2 class="h2">Aucune application dans votre portefeuille.</h2>'));
-  // a repository declared beside published ones: the portfolio names it, its first check awaited
+  assert.ok(none.html.includes('<h1 class="t1">Votre première application.</h1>'));
+  // a repository declared beside published ones: the portfolio names it on its own row, its first check awaited, last
   const status = JSON.parse(JSON.stringify(P.status));
   status.lines.push({ mission: "next-one", repository: "stranxik/next", path: ".", state: "pending", consent: true, accepted: null, notAcceptedSince: 0, activity: [] });
   const beside = paint("", { status }).html;
-  assert.ok(beside.includes(views.renderView(P.index, "decision")) && beside.includes('<h2 class="h2" id="h-attente">En attente du premier contrôle.</h2>') && beside.includes("stranxik/next"));
-  assert.equal(paint("").html.includes("h-attente"), false, "the control: nothing awaited, no such section");
+  assert.ok(beside.includes(views.renderView(P.index, "decision")) && /<li class="pi-rg r-attente" data-mission="next-one">[\s\S]*?<\/li><\/ol>/.test(beside));
+  assert.equal(paint("").html.includes("r-attente"), false, "the control: nothing awaited, no such row");
   assert.equal(paint("", { status: null }).html.includes("Chargement"), true, "loading");
   const err = paint("", { fleetError: { status: 503, requestId: "req-1" } });
-  assert.ok(err.html.includes("Le portefeuille ne s&#39;affiche pas.") && err.html.includes('data-do="reload-screen"') && err.html.includes("<code>req-1</code>"));
+  assert.ok(err.html.includes("Vos applications ne s&#39;affichent pas.") && err.html.includes('data-do="reload-screen"') && err.html.includes("<code>req-1</code>"));
   // an application that is not in the portfolio is said, never replaced by the portfolio
   const unknown = paint("no-such-mission");
-  assert.ok(unknown.html.includes("Cette application n&#39;est pas dans votre portefeuille."));
+  assert.ok(unknown.html.includes("Cette application ne fait pas partie de vos applications."));
   assert.equal(unknown.html.includes('data-reading="decision"'), false);
   assert.equal(paint("%E0%A4%A"), null, "an address that does not decode leads nowhere");
 });

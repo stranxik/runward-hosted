@@ -45,6 +45,7 @@ export const MODULES = Object.freeze([
   "views/workflow.js",
   "views/claims.js",
   "views/liens.js",
+  "views/afaire.js",
   // ---- the shell, its theme selector, the router, the gestures
   "views/shell.js",
   "views/theme.js",
@@ -61,6 +62,13 @@ export const MODULES = Object.freeze([
   "views/fleet.js",
   "views/flotte.js",
   "views/decision.js",
+  // ---- « la piste » (ADR-0035): the rails of the portfolio and of an application's reading, and what moves on them
+  "views/piste/mots.js",
+  "views/piste/donnees.js",
+  "views/piste/rail.js",
+  "views/piste/portefeuille.js",
+  "views/piste/lecture.js",
+  "views/piste/vif.js",
   "views/mission.js",
   "views/panne.js",
   "views/legal.js",

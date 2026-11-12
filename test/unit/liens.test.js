@@ -122,15 +122,15 @@ test("the portfolio: each application awaited says its next step, and its button
   state();
   const v = screens.decision("");
   const enc = (n) => encodeURIComponent(n);
-  // its first upload arrived: « Confirmer le premier envoi », with its date, to its confirmation
-  assert.match(v.html, /Premier envoi reçu le <time datetime="[^"]+">[^<]+<\/time> : il attend votre confirmation/);
-  assert.equal(targets(v.html).filter(([l]) => l === "Confirmer le premier envoi").map(([, t]) => t).join(), `#/declarer/confirmer/${enc("stranxik/dropyour")}`);
+  // its first check arrived: « Confirmer le premier contrôle », with its date, to its confirmation
+  assert.match(v.html, /Premier contrôle reçu le <time datetime="[^"]+">[^<]+<\/time>, à confirmer\./);
+  assert.equal(targets(v.html).filter(([l]) => l === "Confirmer le premier contrôle").map(([, t]) => t).join(), `#/declarer/confirmer/${enc("stranxik/dropyour")}`);
   // nothing sent: what the team adds, the snippet
   assert.equal(target(v.html, "Voir ce que l'équipe ajoute"), `#/declarer/attente/${enc("stranxik/next-one")}`);
   // confirmed without consent: its consent
   // confirmed without consent: the index carries it (not observed); its reading leads to its consent
   assert.ok(T.index.missions.some((m) => m.id === "radar"));
-  assert.equal(target(open("#/decision/radar").html, "Donner l'accord dans Accès"), `#/acces/depot/${enc("stranxik/radar")}/accord`);
+  assert.equal(target(open("#/decision/radar").html, "Donner l'accord dans Compte"), `#/acces/depot/${enc("stranxik/radar")}/accord`);
   // the list of them: the repositories' section, never the top of Accès
   assert.equal(target(v.html, "Tous les dépôts déclarés"), "#/acces/depots");
   assert.equal(targets(v.html).some(([, t]) => t === "#/acces"), false);
@@ -174,7 +174,7 @@ test("Accès: a repository whose first upload arrived says so, with its date, it
   // the repository's own screen: where it stands and its next gesture first
   const s = open(`#/acces/depot/${T.ids.dropyour}`);
   assert.equal(s.title, "stranxik/dropyour");
-  assert.deepEqual(s.crumb.map(([l, h]) => [l, h ?? null]), [["Accès", "#/acces"], ["Dépôts déclarés", "#/acces/depots"], ["stranxik/dropyour", null]]);
+  assert.deepEqual(s.crumb.map(([l, h]) => [l, h ?? null]), [["Compte", "#/acces"], ["Dépôts déclarés", "#/acces/depots"], ["stranxik/dropyour", null]]);
   const first = s.html.indexOf("Où en est ce dépôt");
   assert.ok(first > 0 && s.html.indexOf("Confirmer le premier envoi") > first && s.html.indexOf("Confirmer le premier envoi") < s.html.indexOf("Accord sur le contenu"));
   assert.match(s.html, /premier envoi reçu<\/span> <span class="soft">le <time datetime="[^"]+">[^<]+<\/time>, à confirmer<\/span>[\s\S]*Il attend votre confirmation/);
@@ -230,8 +230,8 @@ test("every link and button of every screen painted leads to a screen that exist
       assert.ok(v, `${name}: « ${label} » leads to ${to}, a screen that exists`);
     }
   }
-  // the sidebar's entry, and the trail's first step on a repository's screen: Accès itself
-  assert.deepEqual([...new Set(bare)].sort(), ["frame: Accès"]);
+  // the sidebar's entry « Compte » (the screen once called Accès, ADR-0034), and the trail's first step on a repository's screen
+  assert.deepEqual([...new Set(bare)].sort(), ["frame: Compte"]);
 });
 
 test("no source sends to the bare top of Accès: no go(), data-go or location write names #/acces alone", () => {
@@ -269,7 +269,7 @@ test("a task sends back where it was opened from, never to the top of Accès", (
   assert.equal(target(open("#/declarer").html, "Annuler"), "#/acces/depots");
   assert.equal(target(open(`#/declarer/attente/${T.ids.waiting}`).html, "Revenir au dépôt"), `#/acces/depot/${T.ids.waiting}`);
   state({ origine: "#/" });
-  assert.equal(target(open("#/acces/ajout").html, "Revenir au portefeuille"), "#/", "opened from the portfolio's banner: back there");
+  assert.equal(target(open("#/acces/ajout").html, "Revenir aux applications"), "#/", "opened from the portfolio's banner: back there");
   state({ origine: "#/decision/runward-hosted" });
   assert.equal(target(open("#/acces/export").html, "Revenir à l'application"), "#/decision/runward-hosted");
   state({ origine: "#/acces" });
@@ -277,7 +277,8 @@ test("a task sends back where it was opened from, never to the top of Accès", (
   // the gestures' own returns, in the sources (they run in a browser): each names its place
   const src = (f) => readFileSync(join(WEB, "views", f), "utf8");
   assert.match(src("events.js"), /location\.hash = retour\(versDepot\(id\)\)/, "a modification saved: its repository");
-  assert.match(src("events.js"), /location\.hash = S\.session\.arrivalDone \? retour\("#\/"\) : "#\/arrivee"/, "a first upload confirmed");
+  assert.match(src("events.js"), /location\.hash = S\.session\.arrivalDone \? retour\("#\/"\) : "#\/arrivee"/, "a new owner confirmed, or nothing published");
+  assert.match(src("events.js"), /if \(S\.session\.arrivalDone && mission && done\.published && !done\.quarantine\) \{ etat\(\)\.premier = mission; location\.hash = `#\/decision\/\$\{encodeURIComponent\(mission\)\}`; return; \}/, "a first check confirmed and published: its first verdict");
   assert.match(src("gestures.js"), /location\.hash = retour\(versSection\("cles"\)\)/, "a passkey added: the passkeys");
   // planted control: an origin that is the top of Accès is never a way back
   assert.notEqual(L.retour("#/acces/donnees", "#/acces"), "#/acces");
@@ -286,9 +287,9 @@ test("a task sends back where it was opened from, never to the top of Accès", (
 test("in English, the new words are English", () => {
   state({ lang: "en" });
   const v = screens.decision("");
-  assert.match(v.html, /First upload received on <time/);
-  assert.ok(v.html.includes(">Confirm the first upload<") && v.html.includes(">See what the team adds<") && v.html.includes(">All declared repositories<"));
-  assert.ok(screens.decision("radar").html.includes(">Give consent in Access<"));
+  assert.match(v.html, /First check received on <time/);
+  assert.ok(v.html.includes(">Confirm the first check<") && v.html.includes(">See what the team adds<") && v.html.includes(">All declared repositories<"));
+  assert.ok(screens.decision("radar").html.includes(">Give consent in Account<"));
   const a = screens.acces("");
   assert.ok(a.html.includes("first upload received") && a.html.includes("to be confirmed") && a.html.includes(">On this page<"));
   const d = open(`#/acces/depot/${T.ids.waiting}`);
