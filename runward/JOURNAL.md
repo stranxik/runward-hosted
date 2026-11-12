@@ -517,3 +517,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the author in chat, 2026-11-12: "et j'accepte", in answer to a list whose item was "Accepter ou non l'ADR-0034 (le cadre « La piste » : quatre entrées, « À faire » d'abord, vues techniques fermées avec leur raison). Je recommande d'accepter."
 - Decided: ADR-0034 accepted (the author): the frame of « La piste », four entries (Applications, Brancher une application, Journal, Compte), « À faire » first on the portfolio, the technical views closed with their reason, the control account said, the sign-in in the decision maker's words.
 - Next: the author's decision on ADR-0035, the views of the same direction (the rails).
+
+## 2026-11-12 - ADR-0035 accepted
+
+- Done: ADR-0035 records the author's acceptance; its row of the architecture note is decided.
+- Evidence: the author in chat, 2026-11-12: "et je confirme tout le reste", in answer to a list whose items were "Accepter ou non l'ADR-0035 (portefeuille et lecture dessinés en lignes de six étapes, lecture runward-fleet repliée dessous). Je recommande d'accepter." and "Décider si « ce qui a bougé » doit survivre à un rechargement. Je recommande : pas pour le 18, à reprendre ensuite avec un ADR."
+- Decided: ADR-0035 accepted (the author): the portfolio and an application drawn by the app from the index as rails of six steps, runward-fleet's reading folded below byte for byte, what moved compared between two checks the page saw. Not for 2026-11-18: serving the earlier check from the service, so that what moved survives a reload; it waits for its own record after the event.
+- Next: the production witness of « La piste » on desktop and phone, and the three-minute demo rehearsed end to end.
