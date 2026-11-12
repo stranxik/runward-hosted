@@ -1,8 +1,9 @@
 // « À faire »: what waits for a gesture of the member, the first block of the first screen after the sign-in
-// (ADR-0034). One item per action, each with what to do, its reason in one sentence, its deadline and its button;
-// an item goes away once its gesture is done (the next read no longer carries it). The shell paints the block above
-// the portfolio (web/views/shell.js) and counts it on the menu's « Applications »; a screen that groups its
-// applications by what they ask (the portfolio of « La piste ») may read the same items through aFaire().
+// (ADR-0034). Since the fixed shell (ADR-0036): a compact strip at the head of the list of applications
+// (web/views/decision.js), the whole block in the drawer the top bar's « À faire » opens (web/views/shell.js), its count
+// on the sidebar's « Applications », on the top bar and on the phone's tab bar, and an application's own item in its
+// reading. One item per action, each with what to do, its reason in one sentence, its deadline and its button; an item
+// goes away once its gesture is done (the next read no longer carries it).
 //
 // Everything is read from what the router already loaded: the session and GET /api/v0/fleet/status, whose lines carry
 // the repository's id, its declaration's expiry and the date of the upload that waits (src/application/reading.js).
@@ -43,15 +44,15 @@ export function aFaire() {
     if (l.state === "pending") {
       const first = premierEnvoi(l);
       const at = l.pendingReceivedAt ?? first?.at ?? null;
-      if (at) out.push({ kind: "confirm", name, at, deadline: l.expiresAt ?? null, href: versConfirmer(key) });
-      else if (l.expiresAt) out.push({ kind: "install", name, at: null, deadline: l.expiresAt, href: versAttente(key) });
+      if (at) out.push({ kind: "confirm", name, key, at, deadline: l.expiresAt ?? null, href: versConfirmer(key) });
+      else if (l.expiresAt) out.push({ kind: "install", name, key, at: null, deadline: l.expiresAt, href: versAttente(key) });
       continue;
     }
     const again = ls.find((x) => x.lastRefusal === "owner-changed" || (x.lastRefusal === "definition-not-pinned" && x.pendingReceivedAt));
-    if (again) { out.push({ kind: again.lastRefusal === "owner-changed" ? "owner" : "definition", name, at: again.pendingReceivedAt ?? again.lastRefusalAt ?? null, deadline: null, href: versConfirmer(key) }); continue; }
-    if (l.consent === false) out.push({ kind: "consent", name, at: null, deadline: null, href: versDepot(key, "accord") });
+    if (again) { out.push({ kind: again.lastRefusal === "owner-changed" ? "owner" : "definition", name, key, at: again.pendingReceivedAt ?? again.lastRefusalAt ?? null, deadline: null, href: versConfirmer(key) }); continue; }
+    if (l.consent === false) out.push({ kind: "consent", name, key, at: null, deadline: null, href: versDepot(key, "accord") });
   }
-  if (s.passkeys === 1) out.push({ kind: "passkey", name: null, at: null, deadline: null, href: s.arrivalDone ? "#/acces/ajout" : "#/arrivee" });
+  if (s.passkeys === 1) out.push({ kind: "passkey", name: null, key: null, at: null, deadline: null, href: s.arrivalDone ? "#/acces/ajout" : "#/arrivee" });
   // what holds a check that already arrived first, then what has a deadline (the nearest first), then the rest
   const RANG = { confirm: 0, owner: 0, definition: 0, install: 1, consent: 2, passkey: 3 };
   return out.map((it, i) => [it, i]).sort(([a, i], [b, j]) => RANG[a.kind] - RANG[b.kind] || String(a.deadline ?? "").localeCompare(String(b.deadline ?? "")) || i - j).map(([it]) => it);
@@ -60,18 +61,30 @@ export function aFaire() {
 /** How many items wait, or null while they are not known (the menu then shows no count of them). */
 export const nombreAFaire = () => (aFaireConnu() ? aFaire().length : null);
 
-/** The block, or nothing when no item waits. Every value from the API is escaped here. */
-export function blocAFaire() {
+/** One item: what to do, why (unless `bref`), its deadline, its button. Every value from the API is escaped here. */
+function item(it, { bref = false } = {}) {
+  const A = mots().afaire, W = A[it.kind];
+  const name = it.name ? `<span translate="no">${esc(it.name)}</span>` : "";
+  const at = it.at ? when(it.at, { sec: false }) : "";
+  const delai = it.deadline ? A.deadline(when(it.deadline, { sec: false })) : esc(A.none);
+  return `<li class="af-i"><div class="af-t"><p class="af-q"><b>${W.q(name)}</b></p>${bref ? "" : `<p class="af-p">${W.p(at)}</p>`}<p class="af-d"><span class="mk mk-delai" aria-hidden="true"></span><span>${delai}</span></p></div><div class="actions">${go(it.href, W.act)}</div></li>`;
+}
+/** The block (`id` names its heading), or nothing when no item waits. */
+function bloc(cls, id, { bref = false } = {}) {
   if (!aFaireConnu()) return "";
   const items = aFaire();
   if (!items.length) return "";
   const A = mots().afaire;
-  const li = items.map((it) => {
-    const W = A[it.kind];
-    const name = it.name ? `<span translate="no">${esc(it.name)}</span>` : "";
-    const at = it.at ? when(it.at, { sec: false }) : "";
-    const delai = it.deadline ? A.deadline(when(it.deadline, { sec: false })) : esc(A.none);
-    return `<li class="af-i"><div class="af-t"><p class="af-q"><b>${W.q(name)}</b></p><p class="af-p">${W.p(at)}</p><p class="af-d"><span class="mk mk-delai" aria-hidden="true"></span><span>${delai}</span></p></div><div class="actions">${go(it.href, W.act)}</div></li>`;
-  }).join("");
-  return `<section class="afaire" aria-labelledby="h-afaire"><h2 class="af-h" id="h-afaire"><span class="af-n num" aria-hidden="true">${items.length}</span>${esc(A.title)}<span class="vh">${esc(A.count(items.length))}</span></h2><ul class="af-l">${li}</ul></section>`;
+  return `<section class="${cls}" aria-labelledby="${id}"><h2 class="af-h" id="${id}"><span class="af-n num" aria-hidden="true">${items.length}</span>${esc(A.title)}<span class="vh">${esc(A.count(items.length))}</span></h2><ul class="af-l">${items.map((it) => item(it, { bref })).join("")}</ul></section>`;
+}
+/** The whole block: each item with its reason (the drawer of the top bar opens on it, web/views/shell.js). */
+export const blocAFaire = () => bloc("afaire", "h-afaire");
+/** The compact strip at the head of the list of applications (ADR-0036): what to do, its deadline, its button. */
+export const bandeAFaire = () => bloc("afaire af-strip", "h-af-strip", { bref: true });
+/** The item of a status line's repository, with its reason, for the reading of that application; or nothing. */
+export function aFairePour(line) {
+  if (!aFaireConnu() || !line) return "";
+  const k = line.repositoryRef ?? line.repository;
+  const it = aFaire().find((x) => x.key === k);
+  return it ? `<ul class="af-l">${item(it)}</ul>` : "";
 }

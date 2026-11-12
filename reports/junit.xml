@@ -45,7 +45,7 @@
 	<testcase name="an item goes once its gesture is done: the first upload confirmed leaves « À faire »" classname="test"/>
 	<testcase name="the second passkey is an item of the portfolio, and the banner that says it is not repeated there; elsewhere the banner stays" classname="test"/>
 	<testcase name="in English, « À faire » says the same in English" classname="test"/>
-	<testcase name="the menu: four entries, the count of what waits on « Applications », one line per application, the export inside the account" classname="test"/>
+	<testcase name="the menu: four entries, the count of what waits on « Applications », no line per application (the list of Applications says them), the export inside the account; the same four in the phone's tab bar" classname="test"/>
 	<testcase name="the technical views: folded, and closed with their reason until the first check of an application is confirmed; their address says so" classname="test"/>
 	<testcase name="the control account: its banner on every screen, no « Brancher une application », no item of an application" classname="test"/>
 	<testcase name="the sign-in, in the decision maker's words, with the public demo's two checks drawn as « La piste »" classname="test"/>
@@ -85,11 +85,11 @@
 	<testcase name="every row of every file of src/http/routes is in the route table, once" classname="test"/>
 	<testcase name="the date the service accepted an upload reaches the reading as the export's `at` label (spec §8): no « date non déclarée »" classname="test"/>
 	<testcase name="a later upload, accepted on the send path, dates the reading with its own acceptance; the first one's confirmation is said" classname="test"/>
-	<testcase name="runward-fleet's reading stays on the screen, byte for byte, folded below the rails, in the index's language and in the other one the viewer chooses" classname="test"/>
+	<testcase name="runward-fleet's reading stays on the screen, byte for byte, folded after the list and in each reading, in the index's language and in the other one the viewer chooses" classname="test"/>
 	<testcase name="the five states, the reason, the refusals by kind with their text as written, the documents, the endorsements and the origin are all on the screen" classname="test"/>
 	<testcase name="« Vérifier par vous-même »: the command, built only from values that pass their pattern, never with an extension option" classname="test"/>
 	<testcase name="the checked deliveries: accepted and not accepted, by date, each refusal with its code as written and its line in the service's words" classname="test"/>
-	<testcase name="the first run (« la piste »): the empty portfolio, declared applications named while their first check is awaited, each on its row; errors and loading are named" classname="test"/>
+	<testcase name="the first run (« la piste »): the empty portfolio, declared applications named while their first check is awaited, each on its row with its reading; errors and loading are named" classname="test"/>
 	<testcase name="the grouped reading on the five real exports: refused first, n / N for every state, the refusals by kind then by the check's text, once, folded, none hidden" classname="test"/>
 	<testcase name="the service's lexicon: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
 	<testcase name="every role and state the reading carries is styled by the app's layer: a state by its shape and hue, the word in ink, no live blue" classname="test"/>
@@ -225,7 +225,7 @@
 	<testcase name="the daily jobs' outcome that cannot be read raises the probe's alert: null with the database ok is not silence" classname="test"/>
 	<testcase name="the note of a daily job that did not run to its end is read by /api/health as a run that did not complete, and raises the probe's alert" classname="test"/>
 	<testcase name="the schedule: each daily job starts after the other's deadline, its kill and its note are over, and the hoster's timeout is above them" classname="test"/>
-	<testcase name="the portfolio: each application awaited says its next step, and its button lands where that step is done" classname="test"/>
+	<testcase name="Applications: each application awaited says its next step on its row, and its reading's button lands where that step is done" classname="test"/>
 	<testcase name="the next step of a status line: confirm, owner, install, consent, wait" classname="test"/>
 	<testcase name="Accès: a repository whose first upload arrived says so, with its date, its confirmation first; one that has sent nothing says it waits" classname="test"/>
 	<testcase name="Accès opened on a section: the section an address names takes the focus and is shown; the page's index names each one" classname="test"/>
@@ -256,8 +256,8 @@
 	<testcase name="the hexagon's allowed arrows pass, and the tree as it is lints clean" classname="test"/>
 	<testcase name="the security scan refuses a read of the environment outside the composition roots, and eval" classname="test"/>
 	<testcase name="the composition roots are three, in the rules and in what the two configurations say of them" classname="test"/>
-	<testcase name="the phone menu open: the screen, the trail's line, the banners and the foot are inert, the sheet answers; closed, the reverse" classname="test"/>
-	<testcase name="a window that crosses 900 px with the menu open closes it: the screen never stays inert with nothing visible" classname="test"/>
+	<testcase name="the phone menu open: the screen, the tab bar, the banners and the foot are inert, the sheet answers; closed, the reverse" classname="test"/>
+	<testcase name="a window that crosses 1024 px with the menu open closes it: the screen never stays inert with nothing visible" classname="test"/>
 	<testcase name="migrations: a contracting statement is refused wherever it sits, in each spelling listed here" classname="test"/>
 	<testcase name="migrations: an escape string and a double-quoted identifier, each holding a quote, no longer hide a statement" classname="test"/>
 	<testcase name="migrations: a $ inside a name opens no dollar-quoted body, so the statement after it is read; glued to a number, the file is refused" classname="test"/>
@@ -321,13 +321,14 @@
 	<testcase name="C44: the replay CLI exits 0 when every index rebuilt here is the same, 1 on a difference, 2 when it cannot tell" classname="test"/>
 	<testcase name="the stations come from the index: where the check refuses, where nothing is required, and where the line stops" classname="test"/>
 	<testcase name="the requirements per step are shown only when every row of the record is listed and placed: never a guess" classname="test"/>
-	<testcase name="« Ce qui bloque »: every refusal of the index in exactly one block, with its file and its line, by step" classname="test"/>
-	<testcase name="one sentence per row, and the sentence that says the whole portfolio" classname="test"/>
+	<testcase name="« Ce qui bloque »: every refusal of the index in exactly one block, with its file and its line, by step, as a table (ADR-0036)" classname="test"/>
+	<testcase name="one short reason per row, one sentence per reading, and the sentence that says the whole portfolio" classname="test"/>
 	<testcase name="« Ce qui s'est passé » says only what the check and the service recorded" classname="test"/>
 	<testcase name="what moved is computed between two checks the page held, and only then" classname="test"/>
 	<testcase name="the first verdict is said once, on the reading the confirmation opens" classname="test"/>
 	<testcase name="the words of « la piste »: the same keys in French and English, none of the words runward never says, no em dash" classname="test"/>
-	<testcase name="the portfolio does not repeat « À faire »: a declaration's deadline is not said on its row, and the control account shows no row awaited" classname="test"/>
+	<testcase name="the list does not repeat « À faire »: a declaration's deadline is said by the strip, not on its row, and the control account shows no row awaited" classname="test"/>
+	<testcase name="Applications in panes: the list and the reading at the same addresses, the first shown by default on a desk, previous and next, the filters" classname="test"/>
 	<testcase name="a gate refused at several steps is said with the phases' names, in French and in English" classname="test"/>
 	<testcase name="the refusal's sentence carries no English and none of the app's banned words" classname="test"/>
 	<testcase name="planted: a gate in neither form is returned as written" classname="test"/>
@@ -457,6 +458,11 @@
 	<testcase name="every font the layer declares is in the served list and in web/fonts, with its licence" classname="test"/>
 	<testcase name="no entrance animation in the app's stylesheet; two loops only, the loading line and the drift of the haze behind the sign-in (ADR-0025), both stopped under reduced motion" classname="test"/>
 	<testcase name="the relevés in the mono read at 12 px, the fleet views' included (author's rule)" classname="test"/>
+	<testcase name="the window: a bar, a list pane and a detail pane, or one pane alone for a state with nothing to list" classname="test"/>
+	<testcase name="a row: a link to its detail's address, its key for the focus, current when the address names it, chosen when a desk shows it by default" classname="test"/>
+	<testcase name="previous and next: links to their address, a still mark where there is none, its place said" classname="test"/>
+	<testcase name="the head of a detail, a sheet, a fold, a state: the screen's heading where nothing else names it" classname="test"/>
+	<testcase name="a repaint keeps what the member was on: the list's scroll on the same screen, the detail's scroll and folds on the same item, the focus by its key" classname="test"/>
 	<testcase name="both dependencies answer at once: one try each, one info line" classname="test"/>
 	<testcase name="a dependency that fails in the instance's first moments is asked again until it answers" classname="test"/>
 	<testcase name="the failure path: a dependency down for the whole budget is said, with its code and never its address, and the warm-up ends" classname="test"/>
@@ -470,9 +476,9 @@
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 469 -->
+	<!-- tests 475 -->
 	<!-- suites 0 -->
-	<!-- pass 469 -->
+	<!-- pass 475 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->

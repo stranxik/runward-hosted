@@ -286,7 +286,7 @@ test("every word of web/index.html is written by the shell in the reader's langu
   assert.deepEqual(pageFaults(PAGE.replace(/ data-mot(-aria)?="[^"]+"/g, ""), Lx.MOTS), [
     "label not written by the shell: Navigation de l'app", "label not written by the shell: Fil d'Ariane", "label not written by the shell: Langue",
     "label not written by the shell: Changer de thème, clair ou sombre", "label not written by the shell: Navigation de l'app",
-    "label not written by the shell: Fil d'Ariane", "label not written by the shell: Langue",
+    "label not written by the shell: Navigation principale",
     "not written by the shell: runward hébergé", "not written by the shell: Aller au contenu", "not written by the shell: hébergé", "not written by the shell: Menu",
   ]);
   // planted controls: a word with no hook, a hook the lexicon does not know
@@ -335,7 +335,7 @@ test("one language for the reading and its frame: the switch of the decision rea
   assert.equal(kept.get("rw-accueil-lang"), "en", "the key of the public site's switch");
   assert.equal(D.readingLang(), "en");
   assert.ok(frame(true, "decision", "", {}).lat.includes("Connect an application"), "the frame follows the reading's switch");
-  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="piste-port">'));
+  assert.ok(D.viewDecision("").html.startsWith('<div class="lecture" lang="en" data-vue="volets">'));
   kept.delete("rw-accueil-lang");
   S.index = { ...T.index, lang: "en" };
   assert.equal(Lx.lang(), "en", "no choice kept: the index's own language");

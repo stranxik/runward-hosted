@@ -29,7 +29,7 @@ export const PISTE = {
     row: {
       stopped: (n, step) => `Arrêtée à l'étape ${n}, ${step}.`,
       refusedNoStep: "Refusée par le contrôle.",
-      allPass: "Les six étapes passent.",
+      allPass: "Les étapes contrôlées passent.",
       rows: (n) => `${n} exigence${s(n)} de l'équipe, aucune refusée.`,
       level: "Rien ne manque, mais la preuve n'atteint pas le niveau exigé par l'équipe.",
       silent: "Aucun contrôle accepté pour l'instant.",
@@ -156,7 +156,7 @@ export const PISTE = {
     row: {
       stopped: (n, step) => `Stopped at step ${n}, ${step}.`,
       refusedNoStep: "Refused by the check.",
-      allPass: "The six steps pass.",
+      allPass: "The checked steps pass.",
       rows: (n) => `${n} requirement${pl(n)} of the team, none refused.`,
       level: "Nothing is missing, but the evidence does not reach the level the team requires.",
       silent: "No check accepted yet.",

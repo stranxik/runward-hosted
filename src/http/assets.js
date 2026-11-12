@@ -48,6 +48,7 @@ export const MODULES = Object.freeze([
   "views/afaire.js",
   // ---- the shell, its theme selector, the router, the gestures
   "views/shell.js",
+  "views/volets.js",
   "views/theme.js",
   "views/router.js",
   "views/gestures.js",
@@ -154,6 +155,8 @@ export function buildAssets({ pin, commit }) {
   const couche = add("couche-runward-app", "css", readFileSync(join(WEB, "couche-runward-app.css")), CSS);
   const fleet = add(`fleet-${pin.version}`, "css", Buffer.from(fleetCss(pin.dir)), CSS);
   const appCss = add("app", "css", readFileSync(join(WEB, "app.css")), CSS);
+  // the fixed shell and its panes (ADR-0036): its own stylesheet, after the app's, served the same way
+  const coqueCss = add("coque", "css", readFileSync(join(WEB, "coque.css")), CSS);
   // the modules: the slot of the pinned views filled first, then one digest over every name and every byte
   const modules = MODULES.map((f) => [f, Buffer.from(readFileSync(join(WEB, f), "utf8").replace('"__VIEWS__"', JSON.stringify(viewsPath)))]);
   const folder = modulesFolder(modules);
@@ -162,6 +165,6 @@ export function buildAssets({ pin, commit }) {
   for (const [f, type] of FONTS) files.set(`/assets/fonts/${f}`, { bytes: readFileSync(join(WEB, "fonts", f)), type, immutable: false });
   const page = Buffer.from(readFileSync(join(WEB, "index.html"), "utf8")
     .replace("__COMMIT__", commit).replace("__FAMILLE_CSS__", famille).replace("__COUCHE_CSS__", couche).replace("__FLEET_CSS__", fleet)
-    .replace("__APP_CSS__", appCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
+    .replace("__APP_CSS__", appCss).replace("__COQUE_CSS__", coqueCss).replace("__VIEWS_JS__", viewsPath).replace("__APP_JS__", appJs));
   return { files, page, viewsSha256: sha(views), viewsPath, modulesPath: folder };
 }
