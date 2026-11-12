@@ -45,6 +45,7 @@ export const MODULES = Object.freeze([
   "views/workflow.js",
   "views/claims.js",
   "views/liens.js",
+  "views/afaire.js",
   // ---- the shell, its theme selector, the router, the gestures
   "views/shell.js",
   "views/theme.js",

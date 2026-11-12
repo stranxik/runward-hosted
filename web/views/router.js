@@ -21,7 +21,7 @@ import { viewReprise } from "./reprise.js";
 import { viewArrivee } from "./arrivee.js";
 import { viewDeclarer } from "./declarer.js";
 import { viewEnvois } from "./envois.js";
-import { viewFleet } from "./fleet.js";
+import { viewFleet, viewVuesFermees } from "./fleet.js";
 import { viewDecision } from "./decision.js";
 import { viewAcces } from "./acces.js";
 import { viewPanne } from "./panne.js";
@@ -84,9 +84,11 @@ export async function show() {
     else location.replace("#/entree/connexion");
     return;
   }
-  // before the first application is confirmed, the fleet's screens open the arrival; the decision reading opens
-  // as soon as the arrival is open (the second passkey, or the choice of one), with its empty state (the mock-up's)
-  if (S.session && !S.session.arrivalDone && (screen === DECISION ? !S.session.arrivalOpen : screen?.reads === "fleet")) { location.replace("#/arrivee"); return; }
+  // until the arrival is open (the second passkey, or the choice of one), the screens that read the index open the
+  // arrival. Once it is open, the decision reading opens with its empty state; the technical views open once the first
+  // check of an application is confirmed, and before that their address says so (ADR-0034), never a silent redirect
+  if (S.session && !S.session.arrivalOpen && screen?.reads === "fleet") { location.replace("#/arrivee"); return; }
+  if (S.session && !S.session.arrivalDone && screen === FLEET) { paint(viewVuesFermees(route)); return; }
   // the reads of this screen, once per opening (switching fleet views reuses the index: 0 more reads)
   // the sidebar lists the missions from the index once this page has read it; a screen opened cold
   // (Envois, Accès) does not read the index for its sidebar, so its budget stays its own (architecture §6)
