@@ -1,7 +1,7 @@
 # ADR-0038: A colour for what passes: the Okabe-Ito bluish green, always with its shape and its word (refines ADR-0019 and ADR-0026)
 
 **Date**: 2026-11-12
-**Status**: proposed (written by an agent session; it records a decision the author took in chat on 2026-11-12 for this product; this record awaits his acceptance)
+**Status**: accepted 2026-11-13 by the author in chat ("j'approuve je suis ok pour tout", in answer to a list whose item was "Accepter ou non l'ADR-0038 (le vert pour ce qui passe). Je recommande d'accepter."); written by an agent session
 **Refines**: ADR-0019 (accepted 2026-11-10, the app's own layer), on its point 4 (« Nothing is blocking: a filled circle in ink, no green. Never a red and green pair. Text stays in ink ») and on its discarded alternative « Green for "nothing is blocking" »; everything else in it stays in force. ADR-0026 (proposed, the house's visual base), on the one rule of the house it adopts here that this record changes for this product: « never a green »
 **Deciders**: Thibault Souris (author). Written by an agent session.
 **Method**: decision-loop: the author's critique of 2026-11-12, read against the screens as built (ADR-0035, ADR-0036); the layer, the stylesheets, the views and the token test read; the dataviz skill's palette validator (`validate_palette.js`) run on the four state hues together, all pairs, on both surfaces of both themes; the WCAG contrast of the passing word measured; the screens witnessed on the real service (in-memory store, one headless Chrome, 1440 and 390 px, light and dark)

@@ -552,3 +552,10 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: `validate_palette.js` of the dataviz skill on the four state hues, all pairs, both surfaces of both themes: all checks pass (worst CVD pair 8.3 deutan light, 8.6 protan dark; worst normal pair green and blue 15.5 light, 15.7 dark); the passing word at 5.58:1 on `--bg` and 5.22:1 on `--bg-2` in light, 6.47:1 and 6.02:1 in dark. The targeted unit tests (tokens, piste, decision, volets, afaire, liens, frame-lang, shell, shell-forge, assets, site, menu, parcours: 129 cases) pass on the Mac; on the NAS (`scripts/on-nas.sh -r`), `npm test` 458 cases and `npm run test:pg` 37 cases pass, the reports regenerated and current (495 cases). The local witness on the real service (in-memory store, one headless Chrome; the list, a passing application's reading, a refused one, the filter, the sign-in, the live move toward passing; 1440 and 390 px, light and dark) finds no fault, the rendered colours the layer's.
 - Decided: ADR-0038 (proposed), refining ADR-0019 on its point 4 and ADR-0026 on « never a green ».
 - Next: the author's decision on ADR-0038, and his change of the house's rule in the shared skill if he takes the green for every product.
+
+## 2026-11-13 - ADR-0038 accepted
+
+- Done: ADR-0038 records the author's acceptance; its row of the architecture note is decided.
+- Evidence: the author in chat, 2026-11-13: "j'approuve je suis ok pour tout", in answer to a list whose item was "Accepter ou non l'ADR-0038 (le vert pour ce qui passe). Je recommande d'accepter."
+- Decided: ADR-0038 accepted (the author): a colour for what passes, `--passe`, the Okabe-Ito bluish green, always with a shape and a word, only on passing states; the blue stays for live, the vermilion and the orange unchanged.
+- Next: the production witness of the green on desk and phone.
