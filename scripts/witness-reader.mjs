@@ -13,12 +13,17 @@ import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { replay, replayPin, countsLine } from "./replay-export.mjs";
 
+/** The refusal code of a JSON answer, or null. */
+export const refusalOf = (bytes) => { try { return JSON.parse(bytes.toString("utf8")).refusal ?? null; } catch { return null; } };
+
 /**
  * One fleet's verdict, from its export archive and the sha256 of the index the service serves.
  * `pin` is replayPin(): the installed runward-fleet, proved to be the pinned archive, and the lock's archives.
  */
-export function judge({ archive, served, pin }) {
-  const r = replay(archive, pin.version, pin.archives);
+export function judge({ archive, served, pin, answered = null }) {
+  // an export the service refused is said as such, never read as an archive without replay.json (its
+  // first run in production, 2026-11-14: a 503 read as "no replay.json")
+  const r = answered ? { ok: false, verdict: "cannot-tell", cannotTell: answered, why: [answered], results: [], counts: { same: 0, different: 0, notRebuilt: 0 } } : replay(archive, pin.version, pin.archives);
   const lastSame = [...r.results].reverse().find((x) => x.state === "same");
   const servedIsLastReplayed = typeof served === "string" && served === lastSame?.got;
   const ok = r.verdict === "same" && servedIsLastReplayed;
@@ -40,8 +45,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const idx = await (await fetch(`${SERVICE}/api/v0/reader/index`, { headers: h })).json();
     const tarRes = await fetch(`${SERVICE}/api/v0/reader/export`, { method: "POST", headers: { ...h, authorization: `Bearer ${await token()}` } });
     const archive = Buffer.from(await tarRes.arrayBuffer());
+    const answered = tarRes.ok ? null : `the export answered HTTP ${tarRes.status} ${refusalOf(archive) ?? "without a refusal"}, request ${tarRes.headers.get("runward-request-id") ?? "unknown"}`;
     const served = idx.index?.sha256 ?? null;
-    const j = judge({ archive, served, pin });
+    const j = judge({ archive, served, pin, answered });
     const drift = [];
     for (const l of idx.status?.lines ?? []) {
       const head = await fetch(`https://api.github.com/repos/${l.repository}/commits/main`, { headers: { authorization: `Bearer ${GH_TOKEN}`, accept: "application/vnd.github+json" } }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
