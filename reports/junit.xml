@@ -493,12 +493,16 @@
 	<testcase name="the port is bound after the warm-up: while a dependency does not answer, connections are refused; once the line is written, the service answers" classname="test"/>
 	<testcase name="a stop asked during the warm-up: the process exits, the port is never bound" classname="test"/>
 	<testcase name="the service as it starts on dependencies that answer: start, then the warm-up's line, then it serves" classname="test"/>
+	<testcase name="every export path a mission may have fits the archive, and reads back by its full name" classname="test"/>
+	<testcase name="a name of at most 100 bytes is written as before: the same content gives the same bytes" classname="test"/>
+	<testcase name="the reader and the member export a fleet whose mission path is past 100 bytes, and the replay holds" classname="test"/>
+	<testcase name="an export the service refused is said with its status, never as an archive without replay.json" classname="test"/>
 	<testcase name="send.yml: the three jobs run where the `runner` input says, a JSON string, ubuntu-24.04 by default" classname="test"/>
 	<testcase name="the guard: check-workflows refuses a runs-on that is or could become a self-hosted runner in this repository, and passes the tree" classname="test"/>
 	<testcase name="C16: the guard reads where a job runs from a closed list, so no other spelling passes (quoted key, alias, quoted `runner`, group, own label)" classname="test"/>
-	<!-- tests 495 -->
+	<!-- tests 499 -->
 	<!-- suites 0 -->
-	<!-- pass 495 -->
+	<!-- pass 499 -->
 	<!-- fail 0 -->
 	<!-- cancelled 0 -->
 	<!-- skipped 0 -->
