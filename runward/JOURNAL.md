@@ -559,3 +559,12 @@ One entry per working session (process-adr-and-journal). Minor decisions and pro
 - Evidence: the author in chat, 2026-11-13: "j'approuve je suis ok pour tout", in answer to a list whose item was "Accepter ou non l'ADR-0038 (le vert pour ce qui passe). Je recommande d'accepter."
 - Decided: ADR-0038 accepted (the author): a colour for what passes, `--passe`, the Okabe-Ito bluish green, always with a shape and a word, only on passing states; the blue stays for live, the vermilion and the orange unchanged.
 - Next: the production witness of the green on desk and phone.
+
+## 2026-11-15 - the service sleeps when idle again: the event is declined
+
+- Done: `service_min_scale` back to 0 on the service's container, five days before the planned 2026-11-20. Applied by the author, from `main` (`infra/scaleway/main.tf` unchanged since 9f15d37), with a script that refuses any plan changing something else than `min_scale` 1 -> 0 of `scaleway_container.rw[0]`.
+- Why: the author declined the stand of 18 November on 2026-11-15; nothing justifies an instance kept on (about 0.52 EUR a day).
+- Evidence: the saved plan `2026-11-15_service_min_scale_0.tfplan` (beside the state), read first: 1 resource changed, `min_scale : 1 -> 0`, nothing else. The apply: 0 added, 1 changed, 0 destroyed, in 31 s; the state then reads `cpu_limit = 500`, `max_scale = 1`, `min_scale = 0`; `/api/version` named the same commit and image before and after (854815e, digest a1cda5ae).
+- Decided: nothing structural, so no ADR (same reasoning as the entry of 2026-11-11). The runbook's paragraph on the event says it is closed.
+- Not done: the first visit after 15 idle minutes waits again for a cold start (21.1 s measured on 2026-11-11).
+- Next: nothing on the minimum scale; any later apply carries the default 0.
