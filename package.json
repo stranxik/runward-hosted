@@ -36,9 +36,9 @@
     "@secretlint/secretlint-formatter-sarif": "13.1.0",
     "@secretlint/secretlint-rule-preset-recommend": "13.1.0",
     "axe-core": "4.14.0",
-    "eslint": "10.13.0",
-    "eslint-plugin-security": "4.2.0",
-    "playwright-core": "1.64.1",
+    "eslint": "10.14.0",
+    "eslint-plugin-security": "4.2.1",
+    "playwright-core": "1.65.0",
     "secretlint": "13.1.0"
   }
 }
